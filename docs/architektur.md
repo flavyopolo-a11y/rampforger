@@ -39,15 +39,23 @@ und Vertices auf ganze Units gerundet; leere oder entartete Ergebnisse werden ve
 Geteilter moderngl-Kontext für 3D- und drei 2D-Ansichten. Räumliche Zellen × Material als
 Vertex-Puffer, nur betroffene Zellen werden neu gebaut. Picking per Strahl gegen BVH auf der CPU.
 
+## Vorlagen-Bibliothek
+
+Alle gängigen Rampenarten als parametrische Vorlagen (gerade, Trapez, Pyramide, Kurve,
+Banane, S-Kurve, Spirale, Welle, Halfpipe/Rohr, Ski, Gabelung, Transfer, Slide), dazu
+Stage-Vorlagen, Terrain-Vorlagen, Detail-Kits und Welt-Stile mit Texturvorschlägen.
+Details im Claude Doc, Abschnitt „Vorlagen-Bibliothek“.
+
 ## Etappen
 
 1. Fenster, Ansichten, Grundformen, Speichern/Laden
 2. VMF-Export, Kompilieren & Testen
-3. Rampen-Generator, Surf-/Bhop-Werkzeuge
-4. Texturen
+3. Rampen-Bibliothek, Surf-/Bhop-Werkzeuge
+4. Texturen und Welt-Stile
 5. Entities über FGD und I/O
 6. Licht
 7. Props
-8. Map-Prüfung
-9. Experten-Werkzeuge
-10. Komfort
+8. Displacements und Detailing
+9. Map-Prüfung
+10. Experten-Werkzeuge
+11. Komfort
