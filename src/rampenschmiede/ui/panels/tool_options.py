@@ -150,7 +150,8 @@ class ToolOptionsPanel(QStackedWidget):
         lay.addLayout(align)
         lay.addWidget(_hint(self.tr(
             "In der 3D-Ansicht: Klick wählt eine Seite, Strg+Klick ergänzt. Shift+Klick gibt einer Seite "
-            "sofort das aktuelle Material, Alt+Klick nimmt das Material einer Seite auf.")))
+            "sofort das aktuelle Material, Strg+Shift+Klick färbt dieses Material in der ganzen Map um, "
+            "Alt+Klick nimmt das Material einer Seite auf.")))
         lay.addStretch(1)
 
         def refresh() -> None:

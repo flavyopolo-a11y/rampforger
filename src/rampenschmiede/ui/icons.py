@@ -52,6 +52,9 @@ _SHAPES: dict[str, str] = {
     "flag": '<path d="M5 21V3.5"/><path d="M5 4h12l-2.5 4L17 12H5" fill="currentColor" fill-opacity="0.25"/>',
     "prefab": '<path d="M3.5 8 L12 3.5 L20.5 8 L20.5 16 L12 20.5 L3.5 16 Z"/><path d="M3.5 8 L12 12.5 L20.5 8'
               ' M12 12.5 L12 20.5"/><path d="M7.7 5.8 L16.3 10.2" />',
+    "sun": '<circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity="0.25"/>'
+           '<path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8'
+           'M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
     "palette": '<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 1.6-2.1-.5-1.3.3-2.4 1.7-2.4H18a3 3 0 0 0 3-3'
                'C21 7.2 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.3" fill="currentColor"/>'
                '<circle cx="10.5" cy="7" r="1.3" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.3" fill="currentColor"/>',
