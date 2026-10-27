@@ -1,6 +1,6 @@
 """Assistent „Neue Surf-Map“: eine spielbare lineare Surf-Map aus Stages.
 
-Jede Stage besteht aus einer Startplattform (mit Teleport-Ziel), einigen Rampen in einer
+Jede Stage besteht aus einer Startplattform (mit Teleport-Ziel und Zeitnahme-Zone), einigen Rampen in einer
 Linie, die nacheinander tiefer liegen, und einem Fall-Teleporter am Boden, der zurück zum
 Anfang der Stage bringt. Am Ende steht eine Zielplattform. Um alles kommt eine dichte
 Skybox-Hülle, die Map lässt sich also sofort kompilieren und durchspielen.
@@ -51,6 +51,14 @@ def _platform(doc: MapDocument, x: int, top: int, size: int) -> Solid:
     return _box(doc, (x, -half, top - 32), (x + size, half, top))
 
 
+def _zone(doc: MapDocument, template: str, x: int, top: int, size: int, **values) -> list[MapObject]:
+    """Zone über einer Plattform, 32 Units Rand rundherum."""
+    inner = size - 64
+    objs, _gen = build_block(doc, template, {"laenge": inner, "breite": inner, "hoehe": 128, **values},
+                             Placement(x + 32, 0, top, 0))
+    return objs
+
+
 def total_length(s: SurfMapSettings) -> int:
     per_stage = s.platform + s.gap + s.ramps_per_stage * (s.ramp_length + s.gap)
     return s.stages * per_stage + s.platform
@@ -77,6 +85,10 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
     for stage in range(s.stages):
         start_x, platform_top = x, top
         objs.append(_platform(doc, x, top, s.platform))
+        if stage == 0:
+            objs += _zone(doc, "zone_start", x, top, s.platform)
+        else:
+            objs += _zone(doc, "zone_stage", x, top, s.platform, nummer=stage + 1)
         name = f"stage_{stage + 1}"
         objs.append(Entity(id=doc.new_id(), classname="info_teleport_destination", keyvalues=(
             ("targetname", name), ("origin", f"{x + 128} 0 {top + 8}"), ("angles", "0 0 0"))))
@@ -99,6 +111,7 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
 
     # Ziel
     objs.append(_platform(doc, x, top, s.platform))
+    objs += _zone(doc, "zone_ende", x, top, s.platform)
     objs.append(Entity(id=doc.new_id(), classname="info_target", keyvalues=(
         ("targetname", "ziel"), ("origin", f"{x + s.platform // 2} 0 {top + 32}"))))
     end_x = x + s.platform

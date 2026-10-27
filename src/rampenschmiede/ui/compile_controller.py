@@ -1,6 +1,7 @@
 """Startet Kompiliervorgänge im Hintergrund und meldet Fortschritt per Signal."""
 from __future__ import annotations
 
+import json
 import threading
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from ..core.compile import (
 )
 from ..core.io.vmf import ExportResult, save_vmf
 from ..core.profiles import GameProfile
+from ..core.zones import collect_zones, momentum_zones
 from .editor import EditorContext
 from .paths import compile_dir
 
@@ -54,7 +56,9 @@ class CompileController(QObject):
         """Plan ohne Seiteneffekte, für die Vorschau im Dialog."""
         folder = compile_dir(self.editor.file_path or self.editor.import_path, create=False)
         vmf = folder / f"{self.map_name()}.vmf"
-        return build_plan(profile, vmf, settings)
+        zones = momentum_zones(collect_zones(self.editor.doc))
+        text = json.dumps(zones, indent=2) if zones else None
+        return build_plan(profile, vmf, settings, momentum_zones=text)
 
     def start(self, profile: GameProfile, settings: CompileSettings, notes: list[LogLine] | None = None) -> bool:
         """`notes` erscheinen nach dem Start oben im Log (z. B. Ergebnis der Vorab-Prüfung)."""

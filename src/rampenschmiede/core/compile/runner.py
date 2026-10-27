@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Callable
 
 from .logparse import Level, LineSplitter, LogLine, classify, parse_pointfile
-from .plan import CompilePlan, CopyStep, LaunchStep, Step, ToolStep
+from .plan import CompilePlan, CopyStep, LaunchStep, Step, ToolStep, WriteStep
 
 
 @dataclass
@@ -122,6 +122,10 @@ class CompileRunner:
                 if not self._copy(step, result):
                     result.failed_step = step.label
                     return
+            elif isinstance(step, WriteStep):
+                if not self._write(step, result):
+                    result.failed_step = step.label
+                    return
             elif isinstance(step, LaunchStep):
                 self._emit(LogLine(f"==== {step.label} ====", Level.STEP), result)
                 self._emit(LogLine(step.command_line(), Level.INFO), result)
@@ -182,6 +186,18 @@ class CompileRunner:
             self._emit(LogLine(f"Kopieren fehlgeschlagen: {exc}", Level.ERROR), result)
             return False
         self._emit(LogLine(f"{src.name} -> {step.target}"), result)
+        return True
+
+    def _write(self, step: WriteStep, result: CompileResult) -> bool:
+        self._emit(LogLine(f"==== {step.label} ====", Level.STEP), result)
+        for target in step.targets:
+            try:
+                Path(target).parent.mkdir(parents=True, exist_ok=True)
+                Path(target).write_text(step.text, encoding="utf-8")
+            except OSError as exc:
+                self._emit(LogLine(f"{target} konnte nicht geschrieben werden: {exc}", Level.ERROR), result)
+                return False
+            self._emit(LogLine(f"geschrieben: {target}"), result)
         return True
 
 

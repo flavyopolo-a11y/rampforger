@@ -34,7 +34,7 @@ class SurfWizard(QDialog):
         self.setWindowTitle(self.tr("Neue Surf-Map"))
         lay = QVBoxLayout(self)
         intro = QLabel(self.tr(
-            "Erzeugt eine lineare Surf-Map: Jede Stage hat eine Startplattform, Rampen, die nacheinander "
+            "Erzeugt eine lineare Surf-Map: Jede Stage hat eine Startplattform mit Zeitnahme-Zone, Rampen, die nacheinander "
             "tiefer liegen, und einen Teleporter am Boden, der zurück zum Anfang der Stage bringt. "
             "Alles ist von einer dichten Skybox umhüllt und lässt sich sofort mit F9 testen. "
             "Rampen und Teleporter bleiben über ihre Regler änderbar."))

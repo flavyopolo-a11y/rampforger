@@ -113,15 +113,25 @@ So baut die Bibliothek Rampen, damit es keine Rampbugs durch krumme Geometrie gi
   Alternativ im Regler *Kollision*: nur `func_detail`.
 - Unsichtbare Flächen (Nähte, Unterseite, aneinanderliegende Teile) bekommen Nodraw.
 
+**Zeitnahme-Zonen.** In der Bibliothek unter *Zonen*: Startzone, Zielzone und Stage-Zone,
+jeweils mit Größe, Bonus-Nummer bzw. Stage-Nummer. In der Map sind das `trigger_multiple` mit
+Namen nach dem `mod_zone`-Standard (`mod_zone_start`, `mod_zone_end`, `mod_zone_checkpoint_2`,
+`mod_zone_bonus_1_start` …). CS:S-Server mit bhoptimer erkennen sie automatisch, die Map
+läuft also auf CS:S ohne Nacharbeit. Für Momentum schreibt F9 beim Momentum-Profil zusätzlich
+die Zonendatei `<map>.json` neben die BSP und nach `maps/zones/local` im Spielordner. Stage 1
+ist die Startzone, die erste Stage-Zone ist Stage 2. Vor dem Kompilieren meldet das Log
+fehlende Start-/Zielzonen und Lücken in den Nummern.
+
 **Eigene Prefabs.** Auswahl treffen, in der Bibliothek *Als Prefab speichern …*, Namen
 eingeben. Das Prefab erscheint unter *Eigene Prefabs* und lässt sich wie jede Vorlage einfügen
 oder hineinziehen; Bausteine darin behalten ihre Regler. Rechtsklick löscht ein Prefab.
 
 **Assistent „Neue Surf-Map“ (Strg+Shift+N).** Spiel, Zahl der Stages, Rampen pro Stage,
 Rampenart (Gerade, Ski, Banane, Welle, Trapez), Länge, Breite, Surf-Winkel, Lücke und
-Höhenstufe wählen. Heraus kommt eine lineare Surf-Map: Startplattform mit Spawn, Rampen, die
+Höhenstufe wählen. Heraus kommt eine lineare Surf-Map: Startplattform mit Spawn und
+Startzone, Stage-Zonen auf den Stage-Plattformen, Rampen, die
 nacheinander tiefer liegen, ein Fall-Teleporter unter jeder Stage zurück zu ihrem Anfang, eine
-Zielplattform, Sonne und eine dichte Skybox-Hülle. F9 testet sie sofort. Ist die Strecke zu lang
+Zielplattform mit Zielzone, Sonne und eine dichte Skybox-Hülle. F9 testet sie sofort. Ist die Strecke zu lang
 für Source (über 32768 Units), sagt der Assistent das, bevor er etwas erzeugt.
 
 **Hammer-Maps.** „Öffnen“ liest `.rsmap` und `.vmf`. Beim Import bleibt alles erhalten, auch
@@ -163,9 +173,10 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - Bei der Gabelung überlappen sich die beiden Äste am Anfang.
 - Die Playerclip-Brushes werden in den Ansichten nicht gezeichnet, weil sie genau auf den
   sichtbaren Teilen liegen.
-- Noch offen aus Etappe 3: Zonen je Spielprofil (Start, Ende, Stages für den Timer). Dafür
-  muss erst geklärt werden, welches Zonenformat Momentum und die CS:S-Timer erwarten. Der
-  Assistent baut deshalb noch keine Zonen.
+- Zonen: Den Namen der Momentum-Zonendatei (`maps/zones/local/<map>.json`) sagt die
+  Momentum-Doku nicht ausdrücklich, er ist angenommen. Das Format selbst folgt dem Prüfcode von
+  Momentum. CS:S-Timer, die Zonen nur aus ihrer Datenbank lesen (nicht bhoptimer), müssen die
+  Zonen weiter im Spiel setzen. Checkpoints innerhalb einer Stage gibt es noch nicht.
 - Der Assistent baut nur gerade Strecken; Kurven und Sprünge zwischen Stages kommen von Hand
   aus der Bibliothek dazu.
 
