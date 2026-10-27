@@ -79,6 +79,8 @@ kopiert. Die weißen Griffe skalieren; ein zweiter Klick auf die Auswahl schalte
 (15°-Schritte, mit Shift frei). Pfeiltasten verschieben um eine Rasterweite.
 In der 3D-Ansicht hat die Auswahl drei Pfeile (X rot, Y grün, Z blau): einen Pfeil greifen und
 ziehen verschiebt nur entlang dieser Achse, am Raster. Shift beim Greifen verschiebt eine Kopie.
+Am orangen Ring um die Auswahl dreht man sie um die Hochachse (15°-Schritte, mit Shift frei);
+Rampen bleiben dabei Bausteine mit Reglern.
 Exakte Zahlen: Panel „Auswahl“ oder **Strg+M** (Transformieren).
 
 **Entities (Shift+E).** Spawns (CT, T, Momentum), Punkt-, Spot- und Sonnenlicht sowie Cubemaps
@@ -95,7 +97,8 @@ setzen. Eigenschaften im Panel „Auswahl“ bearbeiten.
 | Strg+Shift+E | Als `.vmf` exportieren |
 
 **Startraum.** Jede neue Map beginnt mit einem Spawn (für CS:S CT und T, für Momentum
-`info_player_start`), einer Sonne und einer dichten Skybox-Hülle von 4096 × 4096 × 1024 Units.
+`info_player_start`), einer Sonne und einer dichten Skybox-Hülle von 8192 × 8192 × 3072 Units. Die Hülle wächst mit:
+Ragt etwas aus ihr heraus oder kommt ihr näher als 512 Units, wird sie im selben Undo-Schritt größer.
 F9 kompiliert also sofort ohne Leck. Die sechs Hüllen-Brushes sind normale Brushes: verschieben,
 vergrößern oder löschen. *Datei → Neu (leer)* startet ohne Inhalt, *Datei → Neue Maps mit
 Startraum* schaltet den Startraum ab.
@@ -125,7 +128,11 @@ einziger Undo-Schritt. Darunter steht der tatsächliche Surf-Winkel, mit Warnung
 Baustein. *Baustein lösen* macht normale Brushes daraus.
 
 So baut die Bibliothek Rampen, damit es keine Rampbugs durch krumme Geometrie gibt:
-- Alle Eckpunkte liegen auf ganzen Units, benachbarte Segmente teilen exakt dieselben Nahtpunkte.
+- Die Kollision (Playerclip-Hülle) liegt auf ganzen Units, benachbarte Segmente teilen exakt
+  dieselben Nahtpunkte.
+- Die sichtbare Rampe darüber wird ungerundet gebaut: Jedes Kurven-Segment hat genau eine ebene
+  Fläche je Seite, ohne hauchdünne Splitter-Dreiecke, die im Spiel schwarze oder helle Streifen
+  bekommen. Sie liegt 1 Unit innerhalb der Hülle, der Spieler berührt also nur die Hülle.
 - Kurven drehen höchstens 5° pro Segment (Standard 2,5°), jedes Segment hat eine flache Unterseite.
 - Gerade Rampen sind in jeder Richtung exakte Prismen ohne geknickte Flächen.
 - Kollision: glatte Playerclip-Brushes in der Welt, sichtbar ist ein `func_detail`. Die schrägen
@@ -224,10 +231,10 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
   normale Brushes.
 - Verschieben und Drehen um die Hochachse behalten den Baustein (er wird neu gebaut). Spiegeln,
   Skalieren und Kippen machen normale Brushes daraus.
-- Kurven, Spiralen und Wellen mit Gefälle haben fast ebene Flächen, die beim Runden in zwei
-  Dreiecke mit winzigem Knick geteilt werden. Das lässt sich mit ganzen Zahlen nicht vermeiden.
+- Kurven und Spiralen mit Gefälle sind verdrehte Flächen (wie eine Wendeltreppe). Jede solche
+  Fläche wird in zwei große Dreiecke geteilt; eben geht es geometrisch nicht.
 - Bei der Gabelung überlappen sich die beiden Äste am Anfang.
-- Die Playerclip-Brushes werden in den Ansichten nicht gezeichnet, weil sie genau auf den
+- Die Playerclip-Brushes werden in den Ansichten nicht gezeichnet, weil sie fast genau auf den
   sichtbaren Teilen liegen.
 - Texturen werden in der 3D-Ansicht mit höchstens 256×256 Pixeln gezeigt; im Spiel gilt die volle
   Auflösung. Animierte Texturen zeigen das erste Bild.

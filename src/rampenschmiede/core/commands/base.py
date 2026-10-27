@@ -172,6 +172,33 @@ class MacroCommand(Command):
         return cs
 
 
+class FollowUp(Command):
+    """Ein Command samt Folgeänderungen, die automatisch danach passieren (z. B. die Hülle
+    wächst mit). Ein Undo-Schritt; verschmilzt weiter wie das Haupt-Command."""
+
+    def __init__(self, main: Command, extras: Sequence[Command] = ()) -> None:
+        self.main = main
+        self.extras = list(extras)
+        self.description = main.description
+        self.merge_key = main.merge_key
+
+    def do(self, doc: MapDocument) -> ChangeSet:
+        cs = self.main.do(doc)
+        for c in self.extras:
+            cs.merge(c.do(doc))
+        return cs
+
+    def undo(self, doc: MapDocument) -> ChangeSet:
+        cs = ChangeSet()
+        for c in reversed(self.extras):
+            cs.merge(c.undo(doc))
+        cs.merge(self.main.undo(doc))
+        return cs
+
+    def merge(self, newer: Command, doc: MapDocument) -> bool:
+        return self.main.merge(newer, doc)
+
+
 class CommandStack:
     """Unbegrenzter Undo/Redo-Stapel für ein Dokument."""
 
@@ -235,6 +262,20 @@ class CommandStack:
                 self._clean_index = None  # sauberer Zustand liegt im verworfenen Redo-Zweig
         self._allow_merge = True
         self._redo.clear()
+        self.doc.notify(cs)
+        self._changed()
+        return cs
+
+    def attach(self, cmd: Command) -> ChangeSet:
+        """Folgeänderung ausführen und an den letzten Undo-Schritt hängen."""
+        if not self._undo:
+            return self.push(cmd)
+        cs = cmd.do(self.doc)
+        top = self._undo[-1]
+        if isinstance(top, FollowUp):
+            top.extras.append(cmd)
+        else:
+            self._undo[-1] = FollowUp(top, [cmd])
         self.doc.notify(cs)
         self._changed()
         return cs

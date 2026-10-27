@@ -39,6 +39,9 @@ class ViewportRenderer:
         self._sel_vbo: moderngl.Buffer | None = None
         self._sel_vao: moderngl.VertexArray | None = None
         self._sel_count = 0
+        self._edges_vbo: moderngl.Buffer | None = None
+        self._edges_vao: moderngl.VertexArray | None = None
+        self._edges_count = 0
         self._dyn_vbo = ctx.buffer(reserve=6 * 4 * 4096, dynamic=True)
         self._dyn_vao = ctx.vertex_array(self.prog_lines, [(self._dyn_vbo, "3f 3f", "in_pos", "in_color")])
         self._version = -1
@@ -90,7 +93,7 @@ class ViewportRenderer:
         self.sync_textures(atlas)
         if arrays.version == self._version:
             return
-        for vao in (self._faces_vao, self._lines_vao, self._sel_vao):
+        for vao in (self._faces_vao, self._lines_vao, self._sel_vao, self._edges_vao):
             if vao is not None:
                 vao.release()
         self._faces_vbo, self._faces_vao = self._upload(
@@ -103,6 +106,9 @@ class ViewportRenderer:
         self._sel_vbo, self._sel_vao = self._upload(
             arrays.lines_sel, self._sel_vbo, self.prog_lines, "3f 3f", ("in_pos", "in_color"))
         self._sel_count = len(arrays.lines_sel)
+        self._edges_vbo, self._edges_vao = self._upload(
+            arrays.lines3d, self._edges_vbo, self.prog_lines, "3f 3f", ("in_pos", "in_color"))
+        self._edges_count = len(arrays.lines3d)
         self._version = arrays.version
 
     def _draw_dynamic_lines(self, data: np.ndarray) -> None:
@@ -140,10 +146,13 @@ class ViewportRenderer:
             self._faces_vao.render(moderngl.TRIANGLES, vertices=self._faces_count)
             self.ctx.polygon_offset = (0.0, 0.0)
         self.prog_lines["u_mvp"].write(mvp)
-        if self._lines_vao is not None:
-            # Drahtgitter in Brush-Farben, sonst dunkle Kanten für bessere Lesbarkeit
-            self.prog_lines["u_override"].value = (0.0, 0.0, 0.0, 0.0) if mode == "wireframe" else (0.1, 0.1, 0.12, 1.0)
+        if mode == "wireframe" and self._lines_vao is not None:
+            # Drahtgitter: alle Kanten in Brush-Farben
             self._lines_vao.render(moderngl.LINES, vertices=self._lines_count)
+        elif self._edges_vao is not None:
+            # Sonst dunkle Kanten für bessere Lesbarkeit, nur an echten Knicken
+            self.prog_lines["u_override"].value = (0.1, 0.1, 0.12, 1.0)
+            self._edges_vao.render(moderngl.LINES, vertices=self._edges_count)
             self.prog_lines["u_override"].value = (0.0, 0.0, 0.0, 0.0)
         if self._sel_vao is not None:
             self.ctx.disable(moderngl.DEPTH_TEST)
@@ -169,8 +178,8 @@ class ViewportRenderer:
             self._draw_dynamic_lines(extra_lines)
 
     def release(self) -> None:
-        for obj in (self._faces_vao, self._lines_vao, self._sel_vao, self._faces_vbo, self._lines_vbo,
-                    self._sel_vbo, self._dyn_vao, self._dyn_vbo, self.prog_faces, self.prog_lines, self._tex):
+        for obj in (self._faces_vao, self._lines_vao, self._sel_vao, self._edges_vao, self._faces_vbo,
+                    self._lines_vbo, self._sel_vbo, self._edges_vbo, self._dyn_vao, self._dyn_vbo, self.prog_faces, self.prog_lines, self._tex):
             if obj is not None:
                 obj.release()
 

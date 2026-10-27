@@ -42,7 +42,12 @@ def test_block_has_visual_detail_and_clip_collision():
     assert len(kids) == len(clips) == len(gen.face_sets) == 12  # 30° in 2,5°-Schritten
     assert all(f.material == PLAYERCLIP for c in clips for f in c.faces)
     assert all(c.parent_id is None for c in clips)
-    assert [c.vertices() for c in clips] == [k.vertices() for k in kids]
+    # Die sichtbare Rampe ist ungerundet und liegt unter den Surf-Flächen ihrer ganzzahligen
+    # Hülle, damit der Spieler beim Surfen nur die Hülle berührt
+    assert all(all(float(c).is_integer() for p in clip.vertices() for c in p) for clip in clips)
+    for kid, own in zip(kids, gen.face_sets):
+        surf = [f.plane for f in own if 0.05 < abs(f.plane.normal[2]) < 0.95]
+        assert surf and all(pl.distance(p) < -0.2 for pl in surf for p in kid.vertices())
     # Surf-Flächen teilen eine Glättungsgruppe, damit das Licht über die Segmente weich läuft
     slanted = [f for k in kids for f in k.faces if 0.05 < abs(f.plane.normal[2]) < 0.95]
     assert slanted and all(f.smoothing_groups & 1 for f in slanted)
@@ -98,11 +103,15 @@ def test_move_keeps_block_and_matches_regeneration():
     _apply(doc, stack, lambda o: transform.translate(o, (64, -32, 16)))
     moved = doc.get(root.id)
     assert block_info(moved)["placement"][:3] == [64, -32, 16]
-    kids = sorted(v for k in parts(doc, root.id)[0] for v in k.vertices())
+    kids = sorted(_r6(v) for k in parts(doc, root.id)[0] for v in k.vertices())
     fresh_doc = MapDocument()
     objs, _ = build_block(fresh_doc, "kurve", block_info(moved)["values"], Placement(64, -32, 16, 0))
-    fresh = sorted(v for o in objs[1:] if isinstance(o, Solid) and o.parent_id for v in o.vertices())
+    fresh = sorted(_r6(v) for o in objs[1:] if isinstance(o, Solid) and o.parent_id for v in o.vertices())
     assert kids == fresh
+
+
+def _r6(p):
+    return tuple(round(c, 6) for c in p)
 
 
 def test_rotate_regenerates_with_integer_vertices():
@@ -112,7 +121,9 @@ def test_rotate_regenerates_with_integer_vertices():
     assert info["placement"][3] == 37
     for s in doc.solids():
         assert s.is_valid()
-        assert all(float(c).is_integer() for p in s.vertices() for c in p)
+        # Kollision (Playerclip-Hülle) bleibt ganzzahlig, die sichtbare Rampe ist ungerundet
+        if s.parent_id is None:
+            assert all(float(c).is_integer() for p in s.vertices() for c in p)
     stack.undo()
     assert block_info(doc.get(root.id))["placement"][3] == 0
 

@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import colorsys
 import itertools
+import math
 import zlib
 from dataclasses import dataclass
 
 import numpy as np
 
+from ..core.blocks import is_block_root
 from ..core.model import (
     ChangeSet,
     Entity,
@@ -75,7 +77,20 @@ class ObjectMesh:
     tris: np.ndarray   # (n, 12): Position, Normale, Farbe, UV, Textur-Ebene (0 = keine)
     lines: np.ndarray  # (m, 3): Kanten als Linienpaare
     color2d: tuple[float, float, float]
+    #: Kanten für die 3D-Ansicht (ohne Knicke in fast ebenen Flächen), (k, 3); None = wie `lines`
+    edges3d: np.ndarray | None = None
     _variants: dict | None = None
+
+    def edges_3d(self) -> np.ndarray:
+        """Kanten für die 3D-Ansicht mit Platzhalter-Farbe (der Shader färbt sie dunkel)."""
+        if self._variants is None:
+            self._variants = {}
+        hit = self._variants.get("edges3d")
+        if hit is None:
+            edges = self.lines if self.edges3d is None else self.edges3d
+            hit = np.hstack([edges, np.zeros((len(edges), 3), dtype=np.float32)])
+            self._variants["edges3d"] = hit
+        return hit
 
     def variant(self, selected: bool) -> tuple[np.ndarray, np.ndarray]:
         """Fertige GPU-Zeilen (Dreiecke mit Auswahl-Flag, farbige Linien), je Zustand einmal berechnet."""
@@ -146,18 +161,68 @@ def _polygons_to_arrays(polys: list[tuple[tuple[float, float, float], list]], co
     )
 
 
-def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None) -> ObjectMesh | None:
+#: Kanten zwischen Seiten, die weniger als so viel Grad abknicken, zeichnet die 3D-Ansicht nicht
+SOFT_EDGE_DEG = 12.0
+_SOFT_COS = math.cos(math.radians(SOFT_EDGE_DEG))
+NODRAW = "TOOLS/TOOLSNODRAW"
+
+
+def feature_edges(faces: list[Face], polys: list, hide_nodraw: bool = False) -> np.ndarray:
+    """Kanten, die in 3D gezeichnet werden: nur echte Knicke. Wo das Runden auf ganze Units
+    eine Fläche leicht knickt (Kurven), entsteht sonst ein Gewirr dunkler Linien.
+    `hide_nodraw`: Kanten zu unsichtbaren Seiten weglassen (Nähte zwischen Rampen-Segmenten)."""
+    owners: dict[tuple, list[int]] = {}
+    ends: dict[tuple, tuple] = {}
+    reps: list = []
+
+    def vertex(p) -> int:
+        # Ungerundete Brushes: dieselbe Ecke kommt je Seite minimal anders heraus
+        for n, q in enumerate(reps):
+            if abs(p[0] - q[0]) < 0.05 and abs(p[1] - q[1]) < 0.05 and abs(p[2] - q[2]) < 0.05:
+                return n
+        reps.append(p)
+        return len(reps) - 1
+
+    for k, poly in enumerate(polys):
+        if not poly:
+            continue
+        for i in range(len(poly)):
+            a, b = poly[i], poly[(i + 1) % len(poly)]
+            ka, kb = vertex(a), vertex(b)
+            if ka == kb:
+                continue
+            key = (ka, kb) if ka <= kb else (kb, ka)
+            owners.setdefault(key, []).append(k)
+            ends.setdefault(key, (a, b))
+    out: list = []
+    for key, ks in owners.items():
+        if len(ks) == 2:
+            fa, fb = faces[ks[0]], faces[ks[1]]
+            na, nb = fa.plane.normal, fb.plane.normal
+            if na[0] * nb[0] + na[1] * nb[1] + na[2] * nb[2] > _SOFT_COS:
+                continue
+            if hide_nodraw and NODRAW in (fa.material.upper(), fb.material.upper()):
+                continue
+        out += ends[key]
+    return np.asarray(out, dtype=np.float32).reshape(-1, 3)
+
+
+def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_part: bool = False) -> ObjectMesh | None:
     if isinstance(obj, Solid):
         polys, colors, textures = [], [], []
-        for face, poly in zip(obj.faces, obj.polygons()):
-            if poly:
+        all_polys = obj.polygons()
+        for face, poly in zip(obj.faces, all_polys):
+            # Unsichtbare Seiten von Rampen liegen fast alle innen (Nähte zwischen Segmenten) und
+            # blitzen sonst an den Kanten gelb durch
+            if poly and not (block_part and face.material.upper() == NODRAW):
                 polys.append((face.plane.normal, poly))
                 colors.append(material_color(face.material))
                 slot = atlas.slot(face.material) if atlas is not None else None
                 textures.append((face, slot.layer, (slot.width, slot.height)) if slot else None)
         tris, lines = _polygons_to_arrays(polys, colors, textures)
         c = obj.editor.color
-        return ObjectMesh(tris, lines, (c[0] / 255, c[1] / 255, c[2] / 255))
+        edges = feature_edges(list(obj.faces), all_polys, hide_nodraw=block_part)
+        return ObjectMesh(tris, lines, (c[0] / 255, c[1] / 255, c[2] / 255), edges)
     bbox = object_bbox(obj)
     if bbox is None:
         return None
@@ -177,6 +242,7 @@ class SceneArrays:
     faces: np.ndarray       # (n, 13): Position, Normale, Farbe, UV, Textur-Ebene, ausgewählt (0/1)
     lines2d: np.ndarray     # (m, 6): Position, Farbe
     lines_sel: np.ndarray   # (k, 6): Kanten der Auswahl für die 3D-Ansicht
+    lines3d: np.ndarray     # (j, 6): Kanten für die 3D-Ansicht (ohne weiche Knicke)
     version: int
 
 
@@ -213,7 +279,9 @@ class SceneMesh:
         hit = self._cache.get(obj.id)
         if hit is not None and hit[0] is obj:
             return hit[1]
-        mesh = build_object_mesh(obj, self.atlas)
+        parent_id = getattr(obj, "parent_id", None)
+        parent = self.doc.get(parent_id) if parent_id is not None else None
+        mesh = build_object_mesh(obj, self.atlas, block_part=is_block_root(parent))
         self._cache[obj.id] = (obj, mesh)
         return mesh
 
@@ -223,7 +291,7 @@ class SceneMesh:
             self.textures_changed()
         if self._arrays is not None and self._arrays.version == self.version:
             return self._arrays
-        faces_unsel, faces_sel, lines_unsel, lines_sel2d, lines_sel3d = [], [], [], [], []
+        faces_unsel, faces_sel, lines_unsel, lines_sel2d, lines_sel3d, edges3d = [], [], [], [], [], []
         for obj in self.doc.objects():
             if obj.editor.hidden:
                 continue
@@ -241,6 +309,7 @@ class SceneMesh:
             tris, lines = mesh.variant(selected)
             (faces_sel if selected else faces_unsel).append(tris)
             (lines_sel2d if selected else lines_unsel).append(lines)
+            edges3d.append(mesh.edges_3d())
             if selected:
                 lines_sel3d.append(mesh.selected_3d_lines())
 
@@ -251,6 +320,7 @@ class SceneMesh:
             faces=cat(faces_unsel + faces_sel, 13),
             lines2d=cat(lines_unsel + lines_sel2d, 6),
             lines_sel=cat(lines_sel3d, 6),
+            lines3d=cat(edges3d, 6),
             version=self.version,
         )
         return self._arrays
