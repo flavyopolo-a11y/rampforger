@@ -109,7 +109,13 @@ class MapDocument:
         return default
 
     def bbox(self, ids: Iterable[int] | None = None) -> BBox | None:
-        objs = self._objects.values() if ids is None else (self._objects[i] for i in ids if i in self._objects)
+        """Umgebende Box; bei Brush-Entities und Bausteinen samt ihrer Brushes."""
+        if ids is None:
+            return BBox.union(object_bbox(o) for o in self._objects.values())
+        known = [i for i in ids if i in self._objects]
+        objs = [self._objects[i] for i in known]
+        if any(isinstance(o, Entity) for o in objs):
+            objs += self.attached(known)
         return BBox.union(object_bbox(o) for o in objs)
 
     def snapshot(self) -> "MapDocument":

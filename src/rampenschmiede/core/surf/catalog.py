@@ -49,6 +49,11 @@ class Param:
     #: Auswahl: (Wert, Anzeigename)
     choices: tuple[tuple[str, str], ...] = ()
     hint: str = ""
+    #: Nur zeigen, wenn ein anderer Regler diesen Wert hat: (Schlüssel, Wert)
+    only_if: tuple[str, str] | None = None
+
+    def applies(self, values: dict) -> bool:
+        return self.only_if is None or values.get(self.only_if[0]) == self.only_if[1]
 
     @property
     def kind(self) -> str:
@@ -56,6 +61,8 @@ class Param:
             return "bool"
         if self.choices:
             return "choice"
+        if isinstance(self.default, str):
+            return "text"
         if isinstance(self.default, int) and float(self.step).is_integer():
             return "int"
         return "float"
@@ -67,6 +74,9 @@ class Param:
             return bool(value)
         if kind == "choice":
             return value if value in {c for c, _ in self.choices} else self.default
+        if kind == "text":
+            text = str(value).strip() if value is not None else ""
+            return text or self.default
         try:
             v = float(value)
         except (TypeError, ValueError):
@@ -118,6 +128,9 @@ class Template:
     overrides: tuple[tuple[str, Any], ...] = ()
     #: Surf-Winkel prüfen (bei Rinnen und Rohren ist der flache Boden gewollt)
     check_angles: bool = True
+    #: Eigene Wurzel-Entity statt func_brush/func_detail: (Werte, Platzierung) -> (Klasse, Keyvalues).
+    #: Solche Bausteine haben keine Playerclip-Kollision (Trigger, Bhop-Blöcke).
+    entity: Callable[[dict, Placement], tuple[str, tuple[tuple[str, str], ...]]] | None = None
 
     def param(self, key: str) -> Param | None:
         return next((p for p in self.params if p.key == key), None)
@@ -141,8 +154,8 @@ PROFILE_PARAMS = (
     Param("breite", "Breite", 960, 64, 8192, 16, "u"),
     Param("winkel", "Surf-Winkel", 50.0, 20, 80, 0.5, "°", hint="Ab 45° surfbar, über 65° sehr steil"),
     Param("lippe", "Lippe", 32, 0, 512, 8, "u", hint="Senkrechter Rand unten an der Rampe"),
-    Param("oben", "Obere Breite (Trapez)", 256, 16, 4096, 16, "u"),
-    Param("spiegeln", "Seite tauschen (halbe Rampe)", False),
+    Param("oben", "Obere Breite", 256, 16, 4096, 16, "u", only_if=("profil", "trapez")),
+    Param("spiegeln", "Seite tauschen", False, only_if=("profil", "halb")),
 )
 
 MATERIAL_PARAMS = (
@@ -394,6 +407,92 @@ _add(Template("transfer", "Transfer", "Spezial", "Zwei Rampen nebeneinander zum 
               (LENGTH, Param("abstand", "Lücke", 256, 0, 8192, 16, "u"), Param("hoehe", "Zweite tiefer um", 128, -4096, 4096, 16, "u"),
                Param("versatz", "Zweite nach vorne", 256, -16384, 16384, 16, "u"), DIRECTION, DROP,
                *PROFILE_PARAMS, *MATERIAL_PARAMS), build_transfer))
+
+
+# ---- Bhop und Spielelemente ----------------------------------------------------------
+
+TRIGGER = "TOOLS/TOOLSTRIGGER"
+
+
+def _box_points(cx: float, cy: float, z0: float, length: float, width: float, height: float,
+                yaw: float) -> list[IPoint]:
+    """Quader um (cx, cy) ab Höhe z0, entlang `yaw` ausgerichtet. Die Ecken werden gerundet;
+    weil Ober- und Unterseite waagrecht bleiben, ist das Ergebnis immer ein exaktes Prisma."""
+    a = math.radians(yaw)
+    fx, fy = math.cos(a), math.sin(a)
+    lx, ly = -fy, fx
+    pts: list[IPoint] = []
+    for sf, sl in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        x = cx + fx * length / 2 * sf + lx * width / 2 * sl
+        y = cy + fy * length / 2 * sf + ly * width / 2 * sl
+        for z in (z0, z0 + height):
+            pts.append((_r(x), _r(y), _r(z)))
+    return pts
+
+
+def build_bhop(v: dict, at: Placement, m: Materials) -> list[Shape]:
+    """Reihe von Plattformen, optional im Zickzack und mit Stufen."""
+    a = math.radians(at.yaw)
+    fx, fy = math.cos(a), math.sin(a)
+    lx, ly = -fy, fx
+    size = v["groesse"]
+    shapes: list[Shape] = []
+    for i in range(v["anzahl"]):
+        forward = i * (size + v["abstand"]) + size / 2
+        side = v["zickzack"] * (1 if i % 2 else -1) / 2 if v["zickzack"] else 0
+        cx = at.x + fx * forward + lx * side
+        cy = at.y + fy * forward + ly * side
+        pts = _box_points(cx, cy, at.z + i * v["stufe"], size, size, v["dicke"], at.yaw)
+        shapes.append(HullShape(pts, m))
+    return shapes
+
+
+def bhop_entity(v: dict, at: Placement) -> tuple[str, tuple[tuple[str, str], ...]]:
+    return "func_detail", ()
+
+
+def build_trigger_box(v: dict, at: Placement, m: Materials) -> list[Shape]:
+    a = math.radians(at.yaw)
+    cx = at.x + math.cos(a) * v["laenge"] / 2
+    cy = at.y + math.sin(a) * v["laenge"] / 2
+    pts = _box_points(cx, cy, at.z, v["laenge"], v["breite"], v["hoehe"], at.yaw)
+    return [HullShape(pts, Materials(TRIGGER, TRIGGER, TRIGGER, hide_bottom=True))]
+
+
+def booster_entity(v: dict, at: Placement) -> tuple[str, tuple[tuple[str, str], ...]]:
+    yaw = (at.yaw + v["schub_richtung"]) % 360
+    return "trigger_push", (
+        ("spawnflags", "1"), ("pushdir", f"{-v['schub_neigung']:g} {yaw:g} 0"), ("speed", f"{v['tempo']:g}"),
+        ("StartDisabled", "0"),
+    )
+
+
+def teleport_entity(v: dict, at: Placement) -> tuple[str, tuple[tuple[str, str], ...]]:
+    return "trigger_teleport", (("spawnflags", "1"), ("target", v["ziel"]), ("StartDisabled", "0"))
+
+
+BOX_PARAMS = (
+    Param("laenge", "Länge", 256, 16, 16384, 16, "u"),
+    Param("breite", "Breite", 256, 16, 16384, 16, "u"),
+    Param("hoehe", "Höhe", 128, 16, 16384, 16, "u"),
+)
+
+_add(Template("bhop", "Bhop-Blöcke", "Bhop", "Reihe von Plattformen zum Springen.",
+              (Param("anzahl", "Anzahl", 6, 1, 64), Param("groesse", "Größe", 64, 16, 1024, 16, "u"),
+               Param("abstand", "Abstand", 192, 0, 2048, 16, "u"), Param("dicke", "Dicke", 16, 8, 512, 8, "u"),
+               Param("zickzack", "Zickzack seitlich", 0, 0, 2048, 16, "u"),
+               Param("stufe", "Stufe pro Block", 0, -512, 512, 8, "u", hint="Positiv = jeder Block höher"),
+               Param("unterseite_nodraw", "Unterseite unsichtbar (Nodraw)", False)),
+              build_bhop, check_angles=False, entity=bhop_entity))
+_add(Template("booster", "Booster", "Bhop", "Trigger, der den Spieler in eine Richtung schiebt (trigger_push).",
+              (*BOX_PARAMS, Param("tempo", "Tempo", 800, 0, 10000, 50, "u/s"),
+               Param("schub_neigung", "Neigung nach oben", 0.0, -90, 90, 5, "°"),
+               Param("schub_richtung", "Richtung (relativ)", 0.0, -180, 180, 15, "°", hint="0° = entlang des Bausteins")),
+              build_trigger_box, check_angles=False, entity=booster_entity))
+_add(Template("teleporter", "Teleporter", "Bhop", "Trigger, der zum Ziel teleportiert (trigger_teleport). "
+              "Das Ziel wird mit eingefügt und lässt sich frei verschieben.",
+              (*BOX_PARAMS, Param("ziel", "Zielname", "ziel", hint="targetname des info_teleport_destination")),
+              build_trigger_box, check_angles=False, entity=teleport_entity))
 
 
 # ---- Erzeugen ------------------------------------------------------------------------

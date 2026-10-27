@@ -31,6 +31,8 @@ class EditorContext(QObject):
     history_changed = Signal()
     status_message = Signal(str)
     redraw_requested = Signal()
+    #: Eine Vorlage aus der Bibliothek wurde in eine Ansicht gezogen: (Schlüssel, Weltpunkt)
+    template_dropped = Signal(str, object)
 
     def __init__(self) -> None:
         super().__init__()

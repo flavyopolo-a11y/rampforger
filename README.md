@@ -4,11 +4,13 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Etappe 2 von 11** – Fenster, 3D- und 2D-Ansichten, Grundformen, Auswählen,
+> **Stand: Etappe 3 von 11** – Fenster, 3D- und 2D-Ansichten, Grundformen, Auswählen,
 > Verschieben, Drehen, Skalieren, Undo/Redo, Speichern als `.rsmap`, VMF-Import und -Export
-> ohne Verluste, Kompilieren und Testen mit einem Tastendruck (F9) für CS:S und Momentum Mod.
+> ohne Verluste, Kompilieren und Testen mit einem Tastendruck (F9) für CS:S und Momentum Mod,
+> Startraum mit Dicht-Prüfung, Rampen-Bibliothek mit 20 Vorlagen, deren Regler sich jederzeit
+> ändern lassen.
 
-![Rampenschmiede, Etappe 2: Kompilier-Log mit Leck-Spur](docs/bilder/etappe2.png)
+![Rampenschmiede, Etappe 3: Rampen-Bibliothek mit Reglern einer Kurve](docs/bilder/etappe3.png)
 
 ## Installation
 
@@ -85,6 +87,32 @@ Hintergrund, ohne zu kompilieren. Ein Klick darauf zeigt den Weg ins Freie als r
 die betroffene Entity aus. *Testen → Map mit Skybox umhüllen* legt eine dichte Hülle um alles.
 Vor jedem Kompilieren läuft die Prüfung ebenfalls und warnt im Log.
 
+**Rampen-Bibliothek.** Das Panel *Bibliothek* (links) enthält alle Rampen und Spielelemente
+als Vorlagen. Doppelklick oder *Einfügen* setzt eine Vorlage in die Mitte der Ansicht von oben,
+Ziehen in eine Ansicht setzt sie an die Mausposition (in 3D auf die Fläche unter der Maus).
+
+| Gruppe | Vorlagen |
+| --- | --- |
+| Rampen | Gerade, Halb (eine Seite), Invertiert, Trapez (flache Kante), Ski (mit Gefälle), Pyramide |
+| Kurven | Kurve, Halbe Kurve, Spirale, S-Kurve, Banane (Höhe gewölbt), Welle |
+| Spezial | Halfpipe, Rohr, Slide (V-Rinne), Gabelung, Transfer (zwei Rampen nebeneinander) |
+| Bhop | Bhop-Blöcke (Reihe, Zickzack, Stufen), Booster (`trigger_push`), Teleporter mit Ziel |
+
+Eine eingefügte Rampe ist ein **Baustein**: Ist sie ausgewählt, zeigt das Panel ihre Regler
+(Breite, Surf-Winkel, Lippe, Radius, Bogen, Grad pro Segment, Gefälle, Querschnitt, Richtung,
+Anker …). Jede Änderung baut die Rampe sofort neu; mehrere Änderungen am selben Regler sind ein
+einziger Undo-Schritt. Darunter steht der tatsächliche Surf-Winkel, mit Warnung unter 45°
+(man kann stehen) und über 65° (sehr steil). Ein Klick auf irgendeinen Teil wählt den ganzen
+Baustein. *Baustein lösen* macht normale Brushes daraus.
+
+So baut die Bibliothek Rampen, damit es keine Rampbugs durch krumme Geometrie gibt:
+- Alle Eckpunkte liegen auf ganzen Units, benachbarte Segmente teilen exakt dieselben Nahtpunkte.
+- Kurven drehen höchstens 5° pro Segment (Standard 2,5°), jedes Segment hat eine flache Unterseite.
+- Gerade Rampen sind in jeder Richtung exakte Prismen ohne geknickte Flächen.
+- Kollision: Playerclip-Brushes in der Welt, sichtbar ist ein `func_brush` („nie fest“).
+  Alternativ im Regler *Kollision*: nur `func_detail`.
+- Unsichtbare Flächen (Nähte, Unterseite, aneinanderliegende Teile) bekommen Nodraw.
+
 **Hammer-Maps.** „Öffnen“ liest `.rsmap` und `.vmf`. Beim Import bleibt alles erhalten, auch
 was Rampenschmiede noch nicht bearbeiten kann (Displacements, Gruppen, Visgroups, Kameras):
 Ein Export ergibt wieder dieselbe Map.
@@ -113,7 +141,19 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - [Architektur](docs/architektur.md)
 - [Entscheidungslog](docs/entscheidungen.md)
 
-## Bekannte Grenzen (Etappe 2)
+## Bekannte Grenzen (Etappe 3)
+
+- Bausteine bleiben nur im Projektformat `.rsmap` über Regler änderbar. Im VMF-Export sind es
+  normale Brushes.
+- Verschieben und Drehen um die Hochachse behalten den Baustein (er wird neu gebaut). Spiegeln,
+  Skalieren und Kippen machen normale Brushes daraus.
+- Kurven, Spiralen und Wellen mit Gefälle haben fast ebene Flächen, die beim Runden in zwei
+  Dreiecke mit winzigem Knick geteilt werden. Das lässt sich mit ganzen Zahlen nicht vermeiden.
+- Bei der Gabelung überlappen sich die beiden Äste am Anfang.
+- Die Playerclip-Brushes werden in den Ansichten nicht gezeichnet, weil sie genau auf den
+  sichtbaren Teilen liegen.
+- Noch offen aus Etappe 3: Zonen je Spielprofil, Stage- und Spiel-Vorlagen, eigene Prefabs und
+  der Assistent „Neue Surf-Map“.
 
 - Die Dicht-Prüfung arbeitet mit einem Raster (8 Units, bei großen Maps gröber). Spalte, die
   schmaler als eine Rasterzelle sind, findet nur vbsp.
@@ -122,8 +162,8 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
   und sind nicht bearbeitbar (Etappe 7).
 - Eigene Inhalte (Texturen, Modelle) werden noch nicht in die BSP gepackt (bspzip folgt mit dem
   Material-Browser in Etappe 4).
-- Momentum Mod: App-ID und Ordnernamen sind aus der Doku abgeleitet, der Test auf einem echten
-  System steht aus. Falls die Erkennung nichts findet, im Spielprofil die Pfade von Hand setzen.
+- Momentum Mod: Kompilieren und Starten ist auf einem echten System getestet. Falls die
+  Erkennung nichts findet, im Spielprofil die Pfade von Hand setzen.
 - Keine Texturen in der Ansicht: Flächen werden je Material einfarbig dargestellt (Etappe 4).
 - Entities nur aus einer festen Liste, Lichter ohne Vorschau (Etappe 5 und 6).
 - Bei beliebigen Drehwinkeln liegen die Ebenenpunkte auf ganzen Units, einzelne Eckpunkte

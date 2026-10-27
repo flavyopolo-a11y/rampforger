@@ -9,7 +9,7 @@ werden vorher mit Flavio abgestimmt und hier mit „abgestimmt“ markiert.
 | E2 | 2026-10-27 | Jede Änderung ist ein Command; UI ändert nie direkt | Unbegrenztes Undo/Redo, Autosave, Recovery aus einer Quelle |
 | E3 | 2026-10-27 | Brush = Faces mit Ebene aus drei Integer-Punkten (wie VMF) + gecachte Vertices | Verlustfreier Roundtrip, Konvexität per Definition |
 | E4 | 2026-10-27 | Unbekannte VMF-Daten bleiben als rohe KeyValues am Objekt erhalten | Roundtrip ohne Verluste |
-| E5 | 2026-10-27 | Bausteine (Rampe, Bhop, Zone) parametrisch (Empfehlung A, Flavios Bestätigung steht aus) | Vorlagen mit Reglern bleiben nachträglich änderbar |
+| E5 | 2026-10-27 | Bausteine (Rampe, Bhop, Zone) parametrisch (Empfehlung A, von Flavio bestätigt) | Vorlagen mit Reglern bleiben nachträglich änderbar |
 | E6 | 2026-10-27 | Eigenes Projektformat `.rsmap` (JSON, versioniert); VMF als Import/Export | Bausteine, Lesezeichen, Regeln brauchen Platz |
 | E7 | 2026-10-27 | srctools für KeyValues/FGD/VPK/VTF/VMT/BSP; eigener VVD/VTX-Leser für Modellvorschau | srctools liefert keine MDL-Meshes |
 | E8 | 2026-10-27 | UI-Texte direkt auf Deutsch, aber durchgehend über Qt `tr()` (geändert in Etappe 1) | Deutsch ist die Hauptsprache; weitere Sprachen brauchen nur eine `.ts`-Datei, kein Übersetzungsschritt für Deutsch |
@@ -34,3 +34,11 @@ werden vorher mit Flavio abgestimmt und hier mit „abgestimmt“ markiert.
 | E27 | 2026-10-27 | Neue Maps beginnen mit Startraum: Spawn je Spiel, Sonne, dichte Skybox-Hülle (abschaltbar) | Wunsch von Flavio: sofort ohne Leck kompilieren können, Hülle danach frei umbauen |
 | E28 | 2026-10-27 | Dicht-Prüfung per Raster-Flutung von außen (Zellen ab 8 Units, Brush belegt jede berührte Zelle), live im Hintergrund und vor jedem Kompilieren | Rückmeldung ohne Kompilieren; meldet echte Lecks zuverlässig, übersieht höchstens sehr schmale Spalte |
 | E29 | 2026-10-27 | Nur Welt-Brushes dichten ab; Clip-, Trigger-, Hint-, Skip- und Wasser-Brushes sowie alle Brush-Entities nicht | Entspricht dem Verhalten von vbsp |
+| E30 | 2026-10-27 | Rampen entstehen als Querschnitt entlang eines Weges. Jedes Segment ist die exakte, ganzzahlig gerechnete konvexe Hülle zweier gerundeter Querschnitte | Alle Ecken ganzzahlig, Nachbarsegmente teilen exakt dieselben Nahtpunkte: die wichtigste Regel gegen Rampbugs |
+| E31 | 2026-10-27 | Gerade Wege nutzen eine ganzzahlige Querachse (höchstens 0,25° Abweichung von der gewünschten Richtung) | Gerade Rampen sind in jeder Richtung exakte Prismen ohne Knicke. Bei Kurven mit Gefälle sind leicht verdrehte Flächen unvermeidlich |
+| E32 | 2026-10-27 | Ecken von Brushes, deren Ecken genau ihre ganzzahligen Ebenenpunkte sind, werden in ganzen Zahlen berechnet (mit Prüfung auf geschlossenen Körper); sonst Gleitkomma mit Toleranz 0,0001 statt 0,01 | Fast parallele Flächen (Kurvensegmente) ergaben vorher um bis zu 17 Units falsche Ecken oder verschwundene Flächen |
+| E33 | 2026-10-27 | Kollision standardmäßig über deckungsgleiche Playerclip-Brushes in der Welt, sichtbar ist ein `func_brush` mit Solidity „nie“; wahlweise nur `func_detail` | Regel aus dem Plan: einfache Welt-Kollision, Optik getrennt |
+| E34 | 2026-10-27 | Baustein = Wurzel-Entity mit Vorlage, Reglern und Platzierung in `extra["block"]`; Kollisions-Brushes gehören über `extra["block_of"]` dazu. Ändern tauscht alle Teile in einem Undo-Schritt, die Wurzel behält ihre ID | Auswahl und Verweise bleiben erhalten; Regler-Ziehen verschmilzt zu einem Schritt |
+| E35 | 2026-10-27 | Verschieben behält den Baustein, Drehen um Z baut ihn aus den Reglern neu; Spiegeln, Skalieren und Kippen machen normale Brushes daraus | Freies Drehen Punkt für Punkt würde Nähte und ganze Zahlen zerstören |
+| E36 | 2026-10-27 | Surf-Winkel-Warnung unter 45° (begehbar) und über 65° (sehr steil), bei Halfpipe und Rohr aus | Unter 45° steht der Spieler; der flache Boden einer Rinne ist gewollt |
+| E37 | 2026-10-27 | Beim Drehen wird `angles` nur bei Punkt-Entities (mit `origin`) angepasst | Bei Brush-Entities würde `angles` das Modell im Spiel ein zweites Mal drehen |

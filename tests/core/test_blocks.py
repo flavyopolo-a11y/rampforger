@@ -156,3 +156,41 @@ def test_vmf_export_has_clip_world_brushes_and_func_brush():
     assert text.count('"material" "TOOLS/TOOLSPLAYERCLIP"') == sum(len(c.faces) for c in parts(doc, root.id)[1])
     assert '"classname" "func_brush"' in text and '"Solidity" "1"' in text
     assert isinstance(root, Entity)
+
+
+def test_bhop_blocks_are_detail_platforms_in_a_row():
+    doc = MapDocument()
+    objs, _ = build_block(doc, "bhop", {"anzahl": 4, "groesse": 64, "abstand": 128, "stufe": 16}, Placement(0, 0, 0, 90))
+    root, *blocks = objs
+    assert root.classname == "func_detail" and len(blocks) == 4
+    tops = [b.bbox() for b in blocks]
+    assert [round(b.center[1]) for b in tops] == [32, 224, 416, 608]
+    assert [b.maxs[2] for b in tops] == [16, 32, 48, 64]
+    assert not any(MEMBER_KEY in b.extra for b in blocks)
+
+
+def test_booster_pushes_along_block_direction():
+    doc = MapDocument()
+    objs, _ = build_block(doc, "booster", {"tempo": 1200, "schub_neigung": 30}, Placement(0, 0, 0, 90))
+    root = objs[0]
+    assert root.classname == "trigger_push"
+    assert root.get("pushdir") == "-30 90 0" and root.get("speed") == "1200"
+    assert all(f.material == "TOOLS/TOOLSTRIGGER" for s in objs[1:] for f in s.faces)
+    # Drehen des Bausteins dreht die Schubrichtung mit
+    stack = CommandStack(doc)
+    stack.push(AddObjects(objs))
+    _apply(doc, stack, lambda o: transform.rotate(o, (0, 0, 0), 2, 90))
+    assert doc.get(root.id).get("pushdir") == "-30 180 0"
+
+
+def test_teleporter_gets_unique_destination():
+    from rampenschmiede.core.blocks import insert_block
+
+    doc = MapDocument()
+    stack = CommandStack(doc)
+    for _ in range(2):
+        objs, _ = insert_block(doc, "teleporter", None, Placement(0, 0, 0, 0))
+        stack.push(AddObjects(objs))
+    triggers = [e for e in doc.entities() if e.classname == "trigger_teleport"]
+    dests = [e for e in doc.entities() if e.classname == "info_teleport_destination"]
+    assert sorted(t.get("target") for t in triggers) == sorted(d.get("targetname") for d in dests) == ["ziel", "ziel_2"]

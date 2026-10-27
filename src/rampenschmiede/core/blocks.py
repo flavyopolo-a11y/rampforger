@@ -13,6 +13,7 @@ Die Wurzel behält ihre ID, damit Auswahl und Verweise erhalten bleiben.
 from __future__ import annotations
 
 import dataclasses
+import math
 import random
 from typing import Callable, Iterable, Sequence
 
@@ -46,6 +47,11 @@ def placement_of(info: dict) -> Placement:
 
 
 def _root_entity(root_id: int, collision: str, info: dict, editor: EditorInfo | None) -> Entity:
+    template = CATALOG[info["template"]]
+    if template.entity is not None:
+        classname, kvs = template.entity(info["values"], placement_of(info))
+        return Entity(id=root_id, classname=classname, keyvalues=kvs,
+                      editor=editor or EditorInfo(color=(220, 30, 220)), extra={BLOCK_KEY: info})
     if collision == "clip":
         # Nie fest: Die Kollision kommt von den Playerclip-Brushes in der Welt
         kvs = (("Solidity", "1"), ("vrad_brush_cast_shadows", "1"))
@@ -65,7 +71,7 @@ def build_block(doc: MapDocument, template: str, values: dict | None = None, at:
     v = t.values(values)
     gen = generate(t, v, at)
     info = {"template": template, "values": v, "placement": [at.x, at.y, at.z, at.yaw]}
-    collision = v.get("kollision", "clip")
+    collision = v.get("kollision", "clip") if t.entity is None else "none"
     root = _root_entity(root_id if root_id is not None else doc.new_id(), collision, info, root_editor)
     if color is None:
         rng = random.Random()
@@ -78,6 +84,33 @@ def build_block(doc: MapDocument, template: str, values: dict | None = None, at:
             clip = tuple(dataclasses.replace(f, material=PLAYERCLIP) for f in faces)
             objs.append(Solid(id=doc.new_id(), faces=clip, editor=EditorInfo(color=CLIP_COLOR),
                               extra={MEMBER_KEY: root.id}))
+    return objs, gen
+
+
+def _unique_name(doc: MapDocument, base: str) -> str:
+    used = {e.get("targetname") for e in doc.entities()}
+    used |= {(block_info(e) or {}).get("values", {}).get("ziel") for e in doc.entities()}
+    if base not in used:
+        return base
+    n = 2
+    while f"{base}_{n}" in used:
+        n += 1
+    return f"{base}_{n}"
+
+
+def insert_block(doc: MapDocument, template: str, values: dict | None = None,
+                 at: Placement = ORIGIN) -> tuple[list[MapObject], Generated]:
+    """Wie `build_block`, plus Begleiter beim ersten Einfügen (Ziel eines Teleporters)."""
+    values = dict(values or {})
+    if template == "teleporter":
+        values["ziel"] = _unique_name(doc, CATALOG[template].values(values)["ziel"])
+    objs, gen = build_block(doc, template, values, at)
+    if template == "teleporter":
+        a = math.radians(at.yaw)
+        dist = CATALOG[template].values(values)["laenge"] + 256
+        x, y = round(at.x + math.cos(a) * dist), round(at.y + math.sin(a) * dist)
+        objs.append(Entity(id=doc.new_id(), classname="info_teleport_destination", keyvalues=(
+            ("targetname", values["ziel"]), ("origin", f"{x} {y} {round(at.z)}"), ("angles", f"0 {at.yaw:g} 0"))))
     return objs, gen
 
 
@@ -173,6 +206,7 @@ __all__ = [
     "PLAYERCLIP",
     "block_info",
     "build_block",
+    "insert_block",
     "change_block",
     "clone_objects",
     "dissolve",

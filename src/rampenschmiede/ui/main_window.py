@@ -31,6 +31,7 @@ from .dialogs.profiles_dialog import ProfilesDialog
 from .dialogs.transform_dialog import TransformDialog
 from .editor import EditorContext
 from .panels.compile_log import CompileLogPanel
+from .panels.library_panel import LibraryPanel
 from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
 from .paths import profiles_file
@@ -125,8 +126,13 @@ class MainWindow(QMainWindow):
         self.sel_dock.setObjectName("dock_selection")
         self.sel_dock.setWidget(SelectionPanel(self.editor))
         self.addDockWidget(Qt.RightDockWidgetArea, self.sel_dock)
+        self.lib_dock = QDockWidget(self.tr("Bibliothek"), self)
+        self.lib_dock.setObjectName("dock_library")
+        self.library = LibraryPanel(self.editor, self._insert_point)
+        self.lib_dock.setWidget(self.library)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
         # Ohne Mindestbreite drücken die Ansichten die Panels auf wenige Pixel zusammen.
-        for dock in (self.tool_dock, self.sel_dock):
+        for dock in (self.tool_dock, self.sel_dock, self.lib_dock):
             dock.widget().setMinimumWidth(DOCK_MIN_WIDTH)
         self.log_dock = QDockWidget(self.tr("Kompilieren"), self)
         self.log_dock.setObjectName("dock_compile_log")
@@ -246,6 +252,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addAction(self.tool_dock.toggleViewAction())
         m.addAction(self.sel_dock.toggleViewAction())
+        m.addAction(self.lib_dock.toggleViewAction())
 
         m = mb.addMenu(self.tr("&Werkzeuge"))
         for a in self.tool_actions.values():
@@ -669,6 +676,13 @@ class MainWindow(QMainWindow):
         for vp in self.grid_view.viewports():
             vp.center_on(point, size)
 
+    def _insert_point(self) -> tuple[float, float, float]:
+        """Wohin „Einfügen“ aus der Bibliothek setzt: Mitte der Ansicht von oben, Höhe 0."""
+        for vp in self.grid_view.viewports():
+            if vp.view == "top":
+                return (vp.cam2d.center_h, vp.cam2d.center_v, 0.0)
+        return (0.0, 0.0, 0.0)
+
     def center_on_selection(self) -> None:
         bb = self.editor.selection_bbox() or self.editor.doc.bbox()
         if bb is None:
@@ -683,6 +697,9 @@ class MainWindow(QMainWindow):
             dock.setFloating(False)
             dock.show()
             self.addDockWidget(Qt.RightDockWidgetArea, dock)
+        self.lib_dock.setFloating(False)
+        self.lib_dock.show()
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
 
     def set_expert(self, on: bool) -> None:
         self.editor.doc.editor.expert_mode = on
@@ -708,7 +725,7 @@ class MainWindow(QMainWindow):
         state = self.settings.value("window_state")
         if state is not None:
             self.restoreState(state)
-        self.resizeDocks([self.tool_dock, self.sel_dock], [DOCK_MIN_WIDTH, DOCK_MIN_WIDTH], Qt.Horizontal)
+        self.resizeDocks([self.tool_dock, self.sel_dock, self.lib_dock], [DOCK_MIN_WIDTH] * 3, Qt.Horizontal)
         try:
             self.grid_view.restore_state(json.loads(self.settings.value("viewports", "{}")))
         except (TypeError, ValueError):
