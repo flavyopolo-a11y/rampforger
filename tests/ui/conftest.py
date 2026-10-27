@@ -34,6 +34,8 @@ def _isolated_settings(tmp_path, monkeypatch):
 def window(qtbot):
     from rampenschmiede.ui.main_window import MainWindow
 
+    # Die meisten Tests brauchen eine leere Map; der Startraum hat eigene Tests
+    QSettings("Rampenschmiede", "Rampenschmiede").setValue("new_map_starter", "false")
     w = MainWindow()
     w.resize(1400, 900)
     qtbot.addWidget(w)
