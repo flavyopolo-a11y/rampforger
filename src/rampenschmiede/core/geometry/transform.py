@@ -62,7 +62,19 @@ def _transform_solid(solid: Solid, point_fn: Callable[[Point], Point],
     return result
 
 
-def _transform_entity(ent: Entity, point_fn: Callable[[Point], Point]) -> Entity:
+def _transform_entity(ent: Entity, point_fn: Callable[[Point], Point], yaw_delta: float | None = None) -> Entity:
+    """Ursprung mitbewegen. Bei Bausteinen auch den Ankerpunkt: Verschieben und Drehen um Z
+    kann der Baustein nachbilden, alles andere macht ihn zu normalen Brushes."""
+    block = ent.extra.get("block")
+    if block is not None:
+        extra = dict(ent.extra)
+        if yaw_delta is None:
+            del extra["block"]
+        else:
+            x, y, z, yaw = block["placement"]
+            px, py, pz = round_point(point_fn((float(x), float(y), float(z))))
+            extra["block"] = {**block, "placement": [px, py, pz, round((yaw + yaw_delta) % 360, 6)]}
+        ent = ent.replace(extra=extra)
     origin = ent.origin
     if origin is None:
         return ent
@@ -74,7 +86,7 @@ def translate(obj: MapObject, delta: Point, texture_lock: bool = True) -> MapObj
     d = round_point(delta)
     fdelta: Point = (float(d[0]), float(d[1]), float(d[2]))
     if isinstance(obj, Entity):
-        return _transform_entity(obj, lambda p: add(p, fdelta))
+        return _transform_entity(obj, lambda p: add(p, fdelta), 0.0)
 
     def tex(ax: TexAxis) -> TexAxis:
         return dataclasses.replace(ax, offset=ax.offset - dot(fdelta, ax.vec) / ax.scale) if ax.scale else ax
@@ -99,9 +111,10 @@ def rotate(obj: MapObject, pivot: Point, axis: int, degrees: float, texture_lock
         return add(mat_mul_vec(m, sub(p, pivot)), pivot)
 
     if isinstance(obj, Entity):
-        ent = _transform_entity(obj, fn)
-        if axis == 2:
-            # Gier-Winkel der Entity mitdrehen
+        ent = _transform_entity(obj, fn, degrees if axis == 2 else None)
+        if axis == 2 and ent.origin is not None:
+            # Gier-Winkel der Entity mitdrehen (nur Punkt-Entities: bei Brush-Entities würde
+            # "angles" das ganze Modell im Spiel noch einmal drehen)
             raw = ent.get("angles", "0 0 0").split()
             if len(raw) == 3:
                 try:

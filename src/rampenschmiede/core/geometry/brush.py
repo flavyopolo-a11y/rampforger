@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from ..model.objects import Solid
 
 WORLD_EXTENT = 131072.0  # größer als jede Source-Map (±16384 bzw. ±32768 in Strata)
-CLIP_EPSILON = 0.01
+CLIP_EPSILON = 1e-4
 SNAP_EPSILON = 1e-3
 
 
@@ -95,6 +95,98 @@ def face_polygons(planes: Sequence[Plane]) -> list[list[Point] | None]:
         poly = _dedupe([_snap(p) for p in poly])
         result.append(poly if len(poly) >= 3 else None)
     return result
+
+
+def _int_plane(face: "Face") -> tuple[tuple[int, int, int], int] | None:
+    """Exakte Ebene (ganzzahlige Normale nach außen, Abstand) aus ganzzahligen Face-Punkten."""
+    pts = face.points
+    if not all(float(c).is_integer() for p in pts for c in p):
+        return None
+    p1, p2, p3 = ((int(p[0]), int(p[1]), int(p[2])) for p in pts)
+    a = (p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2])
+    b = (p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
+    n = (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+    return n, n[0] * p1[0] + n[1] * p1[1] + n[2] * p1[2]
+
+
+def order_on_plane(normal: tuple[int, int, int], pts: Sequence[tuple[int, int, int]]) -> list[tuple[int, int, int]]:
+    """Ganzzahlige Punkte einer Ebene als konvexes Polygon, gegen den Uhrzeigersinn von
+    außen gesehen, ohne Punkte, die nur auf einer Kante liegen. Exakt gerechnet."""
+    drop = max(range(3), key=lambda i: abs(normal[i]))
+    keep = [i for i in range(3) if i != drop]
+    flat = sorted(set((p[keep[0]], p[keep[1]], p) for p in pts))
+
+    def turn(o, a, b) -> int:
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower: list = []
+    for q in flat:
+        while len(lower) >= 2 and turn(lower[-2], lower[-1], q) <= 0:
+            lower.pop()
+        lower.append(q)
+    upper: list = []
+    for q in reversed(flat):
+        while len(upper) >= 2 and turn(upper[-2], upper[-1], q) <= 0:
+            upper.pop()
+        upper.append(q)
+    loop = [q[2] for q in lower[:-1] + upper[:-1]]
+    if len(loop) >= 3:
+        a, b, c = loop[0], loop[1], loop[2]
+        u = (b[0] - a[0], b[1] - a[1], b[2] - a[2])
+        v = (c[0] - a[0], c[1] - a[1], c[2] - a[2])
+        n = (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0])
+        if n[0] * normal[0] + n[1] * normal[1] + n[2] * normal[2] < 0:
+            loop.reverse()
+    return loop
+
+
+def exact_polygons(faces: Sequence["Face"]) -> list[list[Point] | None] | None:
+    """Exakte Face-Polygone für Brushes, deren Ecken genau die ganzzahligen Ebenenpunkte sind
+    (so baut die Rampen-Bibliothek ihre Segmente).
+
+    Fast parallele Ebenen machen die Gleitkomma-Rechnung ungenau; hier wird in ganzen Zahlen
+    gerechnet. Liefert None, wenn der Brush nicht so beschrieben ist (dann gilt die normale
+    Rechnung). Geprüft wird, dass jede Kante genau zwei Faces trennt und die Euler-Formel
+    gilt, also ein geschlossener Körper entsteht.
+    """
+    planes = [_int_plane(f) for f in faces]
+    if any(p is None or p[0] == (0, 0, 0) for p in planes):
+        return None
+    on_planes: dict[tuple[int, int, int], set[int]] = {}
+    for c in {(int(p[0]), int(p[1]), int(p[2])) for f in faces for p in f.points}:
+        on: set[int] = set()
+        for j, (n, d) in enumerate(planes):  # type: ignore[misc]
+            s = n[0] * c[0] + n[1] * c[1] + n[2] * c[2] - d
+            if s > 0:
+                break
+            if s == 0:
+                on.add(j)
+        else:
+            if len(on) >= 3:
+                on_planes[c] = on
+    loops: list[list[tuple[int, int, int]]] = []
+    edges: dict[frozenset, int] = {}
+    for i, (n, _d) in enumerate(planes):  # type: ignore[misc]
+        loop = order_on_plane(n, [c for c, on in on_planes.items() if i in on])
+        if len(loop) < 3:
+            return None
+        for k in range(len(loop)):
+            e = frozenset((loop[k], loop[k - 1]))
+            edges[e] = edges.get(e, 0) + 1
+        loops.append(loop)
+    if any(count != 2 for count in edges.values()):
+        return None
+    verts = {p for loop in loops for p in loop}
+    if len(verts) - len(edges) + len(loops) != 2:
+        return None
+    return [[(float(p[0]), float(p[1]), float(p[2])) for p in loop] for loop in loops]
+
+
+def solid_polygons(faces: Sequence["Face"]) -> list[list[Point] | None]:
+    exact = exact_polygons(faces)
+    if exact is not None:
+        return exact
+    return face_polygons([f.plane for f in faces])
 
 
 def polygon_area(poly: Sequence[Point]) -> float:

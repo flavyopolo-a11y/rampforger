@@ -92,9 +92,9 @@ class Solid:
     def polygons(self) -> list[list[Point] | None]:
         cache = self.__dict__.get("_polys")
         if cache is None:
-            from ..geometry.brush import face_polygons
+            from ..geometry.brush import solid_polygons
 
-            cache = face_polygons([f.plane for f in self.faces])
+            cache = solid_polygons(self.faces)
             object.__setattr__(self, "_polys", cache)
         return cache
 

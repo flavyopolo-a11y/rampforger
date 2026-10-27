@@ -41,7 +41,7 @@ class AddObjects(Command):
 
 
 class RemoveObjects(Command):
-    """Entfernt Objekte. Bei Brush-Entities werden ihre Brushes mit entfernt."""
+    """Entfernt Objekte. Bei Brush-Entities und Bausteinen werden ihre Brushes mit entfernt."""
 
     def __init__(self, ids: Iterable[int], description: str = "Löschen") -> None:
         self.ids = list(dict.fromkeys(ids))
@@ -50,8 +50,8 @@ class RemoveObjects(Command):
 
     def do(self, doc: MapDocument) -> ChangeSet:
         ids = list(self.ids)
-        for oid in self.ids:
-            ids += [s.id for s in doc.children(oid) if s.id not in ids]
+        known = set(ids)
+        ids += [s.id for s in doc.attached(self.ids) if s.id not in known]
         self.removed, cs = doc._remove(ids)
         return cs
 
@@ -85,6 +85,49 @@ class ReplaceObjects(Command):
         latest = {o.id: o for o in self.new}
         latest.update({o.id: o for o in newer.new})
         self.new = list(latest.values())
+        return True
+
+
+class SwapObjects(Command):
+    """Entfernt Objekte und fügt andere ein, als ein Undo-Schritt. Objekte, die mit derselben
+    ID wieder eingefügt werden, gelten als geändert (z. B. ein neu erzeugter Baustein)."""
+
+    def __init__(self, remove_ids: Iterable[int], add: Sequence[MapObject], description: str = "Ändern",
+                 merge_key: object | None = None) -> None:
+        self.remove_ids = list(dict.fromkeys(remove_ids))
+        self.added = list(add)
+        self.removed: list[MapObject] = []
+        self.description = description
+        self.merge_key = merge_key
+
+    @staticmethod
+    def _changes(gone: Sequence[MapObject], new: Sequence[MapObject]) -> ChangeSet:
+        g, n = {o.id for o in gone}, {o.id for o in new}
+        return ChangeSet(added=n - g, removed=g - n, modified=g & n)
+
+    def do(self, doc: MapDocument) -> ChangeSet:
+        self.removed, _ = doc._remove(self.remove_ids)
+        try:
+            doc._insert(self.added)
+        except Exception:
+            doc._insert(self.removed)
+            raise
+        return self._changes(self.removed, self.added)
+
+    def undo(self, doc: MapDocument) -> ChangeSet:
+        doc._remove([o.id for o in self.added])
+        doc._insert(self.removed)
+        return self._changes(self.added, self.removed)
+
+    def merge(self, newer: Command, doc: MapDocument) -> bool:
+        if not isinstance(newer, SwapObjects) or newer.merge_key != self.merge_key:
+            return False
+        # Ursprüngliche Objekte behalten, Zwischenstände verwerfen, neuesten Stand übernehmen.
+        mine = {o.id for o in self.added}
+        gone = {o.id for o in newer.removed}
+        self.removed += [o for o in newer.removed if o.id not in mine]
+        self.added = [o for o in self.added if o.id not in gone] + newer.added
+        self.remove_ids = [o.id for o in self.removed]
         return True
 
 

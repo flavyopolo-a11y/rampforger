@@ -17,10 +17,11 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
+from ..core.blocks import clone_objects
 from ..core.commands import AddObjects
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.io import rsmap, vmf
-from ..core.model import Entity, MapDocument, MapObject
+from ..core.model import MapDocument, MapObject
 from ..core.profiles import ProfileStore, detect_profiles
 from ..core.templates import enclose_map, starter_room
 from ..core.validation.seal import describe as describe_seal
@@ -526,11 +527,7 @@ class MainWindow(QMainWindow):
     # ---- Bearbeiten -------------------------------------------------------------------
     def edit_copy(self) -> None:
         objs = self.editor.selected_objects()
-        out: list[MapObject] = list(objs)
-        for o in objs:
-            if isinstance(o, Entity):
-                out += self.editor.doc.children(o.id)
-        self._clipboard = out
+        self._clipboard = objs + self.editor.doc.attached(o.id for o in objs)
 
     def edit_cut(self) -> None:
         self.edit_copy()
@@ -539,21 +536,7 @@ class MainWindow(QMainWindow):
     def edit_paste(self) -> None:
         if not self._clipboard:
             return
-        doc = self.editor.doc
-        id_map: dict[int, int] = {}
-        new: list[MapObject] = []
-        roots: list[int] = []
-        for o in self._clipboard:
-            id_map[o.id] = doc.new_id()
-        for o in self._clipboard:
-            if isinstance(o, Entity):
-                new.append(o.replace(id=id_map[o.id], vmf_id=None))
-                roots.append(id_map[o.id])
-            else:
-                parent = id_map.get(o.parent_id) if o.parent_id is not None else None
-                new.append(o.replace(id=id_map[o.id], parent_id=parent, vmf_id=None))
-                if parent is None:
-                    roots.append(id_map[o.id])
+        new, roots = clone_objects(self.editor.doc, self._clipboard)
         self.editor.run(AddObjects(new, self.tr("Einfügen")))
         self.editor.set_selection(roots)
 
