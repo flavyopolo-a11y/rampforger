@@ -6,7 +6,8 @@ Bedienung wie in Hammer:
 - Erneuter Klick auf die Auswahl wechselt zwischen Skalier- und Drehgriffen
 - Drehen rastet in 15°-Schritten ein, mit Shift frei
 - Pfeiltasten verschieben um eine Rasterweite
-- In 3D: an den farbigen Pfeilen (X rot, Y grün, Z blau) entlang einer Achse ziehen, Shift kopiert
+- In 3D: an den farbigen Pfeilen (X rot, Y grün, Z blau) entlang einer Achse ziehen, Shift kopiert;
+  am orangen Ring um die Hochachse drehen (15°-Schritte, mit Shift frei)
 """
 from __future__ import annotations
 
@@ -36,13 +37,17 @@ AXIS_COLORS = ((235, 72, 72), (96, 200, 96), (80, 140, 255))
 AXIS_NAMES = "XYZ"
 AXIS_HOVER = QColor(255, 220, 0)
 GIZMO_PX = 90
+#: Index des Dreh-Rings neben den Achsen 0–2
+RING = 3
+RING_COLOR = QColor(255, 140, 40)
+RING_SEGMENTS = 64
 GIZMO_HIT_PX = 9
 HANDLES = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
 
 
 @dataclass
 class _Drag:
-    kind: str  # pending | move | scale | rotate | marquee
+    kind: str  # pending | move | scale | rotate | marquee | axis | spin
     press_pos: QPointF
     start: tuple[float, float]
     current: tuple[float, float]
@@ -314,6 +319,48 @@ class SelectTool(Tool):
             tips.append(QPointF(c.x() + o[0] * scale, c.y() + o[1] * scale))
         return c, tips
 
+    def ring(self, vp: "Viewport") -> list[QPointF] | None:
+        """Dreh-Ring um die Hochachse (Z) der Auswahl, als Punkte auf dem Bildschirm."""
+        bb = self.editor.selection_bbox()
+        if bb is None:
+            return None
+        center = np.array(bb.center, dtype=float)
+        c = vp.project(center)
+        if c is None:
+            return None
+        dist = max(float(np.linalg.norm(center - vp.cam3d.position)), 1.0)
+        longest = 0.0
+        for axis in range(3):
+            step = np.zeros(3)
+            step[axis] = dist * 0.05
+            t = vp.project(center + step)
+            if t is not None:
+                longest = max(longest, math.hypot(t.x() - c.x(), t.y() - c.y()))
+        if longest < 1e-6:
+            return None
+        radius = GIZMO_PX * 1.35 / longest * dist * 0.05
+        pts: list[QPointF] = []
+        for k in range(RING_SEGMENTS + 1):
+            a = 2 * math.pi * k / RING_SEGMENTS
+            q = vp.project(center + np.array([math.cos(a) * radius, math.sin(a) * radius, 0.0]))
+            if q is None:
+                return None
+            pts.append(q)
+        return pts
+
+    def _hit_ring(self, vp: "Viewport", pos: QPointF) -> bool:
+        pts = self.ring(vp)
+        if not pts:
+            return False
+        return min(_segment_distance(pos, a, b) for a, b in zip(pts, pts[1:])) <= GIZMO_HIT_PX
+
+    def _screen_angle(self, vp: "Viewport", pos: QPointF, center: QPointF) -> float:
+        """Winkel der Maus um die Mitte, gegen den Uhrzeigersinn von oben gesehen."""
+        a = math.degrees(math.atan2(center.y() - pos.y(), pos.x() - center.x()))
+        bb = self.editor.selection_bbox()
+        below = bb is not None and vp.cam3d.position[2] < bb.center[2]
+        return -a if below else a
+
     def _hit_axis(self, vp: "Viewport", pos: QPointF) -> int | None:
         g = self.gizmo(vp)
         if g is None:
@@ -341,6 +388,27 @@ class SelectTool(Tool):
         s = (b * float(direction @ w) - float(a @ w)) / denom
         return float(center[axis] + s)
 
+    def _start_spin(self, vp: "Viewport", e: QMouseEvent) -> bool:
+        bb = self.editor.selection_bbox()
+        c = vp.project(np.array(bb.center, dtype=float)) if bb is not None else None
+        if bb is None or c is None:
+            return False
+        self._drag = _Drag("spin", e.position(), (c.x(), c.y()), (0.0, 0.0), self._targets(), bb,
+                           axis=RING, along=self._screen_angle(vp, e.position(), c))
+        return True
+
+    def _apply_spin(self, vp: "Viewport", d: _Drag, pos: QPointF, free: bool) -> None:
+        if d.bbox is None:
+            return
+        deg = (self._screen_angle(vp, pos, QPointF(*d.start)) - d.along + 180) % 360 - 180
+        if not free:
+            deg = round(deg / ROTATE_SNAP_DEG) * ROTATE_SNAP_DEG
+        d.current = (deg, 0.0)
+        pivot = tuple(math.floor(c + 0.5) for c in d.bbox.center)
+        lock = self.editor.texture_lock
+        self._replace(d, lambda o: transform.rotate(o, pivot, 2, deg, lock), "Drehen")  # type: ignore[arg-type]
+        self.editor.status_message.emit(f"Drehung {deg:+.0f}°")
+
     def _start_axis_drag(self, vp: "Viewport", e: QMouseEvent, axis: int) -> bool:
         bb = self.editor.selection_bbox()
         if bb is None:
@@ -357,6 +425,10 @@ class SelectTool(Tool):
 
     def move_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
         d = self._drag
+        if d is not None and d.kind == "spin":
+            self._apply_spin(vp, d, e.position(), free=bool(e.modifiers() & Qt.ShiftModifier))
+            vp.update()
+            return
         if d is not None and d.kind == "axis" and d.axis is not None and d.bbox is not None:
             along = self._along(vp, e.position(), d.axis, np.array(d.bbox.center, dtype=float))
             if along is None:
@@ -371,18 +443,20 @@ class SelectTool(Tool):
             vp.update()
             return
         hover = self._hit_axis(vp, e.position()) if self.editor.selection else None
+        if hover is None and self.editor.selection and self._hit_ring(vp, e.position()):
+            hover = RING
         if hover != self.hover_axis:
             self.hover_axis = hover
             vp.update()
 
     def release_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
-        if self._drag is not None and self._drag.kind == "axis":
+        if self._drag is not None and self._drag.kind in ("axis", "spin"):
             self._drag = None
             self.editor.stack.end_merge()
             self.editor.redraw_requested.emit()
 
     def cursor_3d(self, vp: "Viewport", pos: QPointF) -> Qt.CursorShape:
-        if self._drag is not None and self._drag.kind == "axis":
+        if self._drag is not None and self._drag.kind in ("axis", "spin"):
             return Qt.ClosedHandCursor
         return Qt.OpenHandCursor if self.hover_axis is not None else Qt.ArrowCursor
 
@@ -391,7 +465,13 @@ class SelectTool(Tool):
         if g is None:
             return
         c, tips = g
-        active = self._drag.axis if self._drag is not None and self._drag.kind == "axis" else self.hover_axis
+        dragging = self._drag is not None and self._drag.kind in ("axis", "spin")
+        active = self._drag.axis if dragging else self.hover_axis  # type: ignore[union-attr]
+        ring = self.ring(vp)
+        if ring:
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(AXIS_HOVER if active == RING else RING_COLOR, 3 if active == RING else 2))
+            p.drawPolyline(ring)
         for axis, tip in enumerate(tips):
             if tip is None:
                 continue
@@ -408,11 +488,16 @@ class SelectTool(Tool):
         if d is not None and d.kind == "axis" and d.axis is not None:
             p.setPen(AXIS_HOVER)
             p.drawText(QPointF(c.x() + 10, c.y() - 10), f"{AXIS_NAMES[d.axis]} {d.current[0]:+g}")
+        elif d is not None and d.kind == "spin":
+            p.setPen(AXIS_HOVER)
+            p.drawText(QPointF(c.x() + 10, c.y() - 10), f"{d.current[0]:+.0f}°")
 
     def press_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
         if self.editor.selection and not e.modifiers() & Qt.ControlModifier:
             axis = self._hit_axis(vp, e.position())
             if axis is not None and self._start_axis_drag(vp, e, axis):
+                return
+            if axis is None and self._hit_ring(vp, e.position()) and self._start_spin(vp, e):
                 return
         origin, direction = vp.ray(e.position())
         hit = pick_3d(self.editor, origin, direction)

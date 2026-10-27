@@ -62,3 +62,29 @@ def test_click_away_from_arrows_still_picks(window, qtbot):
     send_mouse(vp, QEvent.MouseButtonPress, QPointF(5, 5))
     send_mouse(vp, QEvent.MouseButtonRelease, QPointF(5, 5), buttons=Qt.NoButton)
     assert not window.editor.selection
+
+
+def test_ring_rotates_ramp_and_keeps_it_a_block(window, qtbot):
+    from rampenschmiede.core.blocks import block_info
+
+    root = window.library.insert("gerade", (0.0, 0.0, 0.0))
+    window.editor.set_tool("select")
+    window.editor.set_selection({root})
+    vp = next(v for v in window.grid_view.viewports() if v.is_3d)
+    vp.resize(800, 600)
+    bb = window.editor.selection_bbox()
+    vp.cam3d.position = __import__("numpy").array([bb.center[0], bb.center[1] - 2500.0, bb.center[2] + 2500.0])
+    vp.cam3d.look_at_point(__import__("numpy").array(bb.center))
+    tool = window.editor.tool
+    ring = tool.ring(vp)
+    assert ring and len(ring) > 10
+    # rechter Punkt des Rings (Winkel 0°) zum oberen Punkt (90°) ziehen
+    start = ring[0]
+    end = ring[len(ring) // 4]
+    assert tool._hit_axis(vp, start) is None and tool._hit_ring(vp, start)
+    drag(vp, start, end, steps=10)
+    info = block_info(window.editor.doc.get(root))
+    assert info is not None
+    assert round(info["placement"][3]) % 360 == 90
+    window.editor.undo()
+    assert round(block_info(window.editor.doc.get(root))["placement"][3]) % 360 == 0
