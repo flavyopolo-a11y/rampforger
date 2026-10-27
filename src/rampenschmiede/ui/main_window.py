@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QScrollArea,
     QSizePolicy,
     QToolBar,
     QToolButton,
@@ -21,14 +22,14 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
-from ..core.blocks import clone_objects, upgrade_roots
+from ..core.blocks import clone_objects, is_block_root, upgrade_roots
 from ..core.commands import AddObjects, Command, MacroCommand
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.cutting import carve_with
 from ..core.io import bsp, rsmap, vmf
 from ..core.materials import MaterialLibrary
 from ..core.materials.authoring import import_image, ramp_material, wall_material
-from ..core.materials.styles import WorldStyle, pick_sky, pick_wall, style_command
+from ..core.materials.styles import WorldStyle, pick_sky, pick_wall, sky_command, style_command
 from ..core.materials.theme import SetTheme, Theme, apply_collision, apply_theme, get_theme
 from ..core.model import Entity, MapDocument, MapObject
 from ..core.profiles import ProfileStore, detect_profiles
@@ -46,6 +47,7 @@ from .dialogs.ramp_assistant import (
     side_color,
     to_hex,
 )
+from .dialogs.sky_dialog import SkyDialog
 from .dialogs.surf_wizard import SurfWizard
 from .dialogs.texture_packs import TexturePacksDialog
 from .dialogs.transform_dialog import TransformDialog
@@ -58,7 +60,7 @@ from .panels.material_browser import MaterialBrowser
 from .panels.scene_panel import ScenePanel
 from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
-from .paths import profiles_file, textures_dir
+from .paths import bsp_textures_dir, profiles_file, textures_dir
 from .seal_watcher import SealWatcher
 from .tools.clip_tool import ClipTool, HoleTool
 from .tools.entity_tool import EntityTool
@@ -85,8 +87,8 @@ BSP_FILTER = "Kompilierte Map (*.bsp)"
 VMF_FILTER = "Hammer-Map (*.vmf)"
 MAX_RECENT = 8
 #: Steigt, wenn neue Panels dazukommen: Alte gespeicherte Anordnungen werden dann verworfen
-LAYOUT_VERSION = 3
-DOCK_MIN_WIDTH = 320
+LAYOUT_VERSION = 5
+DOCK_MIN_WIDTH = 340
 
 CONTROLS_HELP = """
 <h3>Kamera</h3>
@@ -133,6 +135,8 @@ class MainWindow(QMainWindow):
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")
         self.profiles = self._load_profiles()
+        #: Texturen der zuletzt geöffneten BSP (aus ihr ausgepackt)
+        self._map_textures: list[str] = []
         self.compile_settings = self._load_compile_settings()
         self.compiler = CompileController(self.editor, self)
         self.seal = SealWatcher(self.editor, self)
@@ -156,6 +160,7 @@ class MainWindow(QMainWindow):
         ed.status_message.connect(lambda m: self.statusBar().showMessage(m, 5000))
         ed.grid_changed.connect(lambda g: self.grid_label.setText(self.tr("Raster {0}").format(g)))
         ed.selection_changed.connect(self._update_selection_label)
+        ed.selection_changed.connect(self._show_selection_in_scene)
         ed.tool_changed.connect(self._on_tool_changed)
         ed.document_changed.connect(self._sync_ramp_clip)
         ed.document_replaced.connect(self._sync_ramp_clip)
@@ -179,21 +184,19 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.tool_dock)
         self.sel_dock = QDockWidget(self.tr("Auswahl"), self)
         self.sel_dock.setObjectName("dock_selection")
-        self.sel_dock.setWidget(SelectionPanel(self.editor))
-        self.addDockWidget(Qt.RightDockWidgetArea, self.sel_dock)
+        self.selection_panel = SelectionPanel(self.editor)
+        self.sel_dock.setWidget(_scrollable(self.selection_panel))
         self.lib_dock = QDockWidget(self.tr("Bibliothek"), self)
         self.lib_dock.setObjectName("dock_library")
         self.library = LibraryPanel(self.editor, self._insert_point)
-        self.lib_dock.setWidget(self.library)
+        self.lib_dock.setWidget(_scrollable(self.library))
         self.editor.register_tool(PaintTool(self.editor, self.library))
         self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
         self.scene_dock = QDockWidget(self.tr("Szene"), self)
         self.scene_dock.setObjectName("dock_scene")
         self.scene = ScenePanel(self.editor, self.center_on_selection)
         self.scene_dock.setWidget(self.scene)
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.scene_dock)
-        self.tabifyDockWidget(self.lib_dock, self.scene_dock)
-        self.lib_dock.raise_()
+        self._arrange_left()
         # Ohne Mindestbreite drücken die Ansichten die Panels auf wenige Pixel zusammen.
         for dock in (self.tool_dock, self.sel_dock, self.lib_dock, self.scene_dock):
             dock.widget().setMinimumWidth(DOCK_MIN_WIDTH)
@@ -308,6 +311,9 @@ class MainWindow(QMainWindow):
                                                "Rampenschmiede")
         self.act_world_style = self._action("&Welt-Stil …", self.world_style, None,
                                             "Himmel, Sonne, Nebel, Wände und Rampenfarben mit einem Klick")
+        self.act_sky = self._action("&Himmel …", self.choose_sky, None,
+                                    "Skybox der Map wählen; die 3D-Ansicht zeigt sie in „Texturiert“ und "
+                                    "„Licht-Vorschau“")
         self.act_ramp_clip = self._action("&Playerclip auf Rampen", self.set_ramp_clip, None,
                                           "Glatte Playerclip-Hülle auf allen Rampen (empfohlen). Aus: Die Rampe "
                                           "selbst ist die Kollision.", checkable=True)
@@ -352,8 +358,8 @@ class MainWindow(QMainWindow):
             m.addAction(a)
 
         m = mb.addMenu(self.tr("Te&xturen"))
-        for a in (self.act_ramp_assistant, self.act_world_style, self.act_ramp_clip, None, self.act_import_texture,
-                  self.act_texture_packs):
+        for a in (self.act_ramp_assistant, self.act_world_style, self.act_sky, self.act_ramp_clip, None,
+                  self.act_import_texture, self.act_texture_packs):
             m.addSeparator() if a is None else m.addAction(a)
 
         m = mb.addMenu(self.tr("&Testen"))
@@ -372,7 +378,8 @@ class MainWindow(QMainWindow):
                              (self.act_undo, "undo"), (self.act_redo, "redo"),
                              (self.act_grid_finer, "grid_finer"), (self.act_grid_coarser, "grid_coarser"),
                              (self.act_compile, "compile"), (self.act_expert, "expert"),
-                             (self.act_ramp_assistant, "palette"), (self.act_carve, "carve"), (self.act_world_style, "sun")):
+                             (self.act_ramp_assistant, "palette"), (self.act_carve, "carve"), (self.act_world_style, "sun"),
+                             (self.act_sky, "sky")):
             action.setIcon(icon(name))
         for name, action in self.tool_actions.items():
             action.setIcon(icon(name))
@@ -439,6 +446,16 @@ class MainWindow(QMainWindow):
         self.act_redo.setEnabled(st.can_redo())
         self.act_undo.setText(self.tr("&Rückgängig: {0}").format(st.undo_text()) if st.can_undo() else self.tr("&Rückgängig"))
         self.act_redo.setText(self.tr("&Wiederholen: {0}").format(st.redo_text()) if st.can_redo() else self.tr("&Wiederholen"))
+
+    def _show_selection_in_scene(self) -> None:
+        """Beim Anklicken in den Ansichten links die Szenen-Liste zeigen. Bei Rampen bleibt die
+        Bibliothek vorn, dort stehen ihre Regler."""
+        ed = self.editor
+        if not ed.selection or ed.tool is None or ed.tool.name != "select":
+            return
+        if any(is_block_root(o) for o in ed.selected_objects()):
+            return
+        self.scene_dock.raise_()
 
     def _update_selection_label(self) -> None:
         bb = self.editor.selection_bbox()
@@ -645,11 +662,22 @@ class MainWindow(QMainWindow):
             return False
         finally:
             QApplication.restoreOverrideCursor()
+        # In die BSP gepackte Texturen auspacken, damit die Map ihre echten Farben zeigt
+        try:
+            folder = bsp_textures_dir(path.stem)
+            packed = bsp.extract_materials(path, folder)
+        except OSError:
+            packed = 0
+        if packed:
+            self._map_textures = [str(folder)]
+            self._reload_materials()
         # Eigener Name, damit Kompilieren nie die Original-BSP überschreibt
         self.editor.set_document(doc, None, import_path=path.with_name(f"{path.stem}_bearbeitet.vmf"))
         self._remember(path)
         self._update_title()
         msg = self.tr("{0} geöffnet: {1} Brushes, {2} Entities").format(path.name, report.solids, report.entities)
+        if packed:
+            msg += self.tr(" · {0} eingepackte Textur-Dateien übernommen").format(packed)
         if report.warnings:
             msg += " · " + " · ".join(report.warnings)
         self.statusBar().showMessage(msg, 12000)
@@ -816,7 +844,7 @@ class MainWindow(QMainWindow):
 
     def _reload_materials(self) -> None:
         profile = self.profiles.active_profile()
-        folders = [textures_dir(), *self.texture_packs()]
+        folders = [textures_dir(), *self.texture_packs(), *self._map_textures]
         self.editor.set_material_library(MaterialLibrary.for_game(profile.game_dir if profile else None, folders))
         self.editor.set_entity_fgds(list(profile.fgds) if profile else [])
 
@@ -882,6 +910,17 @@ class MainWindow(QMainWindow):
         self.editor.run(style_command(self.editor.doc, style, pick_sky(style, lib), theme))
         self.library.refresh()
         self.editor.status_message.emit(self.tr("Welt-Stil „{0}“ angewendet").format(self.tr(style.name)))
+        return True
+
+    def choose_sky(self) -> bool:
+        current = self.editor.doc.world_get("skyname")
+        dlg = SkyDialog(self.editor.materials, current, self)
+        if dlg.exec() != QDialog.Accepted or not dlg.chosen() or dlg.chosen() == current:
+            return False
+        self.editor.run(sky_command(self.editor.doc, dlg.chosen()))
+        if self.editor.sky_images() is None:
+            self.editor.status_message.emit(
+                self.tr("Himmel „{0}“ gesetzt, das Spielprofil kennt ihn aber nicht").format(dlg.chosen()))
         return True
 
     def set_ramp_clip(self, on: bool) -> None:
@@ -1039,21 +1078,25 @@ class MainWindow(QMainWindow):
 
     def reset_layout(self) -> None:
         self.grid_view.reset()
-        for dock in (self.tool_dock, self.sel_dock):
+        self.tool_dock.setFloating(False)
+        self.tool_dock.show()
+        self.addDockWidget(Qt.RightDockWidgetArea, self.tool_dock)
+        for dock in (self.lib_dock, self.scene_dock, self.sel_dock):
             dock.setFloating(False)
             dock.show()
-            self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self.lib_dock.setFloating(False)
-        self.lib_dock.show()
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
-        self.scene_dock.setFloating(False)
-        self.scene_dock.show()
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.scene_dock)
-        self.tabifyDockWidget(self.lib_dock, self.scene_dock)
-        self.lib_dock.raise_()
+        self._arrange_left()
         self.mat_dock.setFloating(False)
         self.mat_dock.show()
         self.addDockWidget(Qt.BottomDockWidgetArea, self.mat_dock)
+
+    def _arrange_left(self) -> None:
+        """Links oben Bibliothek und Szene als Reiter, darunter, was ausgewählt ist. Erst teilen,
+        dann Reiter bilden: Ein Dock in einem Reiter-Stapel lässt sich nicht mehr teilen."""
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
+        self.splitDockWidget(self.lib_dock, self.sel_dock, Qt.Vertical)
+        self.tabifyDockWidget(self.lib_dock, self.scene_dock)
+        self.lib_dock.raise_()
+        self.resizeDocks([self.lib_dock, self.sel_dock], [320, 420], Qt.Vertical)
 
     def set_expert(self, on: bool) -> None:
         self.editor.doc.editor.expert_mode = on
@@ -1082,6 +1125,8 @@ class MainWindow(QMainWindow):
                          Qt.Horizontal)
         if not restored:
             self.resizeDocks([self.mat_dock], [260], Qt.Vertical)
+            # Szene oben etwas kleiner als das, was ausgewählt ist (erst wenn das Fenster steht)
+            QTimer.singleShot(0, lambda: self.resizeDocks([self.lib_dock, self.sel_dock], [320, 420], Qt.Vertical))
         try:
             self.grid_view.restore_state(json.loads(self.settings.value("viewports", "{}")))
         except (TypeError, ValueError):
@@ -1099,3 +1144,13 @@ class MainWindow(QMainWindow):
         self.settings.setValue("viewports", json.dumps(self.grid_view.save_state()))
         e.accept()
 
+
+def _scrollable(widget: QWidget) -> QScrollArea:
+    """Panel in eine Scrollfläche: Links liegen zwei Panels übereinander, ohne Scrollbar würde
+    die Mindesthöhe des einen das andere zusammendrücken oder das Fenster in die Höhe treiben."""
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QScrollArea.NoFrame)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    area.setWidget(widget)
+    return area

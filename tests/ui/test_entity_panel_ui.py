@@ -12,7 +12,7 @@ def _add(window, classname, kvs=(), outputs=()):
 
 
 def _panel(window):
-    return window.sel_dock.widget().entity_panel
+    return window.selection_panel.entity_panel
 
 
 def test_light_shows_typed_fields_and_changes_value(window):

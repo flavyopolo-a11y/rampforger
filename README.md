@@ -4,11 +4,12 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Etappe 3 von 11** – Fenster, 3D- und 2D-Ansichten, Grundformen, Auswählen,
+> **Stand: Etappe 6 von 11** – Fenster, 3D- und 2D-Ansichten, Grundformen, Auswählen,
 > Verschieben, Drehen, Skalieren, Undo/Redo, Speichern als `.rsmap`, VMF-Import und -Export
 > ohne Verluste, Kompilieren und Testen mit einem Tastendruck (F9) für CS:S und Momentum Mod,
 > Startraum mit Dicht-Prüfung, Rampen-Bibliothek mit 20 Vorlagen, deren Regler sich jederzeit
-> ändern lassen, eigene Prefabs und der Assistent „Neue Surf-Map“.
+> ändern lassen, eigene Prefabs und der Assistent „Neue Surf-Map“, Texturen und Welt-Stile,
+> Entities mit FGD-Feldern und I/O, BSPs öffnen, Licht-Vorschau und Himmel.
 
 ![Rampenschmiede, Etappe 3: Rampen-Bibliothek mit Reglern einer Kurve](docs/bilder/etappe3.png)
 
@@ -88,6 +89,11 @@ Cubemap und Teleport-Ziel; über *Suche* jede andere Entity aus den FGD-Daten (e
 und die anderen Source-Spiele, dazu die FGD-Dateien aus dem Spielprofil, z. B. von Momentum).
 Neue Entities bekommen die Standardwerte ihrer Klasse.
 
+**Auswahl (Panel links unter der Szene).** Oben steht, was ausgewählt ist („Rampe“, „Brush“,
+„Licht“, „Trigger“ …), darunter Position und Größe zum Eintippen. Wer in den Ansichten etwas
+anklickt, sieht es links in der Szenen-Liste markiert (der Ordner klappt auf). Bei Rampen bleibt
+die Bibliothek vorn, weil dort ihre Regler stehen.
+
 **Entity-Eigenschaften (Panel „Auswahl“).** Klasse wählen oder tippen, darunter drei Reiter:
 *Eigenschaften* mit passenden Feldern (Auswahllisten, Häkchen, Farbwähler mit Helligkeit für
 Lichter, Namensliste für Ziele, Hilfetext beim Überfahren), Flags als Liste zum Abhaken und
@@ -96,6 +102,20 @@ Liste passt sich der Zielklasse an), Parameter, Verzögerung und „nur einmal�
 Map nicht gibt, sind rot. *Eingänge* listet, wer diese Entity anspricht, Doppelklick springt hin.
 Bei gewählten Entities zeigen Linien in den Ansichten ihre Verbindungen: grün zu den Zielen,
 orange von den Auslösern.
+
+**Licht.** In der 3D-Ansicht oben links *Licht-Vorschau* wählen: Die Map wird so beleuchtet, wie
+vrad rechnet (Helligkeit bei 100 Units, Abfall konstant/linear/quadratisch oder 50-%-/0-%-Abstand,
+Spot-Kegel innen/außen, Sonne mit Umgebungslicht), nur ohne Schatten und Lichtreflexe. Hat die Map
+gar kein Licht, ist sie hell wie im Spiel (fullbright). Ein ausgewähltes Licht zeigt seine
+Reichweite als Kugel, ein Spot seinen Kegel, die Sonne einen Pfeil in Leuchtrichtung. Die Kästchen
+der Lichter haben ihre Lichtfarbe. Spot und Sonne lassen sich direkt ausrichten: in der 3D-Ansicht
+dorthin schauen, wohin das Licht soll, und im Panel *In Blickrichtung der 3D-Kamera ausrichten*.
+
+**Himmel (Texturen → Himmel).** Alle Skyboxen des Spiels mit Bild zum Aussuchen. In *Texturiert*
+und *Licht-Vorschau* zeigt die 3D-Ansicht den Himmel im Hintergrund und auf allen Skybox-Flächen,
+so wie im Spiel. **Cubemaps:** `env_cubemap` setzen (Entity-Werkzeug), dann im Kompilier-Dialog
+*Cubemaps bauen* anhaken. Das Spiel startet mit `-buildcubemaps`, baut die Spiegelungen in die BSP
+und schließt sich; danach normal starten.
 
 | Weitere Tasten | |
 | --- | --- |
@@ -177,8 +197,8 @@ dem Spielprofil, auch aus den VPKs, so wie Hammer. Suchen, Favoriten (★), „I
 „Zuletzt benutzt“ helfen beim Finden. Klick wählt das aktuelle Material, Doppelklick legt es auf
 die Auswahl. Neue Formen bekommen das aktuelle Material. **Ziehen** geht auch: Material aus dem
 Browser auf eine Fläche in der 3D-Ansicht ziehen. Auf einer Rampe landet es standardmäßig auf
-allen Rampen (Fahrfläche oder Seite, je nachdem, wohin es fällt), mit der Auswahl *Nur diese Rampe* im
-Browser nur auf der einen. Bei Rampen-Bausteinen lassen sich
+allen Rampen (Fahrfläche oder Seite, je nachdem, wohin es fällt). Der orange Schalter
+**Alle Rampen | Nur diese Rampe** oben im Browser (und im Seiten-Werkzeug) zeigt immer, was gilt. Bei Rampen-Bausteinen lassen sich
 Surf-Fläche und Seiten getrennt in den Reglern setzen (⇐ übernimmt das aktuelle Material).
 
 **Seiten-Werkzeug (Shift+A).** Wie der Face-Editor in Hammer: in der 3D-Ansicht Seiten anklicken
@@ -216,7 +236,9 @@ Ein Export ergibt wieder dieselbe Map.
 Die Brushes werden aus der kompilierten Map zurückgerechnet, mit Texturen, Entities, I/O,
 Triggern und statischen Props. Detail-Brushes landen gesammelt in einem `func_detail`.
 Displacements kommen als flache Brushes, Overlays und Detail-Sprites fehlen (das Kompilieren
-löscht sie). Kompilieren schreibt nie über die Original-BSP, sondern unter `…_bearbeitet`.
+löscht sie). Texturen, die in der BSP stecken, werden ausgepackt und angezeigt; Materialien, die
+vbsp für Cubemaps umbenannt hat (`maps/<map>/…_x_y_z`), bekommen ihren echten Namen zurück.
+Kompilieren schreibt nie über die Original-BSP, sondern unter `…_bearbeitet`.
 Fremde Maps nur zum Ansehen und Lernen nutzen, nicht als eigene veröffentlichen.
 
 **Szene (Panel links, neben der Bibliothek).** Alle Objekte nach Ordnern: Rampen, Welt,
@@ -279,7 +301,12 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - Momentum Mod: Kompilieren und Starten ist auf einem echten System getestet. Falls die
   Erkennung nichts findet, im Spielprofil die Pfade von Hand setzen.
 - Keine Texturen in der Ansicht: Flächen werden je Material einfarbig dargestellt (Etappe 4).
-- Lichter ohne Vorschau in den Ansichten (Etappe 6). Entity-Beschriftungen kommen englisch aus den FGD-Dateien.
+- Licht-Vorschau ohne Schatten: Sonne und Himmelslicht erreichen auch Räume, die im Spiel dunkel
+  sind. Gleichzeitig zählen die 32 Lichter, die für die Kamera am wichtigsten sind. Die
+  Himmels-Zuordnung (rt = +X, bk = +Y …) folgt der Skybox-Tabelle der Engine, ist aber nur
+  synthetisch getestet. `-buildcubemaps` baut nur LDR-Cubemaps; für HDR einmal im Spiel
+  `mat_hdr_level 2` und `buildcubemaps`.
+- Entity-Beschriftungen kommen englisch aus den FGD-Dateien.
 - Bei beliebigen Drehwinkeln liegen die Ebenenpunkte auf ganzen Units, einzelne Eckpunkte
   können aber krumm werden (siehe E11). Bei 90°-Schritten und allen Grundformen bleibt alles ganzzahlig.
 - Beim Laden sehr großer Maps (10'000 Brushes) dauert der erste Aufbau etwa 3 Sekunden;

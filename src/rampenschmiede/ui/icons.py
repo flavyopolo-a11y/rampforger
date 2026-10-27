@@ -71,6 +71,8 @@ _SHAPES: dict[str, str] = {
     "sun": '<circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity="0.25"/>'
            '<path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8'
            'M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
+    "sky": '<path d="M6.5 18.5a4 4 0 0 1-.4-8 6 6 0 0 1 11.6 1.5 3.3 3.3 0 0 1-.2 6.5z" fill="currentColor"'
+           ' fill-opacity="0.25"/><path d="M3 21.5h18"/>',
     "palette": '<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 1.6-2.1-.5-1.3.3-2.4 1.7-2.4H18a3 3 0 0 0 3-3'
                'C21 7.2 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.3" fill="currentColor"/>'
                '<circle cx="10.5" cy="7" r="1.3" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.3" fill="currentColor"/>',

@@ -18,6 +18,8 @@ class CompileSettings:
     copy_to_game: bool = True
     launch_game: bool = True
     extra_launch_args: str = ""
+    #: Spiel mit -buildcubemaps starten: baut die Spiegelungen der env_cubemap in die BSP
+    build_cubemaps: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)

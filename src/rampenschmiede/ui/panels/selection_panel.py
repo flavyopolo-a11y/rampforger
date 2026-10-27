@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.model import Entity
+from ...core.scene import kind_of
+from ...core.scene import label as object_label
 from ..editor import EditorContext
 from .entity_panel import EntityPanel
 
@@ -34,6 +36,7 @@ class SelectionPanel(QWidget):
         lay = QVBoxLayout(self)
         self.summary = QLabel()
         self.summary.setWordWrap(True)
+        self.summary.setStyleSheet("font-size: 11pt; padding: 2px 0 4px 0;")
         lay.addWidget(self.summary)
 
         box = QGroupBox(self.tr("Position und Größe"))
@@ -78,10 +81,7 @@ class SelectionPanel(QWidget):
                 self.summary.setText(self.tr("Nichts ausgewählt"))
             elif len(objs) == 1:
                 o = objs[0]
-                if isinstance(o, Entity):
-                    self.summary.setText(self.tr("Entity: {0}").format(o.classname))
-                else:
-                    self.summary.setText(self.tr("Brush mit {0} Seiten").format(len(o.faces)))
+                self.summary.setText(f"<b>{self.tr(kind_of(self.editor.doc, o))}</b> · {object_label(o)}")
             else:
                 self.summary.setText(self.tr("{0} Objekte ausgewählt").format(len(objs)))
             self.geom_box.setEnabled(bb is not None)

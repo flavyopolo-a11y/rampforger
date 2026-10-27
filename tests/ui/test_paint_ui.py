@@ -75,7 +75,7 @@ def test_material_browser_drag_and_scope(window):
     browser.model.set_names(["test/rot"])
     mime = browser.model.mimeData([browser.model.index(0)])
     assert bytes(mime.data(MIME_MATERIAL)).decode() == "test/rot"
-    browser.scope.setCurrentIndex(browser.scope.findData("einer"))
+    browser.scope.buttons["einer"].click()
     assert window.editor.material_scope == "einer"
-    browser.scope.setCurrentIndex(browser.scope.findData("alle"))
+    browser.scope.buttons["alle"].click()
     assert window.editor.material_scope == "alle"
