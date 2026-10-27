@@ -33,7 +33,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -e .[dev]
       - name: Kern-Tests (ohne Oberfläche)
-        run: pytest tests/core tests/geometry tests/io tests/test_layering.py
+        run: pytest tests/core tests/geometry tests/io tests/compile tests/profiles tests/test_layering.py
       - name: Oberflächen-Tests (offscreen, ohne OpenGL)
         env:
           QT_QPA_PLATFORM: offscreen

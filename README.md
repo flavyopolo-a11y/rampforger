@@ -4,11 +4,11 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Etappe 1 von 11** – Fenster, 3D- und 2D-Ansichten, Grundformen, Auswählen,
-> Verschieben, Drehen, Skalieren, Undo/Redo, Speichern und Laden als `.rsmap`.
-> VMF-Export und Kompilieren folgen in Etappe 2.
+> **Stand: Etappe 2 von 11** – Fenster, 3D- und 2D-Ansichten, Grundformen, Auswählen,
+> Verschieben, Drehen, Skalieren, Undo/Redo, Speichern als `.rsmap`, VMF-Import und -Export
+> ohne Verluste, Kompilieren und Testen mit einem Tastendruck (F9) für CS:S und Momentum Mod.
 
-![Rampenschmiede, Etappe 1](docs/bilder/etappe1.png)
+![Rampenschmiede, Etappe 2: Kompilier-Log mit Leck-Spur](docs/bilder/etappe2.png)
 
 ## Installation
 
@@ -71,15 +71,44 @@ setzen. Eigenschaften im Panel „Auswahl“ bearbeiten.
 | Strg+L / Strg+I | Spiegeln horizontal / vertikal |
 | H / Strg+H / U | Auswahl ausblenden / Rest ausblenden / alles einblenden |
 | Strg+S | Speichern als `.rsmap` |
+| Strg+Shift+E | Als `.vmf` exportieren |
+
+**Hammer-Maps.** „Öffnen“ liest `.rsmap` und `.vmf`. Beim Import bleibt alles erhalten, auch
+was Rampenschmiede noch nicht bearbeiten kann (Displacements, Gruppen, Visgroups, Kameras):
+Ein Export ergibt wieder dieselbe Map.
+
+**Kompilieren und testen (F9).** Beim ersten Start sucht Rampenschmiede CS:S und Momentum Mod
+in allen Steam-Bibliotheken und legt dafür Spielprofile an (Menü *Testen → Spielprofile*, dort
+lässt sich alles von Hand anpassen). F9 öffnet den Dialog: Spiel und Qualität wählen, fertig.
+
+| Qualität | Wofür |
+| --- | --- |
+| Nur Geometrie | Sekunden. Kein Licht, kein VIS: zum Testen von Rampen und Sprüngen |
+| Schnell | Zwischentests mit grobem Licht |
+| Normal | Volle Sichtbarkeit und Licht |
+| Final | Zum Veröffentlichen: LDR und HDR, weiche Schatten |
+
+Die Map wird in einen Ordner `<Projektname>_kompilieren` neben dem Projekt geschrieben, kompiliert,
+in den `maps`-Ordner des Spiels kopiert und das Spiel startet direkt in der Map.
+**Strg+F9** kompiliert ohne Dialog mit den letzten Einstellungen.
+Das Log unten zeigt die Ausgabe live, Fehler rot, Warnungen gelb. Ein Klick auf eine Meldung
+wie „Brush 12: …“ oder ein Leck springt zum betroffenen Objekt. Bei einem Leck zeigt eine rote
+Linie in allen Ansichten den Weg von der Entity ins Leere.
+Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VRAD frei setzen.
 
 ## Dokumentation
 
 - [Architektur](docs/architektur.md)
 - [Entscheidungslog](docs/entscheidungen.md)
 
-## Bekannte Grenzen (Etappe 1)
+## Bekannte Grenzen (Etappe 2)
 
-- Noch kein VMF-Export und kein Kompilieren (Etappe 2). Maps lassen sich nur als `.rsmap` speichern.
+- Displacements werden importiert und wieder exportiert, aber noch als flache Fläche angezeigt
+  und sind nicht bearbeitbar (Etappe 7).
+- Eigene Inhalte (Texturen, Modelle) werden noch nicht in die BSP gepackt (bspzip folgt mit dem
+  Material-Browser in Etappe 4).
+- Momentum Mod: App-ID und Ordnernamen sind aus der Doku abgeleitet, der Test auf einem echten
+  System steht aus. Falls die Erkennung nichts findet, im Spielprofil die Pfade von Hand setzen.
 - Keine Texturen in der Ansicht: Flächen werden je Material einfarbig dargestellt (Etappe 4).
 - Entities nur aus einer festen Liste, Lichter ohne Vorschau (Etappe 5 und 6).
 - Bei beliebigen Drehwinkeln liegen die Ebenenpunkte auf ganzen Units, einzelne Eckpunkte

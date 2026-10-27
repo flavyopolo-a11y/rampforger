@@ -9,6 +9,7 @@ Zell-Batching (nur betroffene Raumzellen neu hochladen) folgt in der Komfort-Eta
 from __future__ import annotations
 
 import colorsys
+import itertools
 import zlib
 from dataclasses import dataclass
 
@@ -38,6 +39,10 @@ ENTITY_COLORS = {
     "light_environment": (1.0, 0.75, 0.25),
 }
 
+
+# Versionen sind über alle SceneMesh-Instanzen eindeutig. Sonst hielte ein Renderer nach
+# dem Laden einer Datei (neue Szene, wieder Version 0) seine alten Puffer für aktuell.
+_versions = itertools.count(1)
 
 SELECT_COLOR_2D = (1.0, 0.15, 0.15)
 SELECT_COLOR_3D = (1.0, 0.85, 0.1)
@@ -151,7 +156,7 @@ class SceneMesh:
         self.doc = doc
         self._cache: dict[int, tuple[MapObject, ObjectMesh | None]] = {}
         self._selection: frozenset[int] = frozenset()
-        self.version = 0
+        self.version = next(_versions)
         self._arrays: SceneArrays | None = None
         doc.subscribe(self._on_change)
 
@@ -161,12 +166,12 @@ class SceneMesh:
     def _on_change(self, cs: ChangeSet) -> None:
         for oid in cs.modified | cs.removed:
             self._cache.pop(oid, None)
-        self.version += 1
+        self.version = next(_versions)
 
     def set_selection(self, ids: frozenset[int]) -> None:
         if ids != self._selection:
             self._selection = ids
-            self.version += 1
+            self.version = next(_versions)
 
     def _mesh(self, obj: MapObject) -> ObjectMesh | None:
         hit = self._cache.get(obj.id)

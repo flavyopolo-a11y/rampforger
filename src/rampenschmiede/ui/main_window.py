@@ -17,12 +17,19 @@ from PySide6.QtWidgets import (
 
 from .. import __version__
 from ..core.commands import AddObjects
-from ..core.io import rsmap
+from ..core.compile import CompileSettings
+from ..core.io import rsmap, vmf
 from ..core.model import Entity, MapDocument, MapObject
+from ..core.profiles import ProfileStore, detect_profiles
+from .compile_controller import CompileController, load_pointfile
+from .dialogs.compile_dialog import CompileDialog
+from .dialogs.profiles_dialog import ProfilesDialog
 from .dialogs.transform_dialog import TransformDialog
 from .editor import EditorContext
+from .panels.compile_log import CompileLogPanel
 from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
+from .paths import profiles_file
 from .tools.entity_tool import EntityTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
@@ -30,6 +37,8 @@ from .viewports.layout import ViewportGrid
 
 APP_NAME = "Rampenschmiede"
 FILE_FILTER = "Rampenschmiede-Projekt (*.rsmap)"
+OPEN_FILTER = "Maps (*.rsmap *.vmf);;Rampenschmiede-Projekt (*.rsmap);;Hammer-Map (*.vmf)"
+VMF_FILTER = "Hammer-Map (*.vmf)"
 MAX_RECENT = 8
 DOCK_MIN_WIDTH = 320
 
@@ -53,6 +62,12 @@ CONTROLS_HELP = """
 <tr><td>H / Strg+H / U</td><td>Auswahl ausblenden / Rest ausblenden / alles einblenden</td></tr>
 <tr><td>Enter / Esc</td><td>Form erstellen / Rahmen oder Auswahl verwerfen</td></tr>
 </table>
+<h3>Testen</h3>
+<table>
+<tr><td>F9</td><td>Kompilieren und testen (Dialog)</td></tr>
+<tr><td>Strg+F9</td><td>Sofort mit den letzten Einstellungen kompilieren</td></tr>
+<tr><td>Klick auf eine rote Log-Zeile</td><td>springt zum betroffenen Objekt</td></tr>
+</table>
 """
 
 
@@ -64,6 +79,9 @@ class MainWindow(QMainWindow):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")
+        self.profiles = self._load_profiles()
+        self.compile_settings = self._load_compile_settings()
+        self.compiler = CompileController(self.editor, self)
 
         self.grid_view = ViewportGrid(self.editor)
         self.setCentralWidget(self.grid_view)
@@ -81,6 +99,8 @@ class MainWindow(QMainWindow):
         ed.grid_changed.connect(lambda g: self.grid_label.setText(self.tr("Raster {0}").format(g)))
         ed.selection_changed.connect(self._update_selection_label)
         ed.tool_changed.connect(self._on_tool_changed)
+        self.compiler.started.connect(self._on_compile_started)
+        self.compiler.finished.connect(self._on_compile_finished)
 
         ed.set_tool("select")
         self._restore_window()
@@ -101,6 +121,12 @@ class MainWindow(QMainWindow):
         # Ohne Mindestbreite drücken die Ansichten die Panels auf wenige Pixel zusammen.
         for dock in (self.tool_dock, self.sel_dock):
             dock.widget().setMinimumWidth(DOCK_MIN_WIDTH)
+        self.log_dock = QDockWidget(self.tr("Kompilieren"), self)
+        self.log_dock.setObjectName("dock_compile_log")
+        self.compile_log = CompileLogPanel(self.compiler, self._center_views_on)
+        self.log_dock.setWidget(self.compile_log)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
+        self.log_dock.hide()
 
     def _action(self, text: str, slot, shortcut: str | QKeySequence | None = None, tip: str = "",
                 checkable: bool = False) -> QAction:
@@ -121,6 +147,10 @@ class MainWindow(QMainWindow):
         self.act_open = self._action("Ö&ffnen …", self.file_open, QKeySequence.Open, "Projekt öffnen")
         self.act_save = self._action("&Speichern", self.file_save, QKeySequence.Save, "Projekt speichern")
         self.act_save_as = self._action("Speichern &unter …", self.file_save_as, "Ctrl+Shift+S")
+        self.act_import_vmf = self._action("VMF &importieren …", self.file_import_vmf, None,
+                                           "Hammer-Map (.vmf) öffnen")
+        self.act_export_vmf = self._action("Als VMF e&xportieren …", self.file_export_vmf, "Ctrl+Shift+E",
+                                           "Map als .vmf für Hammer oder andere Werkzeuge speichern")
         self.act_quit = self._action("&Beenden", self.close, QKeySequence.Quit)
 
         self.act_undo = self._action("&Rückgängig", ed.undo, QKeySequence.Undo)
@@ -157,6 +187,18 @@ class MainWindow(QMainWindow):
             self.tool_group.addAction(a)
             self.tool_actions[name] = a
 
+        self.act_compile = self._action("&Kompilieren und testen …", self.compile_dialog, "F9",
+                                        "Map bauen, ins Spiel kopieren und starten")
+        self.act_compile_again = self._action("&Sofort kompilieren", self.compile_again, "Ctrl+F9",
+                                              "Mit den letzten Einstellungen kompilieren, ohne Dialog")
+        self.act_compile_cancel = self._action("Kompilieren a&bbrechen", self.compiler.cancel)
+        self.act_compile_cancel.setEnabled(False)
+        self.act_profiles = self._action("S&pielprofile …", self.edit_profiles, None,
+                                         "Spiele, Compiler und Startparameter einrichten")
+        self.act_load_pointfile = self._action("Leck-Spur &laden …", self.open_pointfile, None,
+                                               "Eine .lin-Datei von vbsp anzeigen")
+        self.act_clear_leak = self._action("Leck-Spur &ausblenden", lambda: self.editor.set_leak_path([]))
+
         self.act_controls = self._action("&Steuerung", self.show_controls, "F1")
         self.act_about = self._action("Ü&ber Rampenschmiede", self.show_about)
 
@@ -168,8 +210,8 @@ class MainWindow(QMainWindow):
         self.recent_menu = m.addMenu(self.tr("&Zuletzt geöffnet"))
         self.recent_menu.aboutToShow.connect(self._fill_recent)
         m.addSeparator()
-        for a in (self.act_save, self.act_save_as):
-            m.addAction(a)
+        for a in (self.act_save, self.act_save_as, None, self.act_import_vmf, self.act_export_vmf):
+            m.addSeparator() if a is None else m.addAction(a)
         m.addSeparator()
         m.addAction(self.act_quit)
 
@@ -190,6 +232,12 @@ class MainWindow(QMainWindow):
         for a in self.tool_actions.values():
             m.addAction(a)
 
+        m = mb.addMenu(self.tr("&Testen"))
+        for a in (self.act_compile, self.act_compile_again, self.act_compile_cancel, None,
+                  self.act_load_pointfile, self.act_clear_leak, None, self.act_profiles):
+            m.addSeparator() if a is None else m.addAction(a)
+        m.addAction(self.log_dock.toggleViewAction())
+
         m = mb.addMenu(self.tr("&Hilfe"))
         m.addAction(self.act_controls)
         m.addAction(self.act_about)
@@ -198,7 +246,7 @@ class MainWindow(QMainWindow):
         tb = QToolBar(self.tr("Datei"))
         tb.setObjectName("tb_file")
         for a in (self.act_new, self.act_open, self.act_save, None, self.act_undo, self.act_redo, None,
-                  self.act_grid_finer, self.act_grid_coarser, None, self.act_expert):
+                  self.act_grid_finer, self.act_grid_coarser, None, self.act_compile, None, self.act_expert):
             tb.addSeparator() if a is None else tb.addAction(a)
         self.addToolBar(Qt.TopToolBarArea, tb)
         tools = QToolBar(self.tr("Werkzeuge"))
@@ -212,12 +260,21 @@ class MainWindow(QMainWindow):
         sb = self.statusBar()
         self.sel_label = QLabel()
         self.grid_label = QLabel(self.tr("Raster {0}").format(self.editor.grid))
+        self.profile_label = QLabel()
         sb.addPermanentWidget(self.sel_label)
+        sb.addPermanentWidget(self.profile_label)
         sb.addPermanentWidget(self.grid_label)
+        self._update_profile_label()
 
     # ---- Zustand ------------------------------------------------------------------
     def _update_title(self) -> None:
-        name = self.editor.file_path.name if self.editor.file_path else self.tr("Unbenannt")
+        ed = self.editor
+        if ed.file_path:
+            name = ed.file_path.name
+        elif ed.import_path:
+            name = self.tr("{0} (importiert)").format(ed.import_path.name)
+        else:
+            name = self.tr("Unbenannt")
         dirty = "" if self.editor.stack.is_clean() else "*"
         self.setWindowTitle(f"{name}{dirty} – {APP_NAME}")
 
@@ -267,11 +324,22 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             return
         start = self.settings.value("last_dir", str(Path.home()))
-        path, _ = QFileDialog.getOpenFileName(self, self.tr("Projekt öffnen"), start, self.tr(FILE_FILTER))
+        path, _ = QFileDialog.getOpenFileName(self, self.tr("Map öffnen"), start, self.tr(OPEN_FILTER))
+        if path:
+            self.open_path(Path(path))
+
+    def file_import_vmf(self) -> None:
+        if not self._confirm_discard():
+            return
+        start = self.settings.value("last_dir", str(Path.home()))
+        path, _ = QFileDialog.getOpenFileName(self, self.tr("VMF importieren"), start, self.tr(VMF_FILTER))
         if path:
             self.open_path(Path(path))
 
     def open_path(self, path: Path) -> bool:
+        path = path.absolute()
+        if path.suffix.lower() == ".vmf":
+            return self._import_vmf(path)
         try:
             doc = rsmap.load(path)
         except (OSError, rsmap.ProjectFormatError, KeyError, ValueError, TypeError) as exc:
@@ -281,6 +349,41 @@ class MainWindow(QMainWindow):
         self._remember(path)
         self._update_title()
         self.statusBar().showMessage(self.tr("{0} geladen ({1} Objekte)").format(path.name, len(doc)), 5000)
+        return True
+
+    def _import_vmf(self, path: Path) -> bool:
+        try:
+            doc, report = vmf.load_vmf(path)
+        except (OSError, vmf.VmfError, ValueError) as exc:
+            QMessageBox.critical(self, APP_NAME, self.tr("VMF konnte nicht importiert werden:\n{0}").format(exc))
+            return False
+        self.editor.set_document(doc, None, import_path=path)
+        self._remember(path)
+        self._update_title()
+        msg = self.tr("{0} importiert: {1} Brushes, {2} Entities").format(path.name, report.solids, report.entities)
+        if report.warnings:
+            msg += self.tr(" · {0} Warnungen").format(len(report.warnings))
+        self.statusBar().showMessage(msg, 8000)
+        self.center_on_selection()
+        return True
+
+    def file_export_vmf(self) -> bool:
+        ed = self.editor
+        source = ed.import_path or (ed.file_path.with_suffix(".vmf") if ed.file_path else None)
+        start = str(source or Path(self.settings.value("last_dir", str(Path.home()))) / "neue_map.vmf")
+        path, _ = QFileDialog.getSaveFileName(self, self.tr("Als VMF exportieren"), start, self.tr(VMF_FILTER))
+        if not path:
+            return False
+        p = Path(path)
+        if p.suffix.lower() != ".vmf":
+            p = p.with_suffix(".vmf")
+        try:
+            result = vmf.save_vmf(ed.doc, p)
+        except OSError as exc:
+            QMessageBox.critical(self, APP_NAME, self.tr("Export fehlgeschlagen:\n{0}").format(exc))
+            return False
+        self.settings.setValue("last_dir", str(p.parent))
+        self.statusBar().showMessage(self.tr("Exportiert: {0} ({1} Brushes)").format(p, len(result.solid_ids)), 5000)
         return True
 
     def file_save(self) -> bool:
@@ -385,7 +488,108 @@ class MainWindow(QMainWindow):
             axis = vp.axes()[which]
         self.editor.mirror_selection(axis)
 
+    # ---- Testen --------------------------------------------------------------------------
+    def _load_profiles(self) -> ProfileStore:
+        store = ProfileStore.load(profiles_file())
+        if not store.profiles:
+            try:
+                if store.merge_detected(detect_profiles()):
+                    store.save(profiles_file())
+            except OSError:
+                pass
+        return store
+
+    def _save_profiles(self) -> None:
+        try:
+            self.profiles.save(profiles_file())
+        except OSError as exc:
+            QMessageBox.critical(self, APP_NAME, self.tr("Spielprofile konnten nicht gespeichert werden:\n{0}").format(exc))
+        self._update_profile_label()
+
+    def _update_profile_label(self) -> None:
+        p = self.profiles.active_profile()
+        if p is None:
+            self.profile_label.setText(self.tr("Kein Spielprofil"))
+        else:
+            mark = "" if not p.problems() else " ⚠"
+            self.profile_label.setText(f"{p.name}{mark}")
+
+    def _load_compile_settings(self) -> CompileSettings:
+        try:
+            return CompileSettings.from_dict(json.loads(self.settings.value("compile_settings", "{}")))
+        except (TypeError, ValueError):
+            return CompileSettings()
+
+    def edit_profiles(self) -> bool:
+        dlg = ProfilesDialog(self.profiles, self)
+        if dlg.exec():
+            self.profiles = dlg.result_store()
+            self._save_profiles()
+            return True
+        return False
+
+    def compile_dialog(self) -> None:
+        if self.compiler.running:
+            self.statusBar().showMessage(self.tr("Es wird schon kompiliert"), 3000)
+            return
+        dlg = CompileDialog(self.profiles, self.compile_settings, self.compiler.prepare,
+                            self.editor.doc.editor.expert_mode, self)
+
+        def open_profiles() -> None:
+            if self.edit_profiles():
+                dlg.set_store(self.profiles)
+
+        dlg.profiles_requested.connect(open_profiles)
+        if dlg.exec():
+            self.profiles = dlg.store
+            self._save_profiles()
+            self.compile_settings = dlg.settings
+            self.settings.setValue("compile_settings", json.dumps(self.compile_settings.to_dict()))
+            self.start_compile()
+
+    def compile_again(self) -> None:
+        if self.profiles.active_profile() is None:
+            self.compile_dialog()
+        else:
+            self.start_compile()
+
+    def start_compile(self) -> bool:
+        profile = self.profiles.active_profile()
+        if profile is None or self.compiler.running:
+            return False
+        return self.compiler.start(profile, self.compile_settings)
+
+    def _on_compile_started(self, _plan) -> None:
+        self.log_dock.show()
+        self.log_dock.raise_()
+        self.act_compile_cancel.setEnabled(True)
+        self.act_compile.setEnabled(False)
+        self.act_compile_again.setEnabled(False)
+
+    def _on_compile_finished(self, result) -> None:
+        self.act_compile_cancel.setEnabled(False)
+        self.act_compile.setEnabled(True)
+        self.act_compile_again.setEnabled(True)
+        if result.ok:
+            self.statusBar().showMessage(self.tr("Kompilieren fertig ({0:.1f} s)").format(result.seconds), 5000)
+
+    def open_pointfile(self) -> None:
+        start = str(self.compiler.plan.pointfile_path) if self.compiler.plan else self.settings.value("last_dir", "")
+        path, _ = QFileDialog.getOpenFileName(self, self.tr("Leck-Spur laden"), start, "Pointfile (*.lin)")
+        if path:
+            try:
+                n = load_pointfile(self.editor, Path(path))
+            except OSError as exc:
+                QMessageBox.critical(self, APP_NAME, str(exc))
+                return
+            self.statusBar().showMessage(self.tr("Leck-Spur mit {0} Punkten geladen").format(n), 5000)
+            self.compile_log.go_to_leak()
+
     # ---- Ansicht -----------------------------------------------------------------------
+    def _center_views_on(self, point, size: float) -> None:
+        for vp in self.grid_view.viewports():
+            vp.center_on(point, size)
+
     def center_on_selection(self) -> None:
         bb = self.editor.selection_bbox() or self.editor.doc.bbox()
         if bb is None:
@@ -435,6 +639,9 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             e.ignore()
             return
+        if self.compiler.running:
+            self.compiler.cancel()
+            self.compiler.wait(5)
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("window_state", self.saveState())
         self.settings.setValue("viewports", json.dumps(self.grid_view.save_state()))

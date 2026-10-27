@@ -24,6 +24,9 @@ def _isolated_settings(tmp_path, monkeypatch):
     QSettings.setDefaultFormat(QSettings.IniFormat)
     QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, str(tmp_path))
     QCoreApplication.setOrganizationName("RampenschmiedeTest")
+    # Spielprofile und Kompilier-Ordner landen im Testordner, Steam wird nicht gesucht
+    monkeypatch.setenv("RAMPENSCHMIEDE_DATA_DIR", str(tmp_path / "daten"))
+    monkeypatch.setattr("rampenschmiede.ui.main_window.detect_profiles", lambda: [])
     yield
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
+import numpy as np
 from PySide6.QtCore import QObject, Signal
 
 from ..core.commands import AddObjects, Command, CommandStack, RemoveObjects, ReplaceObjects
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from .tools.base import Tool
 
 GRID_SIZES = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
+LEAK_COLOR = (1.0, 0.1, 0.1)
 
 
 class EditorContext(QObject):
@@ -36,9 +38,14 @@ class EditorContext(QObject):
         self.scene = SceneMesh(self.doc)
         self.selection: frozenset[int] = frozenset()
         self.file_path: Path | None = None
+        #: Woher eine importierte Map stammt (VMF), solange sie nicht als Projekt gespeichert ist
+        self.import_path: Path | None = None
         self.tools: dict[str, "Tool"] = {}
         self.tool: "Tool | None" = None
         self.texture_lock = True
+        #: Leck-Spur aus der letzten .lin-Datei, als Linienpaare für die Ansichten
+        self.leak_lines: np.ndarray | None = None
+        self.leak_points: list[Point] = []
         self._hook_document()
 
     # ---- Dokument --------------------------------------------------------------
@@ -46,14 +53,16 @@ class EditorContext(QObject):
         self.doc.subscribe(self._on_doc_change)
         self.stack.subscribe(self.history_changed.emit)
 
-    def set_document(self, doc: MapDocument, path: Path | None) -> None:
+    def set_document(self, doc: MapDocument, path: Path | None, import_path: Path | None = None) -> None:
         self.doc.unsubscribe(self._on_doc_change)
         self.scene.detach()
         self.doc = doc
         self.stack = CommandStack(doc)
         self.scene = SceneMesh(doc)
         self.file_path = path
+        self.import_path = import_path
         self.selection = frozenset()
+        self.leak_points, self.leak_lines = [], None
         self._hook_document()
         self.document_replaced.emit()
         self.selection_changed.emit()
@@ -199,6 +208,18 @@ class EditorContext(QObject):
                                     "Ausblenden" if hidden else "Einblenden"))
             if hidden:
                 self.set_selection(self.selection - {o.id for o in objs})
+
+    # ---- Leck-Spur -------------------------------------------------------------------
+    def set_leak_path(self, points: list[Point]) -> None:
+        self.leak_points = list(points)
+        if len(points) < 2:
+            self.leak_lines = None
+        else:
+            pts = np.asarray(points, dtype=np.float32)
+            pairs = np.repeat(pts, 2, axis=0)[1:-1]
+            color = np.tile(np.asarray(LEAK_COLOR, dtype=np.float32), (len(pairs), 1))
+            self.leak_lines = np.hstack([pairs, color])
+        self.redraw_requested.emit()
 
     # ---- Werkzeuge ------------------------------------------------------------------
     def register_tool(self, tool: "Tool") -> None:
