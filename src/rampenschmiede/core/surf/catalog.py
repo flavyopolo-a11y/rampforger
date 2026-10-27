@@ -158,7 +158,14 @@ PROFILE_PARAMS = (
     Param("spiegeln", "Seite tauschen", False, only_if=("profil", "halb")),
 )
 
+SURF_MATERIAL = Param("mat_surf", "Material Surf-Fläche", "DEV/DEV_MEASUREGENERIC01B",
+                      hint="Material der surfbaren Flächen")
+SIDE_MATERIAL = Param("mat_seite", "Material Seiten", "DEV/DEV_MEASUREGENERIC01",
+                      hint="Material von Lippe, Enden und flachen Kanten")
+
 MATERIAL_PARAMS = (
+    SURF_MATERIAL,
+    SIDE_MATERIAL,
     Param("unterseite_nodraw", "Unterseite unsichtbar (Nodraw)", True),
     Param("kollision", "Kollision", "clip", choices=(
         ("clip", "Playerclip + func_brush (empfohlen)"), ("detail", "Nur func_detail"))),
@@ -199,7 +206,9 @@ def profile_from(v: dict) -> Profile:
 
 
 def materials_from(v: dict) -> Materials:
-    return Materials(hide_bottom=bool(v.get("unterseite_nodraw", True)))
+    return Materials(surf=str(v.get("mat_surf", SURF_MATERIAL.default)).upper(),
+                     side=str(v.get("mat_seite", SIDE_MATERIAL.default)).upper(),
+                     hide_bottom=bool(v.get("unterseite_nodraw", True)))
 
 
 # ---- Wege ---------------------------------------------------------------------------
@@ -482,6 +491,7 @@ _add(Template("bhop", "Bhop-Blöcke", "Bhop", "Reihe von Plattformen zum Springe
                Param("abstand", "Abstand", 192, 0, 2048, 16, "u"), Param("dicke", "Dicke", 16, 8, 512, 8, "u"),
                Param("zickzack", "Zickzack seitlich", 0, 0, 2048, 16, "u"),
                Param("stufe", "Stufe pro Block", 0, -512, 512, 8, "u", hint="Positiv = jeder Block höher"),
+               dataclasses.replace(SIDE_MATERIAL, label="Material", hint=""),
                Param("unterseite_nodraw", "Unterseite unsichtbar (Nodraw)", False)),
               build_bhop, check_angles=False, entity=bhop_entity))
 _add(Template("booster", "Booster", "Bhop", "Trigger, der den Spieler in eine Richtung schiebt (trigger_push).",

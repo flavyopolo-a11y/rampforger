@@ -21,8 +21,8 @@ from ..core.blocks import clone_objects
 from ..core.commands import AddObjects
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.io import rsmap, vmf
-from ..core.model import Entity, MapDocument, MapObject
 from ..core.materials import MaterialLibrary
+from ..core.model import Entity, MapDocument, MapObject
 from ..core.profiles import ProfileStore, detect_profiles
 from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
 from ..core.validation.seal import describe as describe_seal
@@ -35,11 +35,13 @@ from .dialogs.transform_dialog import TransformDialog
 from .editor import EditorContext
 from .panels.compile_log import CompileLogPanel
 from .panels.library_panel import LibraryPanel
+from .panels.material_browser import MaterialBrowser
 from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
 from .paths import profiles_file, textures_dir
 from .seal_watcher import SealWatcher
 from .tools.entity_tool import EntityTool
+from .tools.face_tool import FaceTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
 from .viewports.layout import ViewportGrid
@@ -49,6 +51,8 @@ FILE_FILTER = "Rampenschmiede-Projekt (*.rsmap)"
 OPEN_FILTER = "Maps (*.rsmap *.vmf);;Rampenschmiede-Projekt (*.rsmap);;Hammer-Map (*.vmf)"
 VMF_FILTER = "Hammer-Map (*.vmf)"
 MAX_RECENT = 8
+#: Steigt, wenn neue Panels dazukommen: Alte gespeicherte Anordnungen werden dann verworfen
+LAYOUT_VERSION = 2
 DOCK_MIN_WIDTH = 320
 
 CONTROLS_HELP = """
@@ -90,7 +94,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.editor = EditorContext()
-        for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor)):
+        for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor)):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")
@@ -148,8 +152,15 @@ class MainWindow(QMainWindow):
         self.log_dock.setObjectName("dock_compile_log")
         self.compile_log = CompileLogPanel(self.compiler, self._center_views_on)
         self.log_dock.setWidget(self.compile_log)
+        self.mat_dock = QDockWidget(self.tr("Materialien"), self)
+        self.mat_dock.setObjectName("dock_materials")
+        self.material_browser = MaterialBrowser(self.editor)
+        self.mat_dock.setWidget(self.material_browser)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.mat_dock)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
+        self.tabifyDockWidget(self.mat_dock, self.log_dock)
         self.log_dock.hide()
+        self.mat_dock.raise_()
 
     def _action(self, text: str, slot, shortcut: str | QKeySequence | None = None, tip: str = "",
                 checkable: bool = False) -> QAction:
@@ -265,6 +276,7 @@ class MainWindow(QMainWindow):
         m.addAction(self.tool_dock.toggleViewAction())
         m.addAction(self.sel_dock.toggleViewAction())
         m.addAction(self.lib_dock.toggleViewAction())
+        m.addAction(self.mat_dock.toggleViewAction())
 
         m = mb.addMenu(self.tr("&Werkzeuge"))
         for a in self.tool_actions.values():
@@ -763,6 +775,9 @@ class MainWindow(QMainWindow):
         self.lib_dock.setFloating(False)
         self.lib_dock.show()
         self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
+        self.mat_dock.setFloating(False)
+        self.mat_dock.show()
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.mat_dock)
 
     def set_expert(self, on: bool) -> None:
         self.editor.doc.editor.expert_mode = on
@@ -786,9 +801,10 @@ class MainWindow(QMainWindow):
         else:
             self.resize(1600, 960)
         state = self.settings.value("window_state")
-        if state is not None:
-            self.restoreState(state)
+        restored = state is not None and self.restoreState(state, LAYOUT_VERSION)
         self.resizeDocks([self.tool_dock, self.sel_dock, self.lib_dock], [DOCK_MIN_WIDTH] * 3, Qt.Horizontal)
+        if not restored:
+            self.resizeDocks([self.mat_dock], [260], Qt.Vertical)
         try:
             self.grid_view.restore_state(json.loads(self.settings.value("viewports", "{}")))
         except (TypeError, ValueError):
@@ -802,6 +818,6 @@ class MainWindow(QMainWindow):
             self.compiler.cancel()
             self.compiler.wait(5)
         self.settings.setValue("geometry", self.saveGeometry())
-        self.settings.setValue("window_state", self.saveState())
+        self.settings.setValue("window_state", self.saveState(LAYOUT_VERSION))
         self.settings.setValue("viewports", json.dumps(self.grid_view.save_state()))
         e.accept()
