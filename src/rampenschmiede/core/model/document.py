@@ -106,6 +106,15 @@ class MapDocument:
         objs = self._objects.values() if ids is None else (self._objects[i] for i in ids if i in self._objects)
         return BBox.union(object_bbox(o) for o in objs)
 
+    def snapshot(self) -> "MapDocument":
+        """Flache Kopie für Berechnungen in einem anderen Thread. Die Objekte sind
+        unveränderlich, also reicht es, das Verzeichnis zu kopieren."""
+        snap = MapDocument()
+        snap.world_keyvalues = self.world_keyvalues
+        snap._objects = dict(self._objects)
+        snap._next_id = self._next_id
+        return snap
+
     # ---- Beobachter ------------------------------------------------------
     def subscribe(self, listener: Callable[[ChangeSet], None]) -> None:
         self._listeners.append(listener)

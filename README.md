@@ -73,6 +73,18 @@ setzen. Eigenschaften im Panel „Auswahl“ bearbeiten.
 | Strg+S | Speichern als `.rsmap` |
 | Strg+Shift+E | Als `.vmf` exportieren |
 
+**Startraum.** Jede neue Map beginnt mit einem Spawn (für CS:S CT und T, für Momentum
+`info_player_start`), einer Sonne und einer dichten Skybox-Hülle von 1024 × 1024 × 512 Units.
+F9 kompiliert also sofort ohne Leck. Die sechs Hüllen-Brushes sind normale Brushes: verschieben,
+vergrößern oder löschen. *Datei → Neu (leer)* startet ohne Inhalt, *Datei → Neue Maps mit
+Startraum* schaltet den Startraum ab.
+
+**Dicht-Prüfung.** Unten rechts steht immer, ob die Map dicht ist („✓ Map ist dicht“ oder
+„⚠ Leck: info_player_start ist nicht umschlossen“). Die Prüfung läuft nach jeder Änderung im
+Hintergrund, ohne zu kompilieren. Ein Klick darauf zeigt den Weg ins Freie als rote Linie und wählt
+die betroffene Entity aus. *Testen → Map mit Skybox umhüllen* legt eine dichte Hülle um alles.
+Vor jedem Kompilieren läuft die Prüfung ebenfalls und warnt im Log.
+
 **Hammer-Maps.** „Öffnen“ liest `.rsmap` und `.vmf`. Beim Import bleibt alles erhalten, auch
 was Rampenschmiede noch nicht bearbeiten kann (Displacements, Gruppen, Visgroups, Kameras):
 Ein Export ergibt wieder dieselbe Map.
@@ -102,6 +114,9 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - [Entscheidungslog](docs/entscheidungen.md)
 
 ## Bekannte Grenzen (Etappe 2)
+
+- Die Dicht-Prüfung arbeitet mit einem Raster (8 Units, bei großen Maps gröber). Spalte, die
+  schmaler als eine Rasterzelle sind, findet nur vbsp.
 
 - Displacements werden importiert und wieder exportiert, aber noch als flache Fläche angezeigt
   und sind nicht bearbeitbar (Etappe 7).

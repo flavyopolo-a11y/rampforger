@@ -56,13 +56,16 @@ class CompileController(QObject):
         vmf = folder / f"{self.map_name()}.vmf"
         return build_plan(profile, vmf, settings)
 
-    def start(self, profile: GameProfile, settings: CompileSettings) -> bool:
+    def start(self, profile: GameProfile, settings: CompileSettings, notes: list[LogLine] | None = None) -> bool:
+        """`notes` erscheinen nach dem Start oben im Log (z. B. Ergebnis der Vorab-Prüfung)."""
         if self.running:
             return False
         plan = self.prepare(profile, settings)
         self.editor.set_leak_path([])
         self.plan = plan
         self.started.emit(plan)
+        for note in notes or ():
+            self.line.emit(note)
         if not plan.problems:
             try:
                 Path(plan.vmf_path).parent.mkdir(parents=True, exist_ok=True)

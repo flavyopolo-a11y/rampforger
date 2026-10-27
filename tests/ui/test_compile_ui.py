@@ -65,7 +65,9 @@ def test_compile_success_and_jump_to_brush(window, qtbot, tmp_path):
     assert window.act_compile.isEnabled() and not window.act_compile_cancel.isEnabled()
 
     panel = window.compile_log
-    warn = next(line for line in panel.lines() if line.level is Level.WARNING)
+    # Offene Testmap: Die Vorab-Prüfung warnt schon vor vbsp
+    assert "Vorab-Prüfung" in panel.lines()[0].text and panel.lines()[0].level is Level.WARNING
+    warn = next(line for line in panel.lines() if line.brush_id == 2)
     assert panel.jump_to(warn)
     assert window.editor.selection == {solid.id}
     assert "Fertig" in panel.status.text()

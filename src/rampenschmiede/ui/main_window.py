@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QDockWidget,
@@ -13,14 +13,17 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QToolBar,
+    QToolButton,
 )
 
 from .. import __version__
 from ..core.commands import AddObjects
-from ..core.compile import CompileSettings
+from ..core.compile import CompileSettings, Level, LogLine
 from ..core.io import rsmap, vmf
 from ..core.model import Entity, MapDocument, MapObject
 from ..core.profiles import ProfileStore, detect_profiles
+from ..core.templates import enclose_map, starter_room
+from ..core.validation.seal import describe as describe_seal
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
 from .dialogs.profiles_dialog import ProfilesDialog
@@ -30,6 +33,7 @@ from .panels.compile_log import CompileLogPanel
 from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
 from .paths import profiles_file
+from .seal_watcher import SealWatcher
 from .tools.entity_tool import EntityTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
@@ -82,6 +86,7 @@ class MainWindow(QMainWindow):
         self.profiles = self._load_profiles()
         self.compile_settings = self._load_compile_settings()
         self.compiler = CompileController(self.editor, self)
+        self.seal = SealWatcher(self.editor, self)
 
         self.grid_view = ViewportGrid(self.editor)
         self.setCentralWidget(self.grid_view)
@@ -104,7 +109,8 @@ class MainWindow(QMainWindow):
 
         ed.set_tool("select")
         self._restore_window()
-        self._update_title()
+        self.seal.checked.connect(self._on_seal_checked)
+        self._new_document()
         self._update_undo_actions()
 
     # ---- Aufbau ------------------------------------------------------------------
@@ -143,7 +149,15 @@ class MainWindow(QMainWindow):
 
     def _build_actions(self) -> None:
         ed = self.editor
-        self.act_new = self._action("&Neu", self.file_new, QKeySequence.New, "Neue, leere Map")
+        self.act_new = self._action("&Neu", self.file_new, QKeySequence.New,
+                                    "Neue Map, auf Wunsch mit Startraum (Spawn in dichter Skybox)")
+        self.act_new_empty = self._action("Neu (&leer)", lambda: self.file_new(empty=True), "Ctrl+Alt+N",
+                                          "Neue Map ganz ohne Inhalt")
+        self.act_starter = self._action("Neue Maps mit &Startraum", self._toggle_starter, None,
+                                        "Neue Maps beginnen mit Spawn, Sonne und dichter Skybox-Hülle. "
+                                        "So lässt sich sofort ohne Leck kompilieren.", checkable=True)
+        self.act_starter.setChecked(self._starter_enabled())
+        self.act_starter.toggled.connect(self._toggle_starter)  # auch wenn per Code umgeschaltet
         self.act_open = self._action("Ö&ffnen …", self.file_open, QKeySequence.Open, "Projekt öffnen")
         self.act_save = self._action("&Speichern", self.file_save, QKeySequence.Save, "Projekt speichern")
         self.act_save_as = self._action("Speichern &unter …", self.file_save_as, "Ctrl+Shift+S")
@@ -198,6 +212,10 @@ class MainWindow(QMainWindow):
         self.act_load_pointfile = self._action("Leck-Spur &laden …", self.open_pointfile, None,
                                                "Eine .lin-Datei von vbsp anzeigen")
         self.act_clear_leak = self._action("Leck-Spur &ausblenden", lambda: self.editor.set_leak_path([]))
+        self.act_check_seal = self._action("&Dichtheit prüfen", self.show_seal_problem, None,
+                                           "Prüft ohne Kompilieren, ob alle Entities umschlossen sind")
+        self.act_enclose = self._action("Map mit Skybox &umhüllen", self.enclose_with_skybox, None,
+                                        "Legt eine dichte Skybox-Hülle um alles, was in der Map ist")
 
         self.act_controls = self._action("&Steuerung", self.show_controls, "F1")
         self.act_about = self._action("Ü&ber Rampenschmiede", self.show_about)
@@ -205,7 +223,7 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         mb = self.menuBar()
         m = mb.addMenu(self.tr("&Datei"))
-        for a in (self.act_new, self.act_open):
+        for a in (self.act_new, self.act_new_empty, self.act_starter, self.act_open):
             m.addAction(a)
         self.recent_menu = m.addMenu(self.tr("&Zuletzt geöffnet"))
         self.recent_menu.aboutToShow.connect(self._fill_recent)
@@ -234,6 +252,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("&Testen"))
         for a in (self.act_compile, self.act_compile_again, self.act_compile_cancel, None,
+                  self.act_check_seal, self.act_enclose, None,
                   self.act_load_pointfile, self.act_clear_leak, None, self.act_profiles):
             m.addSeparator() if a is None else m.addAction(a)
         m.addAction(self.log_dock.toggleViewAction())
@@ -261,6 +280,10 @@ class MainWindow(QMainWindow):
         self.sel_label = QLabel()
         self.grid_label = QLabel(self.tr("Raster {0}").format(self.editor.grid))
         self.profile_label = QLabel()
+        self.seal_button = QToolButton()
+        self.seal_button.setAutoRaise(True)
+        self.seal_button.clicked.connect(self.show_seal_problem)
+        sb.addPermanentWidget(self.seal_button)
         sb.addPermanentWidget(self.sel_label)
         sb.addPermanentWidget(self.profile_label)
         sb.addPermanentWidget(self.grid_label)
@@ -315,10 +338,73 @@ class MainWindow(QMainWindow):
             return self.file_save()
         return r == QMessageBox.Discard
 
-    def file_new(self) -> None:
+    def file_new(self, empty: bool = False) -> None:
         if self._confirm_discard():
-            self.editor.set_document(MapDocument(), None)
-            self._update_title()
+            self._new_document(empty)
+
+    def _starter_enabled(self) -> bool:
+        return str(self.settings.value("new_map_starter", "true")).lower() in ("true", "1")
+
+    def _toggle_starter(self, on: bool) -> None:
+        self.settings.setValue("new_map_starter", "true" if on else "false")
+
+    def _new_document(self, empty: bool = False) -> None:
+        doc = MapDocument()
+        if not empty and self._starter_enabled():
+            profile = self.profiles.active_profile()
+            doc._insert(starter_room(doc, profile.key if profile else None))
+            # 3D-Kamera steht im Raum hinter den Spawns, nicht draußen vor der Skybox
+            doc.editor.camera_position = (-440.0, -440.0, 220.0)
+            doc.editor.camera_angles = (45.0, -15.0)
+        self.editor.set_document(doc, None)
+        self._update_title()
+        if len(doc):
+            # erst nach dem Layout zentrieren, vorher sind die Ansichten noch winzig
+            QTimer.singleShot(0, self._center_2d_on_map)
+
+    def _center_2d_on_map(self) -> None:
+        bb = self.editor.doc.bbox()
+        if bb is None:
+            return
+        for vp in self.grid_view.viewports():
+            if not vp.is_3d:
+                vp.center_on(bb.center, max(max(bb.size), 64))
+
+    # ---- Dichtheit ------------------------------------------------------------------
+    def _on_seal_checked(self, result) -> None:
+        text = describe_seal(self.editor.doc, result)
+        if result.unknown:
+            color, mark = "#9aa4b2", "·"
+        elif result.sealed:
+            color, mark = "#7fd67f", "✓"
+        else:
+            color, mark = "#f0c85a", "⚠"
+        self.seal_button.setText(f"{mark} {text}")
+        self.seal_button.setStyleSheet(f"color: {color};")
+        self.seal_button.setToolTip(self.tr(
+            "Vorhersage ohne Kompilieren. Klick zeigt den Weg ins Freie als rote Linie."
+            if not result.sealed else "Alle Entities sind von Brushes umschlossen."))
+
+    def show_seal_problem(self) -> None:
+        result = self.seal.check_now()
+        self._on_seal_checked(result)
+        if result.sealed:
+            self.statusBar().showMessage(self.tr(describe_seal(self.editor.doc, result)), 4000)
+            return
+        self.editor.set_leak_path(result.path)
+        if result.entity_id is not None:
+            self.editor.set_selection([result.entity_id])
+        if result.path:
+            self._center_views_on(result.path[0], 512)
+        self.statusBar().showMessage(self.tr(
+            "{0}. Rote Linie zeigt den Weg ins Freie. Tipp: Testen → Map mit Skybox umhüllen."
+        ).format(describe_seal(self.editor.doc, result)), 8000)
+
+    def enclose_with_skybox(self) -> None:
+        hull = enclose_map(self.editor.doc)
+        self.editor.run(AddObjects(hull, self.tr("Map umhüllen")))
+        self.editor.set_leak_path([])
+        self.editor.set_selection([s.id for s in hull])
 
     def file_open(self) -> None:
         if not self._confirm_discard():
@@ -557,7 +643,17 @@ class MainWindow(QMainWindow):
         profile = self.profiles.active_profile()
         if profile is None or self.compiler.running:
             return False
-        return self.compiler.start(profile, self.compile_settings)
+        seal = self.seal.check_now()
+        warnings = []
+        if not seal.sealed:
+            warnings.append(LogLine(
+                self.tr("Vorab-Prüfung: {0}. vbsp wird vermutlich ein Leck melden. "
+                        "Tipp: Testen → Map mit Skybox umhüllen.").format(describe_seal(self.editor.doc, seal)),
+                Level.WARNING, position=seal.path[0] if seal.path else None))
+        started = self.compiler.start(profile, self.compile_settings, warnings)
+        if started and not seal.sealed:
+            self.editor.set_leak_path(seal.path)
+        return started
 
     def _on_compile_started(self, _plan) -> None:
         self.log_dock.show()
