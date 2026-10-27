@@ -10,6 +10,7 @@ import json
 
 from PySide6.QtCore import (
     QAbstractListModel,
+    QMimeData,
     QModelIndex,
     QObject,
     QRunnable,
@@ -34,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.materials import MaterialLibrary, normalize
-from ...core.materials.apply import apply_to_objects
+from ...core.materials.apply import SCOPE_ALL, SCOPE_ONE, apply_to_objects, expand_scope
 from ...render.scene_mesh import material_color
 from ..editor import EditorContext
 
@@ -42,6 +43,9 @@ THUMB = 72
 FILTERS = (("all", "Alle"), ("favorites", "Favoriten"), ("map", "In dieser Map"), ("recent", "Zuletzt benutzt"),
            ("own", "Eigene Texturen"))
 MAX_RECENT = 40
+#: Material per Ziehen aus dem Browser in eine Ansicht
+MIME_MATERIAL = "application/x-rampenschmiede-material"
+SCOPES = ((SCOPE_ALL, "Alle Rampen"), (SCOPE_ONE, "Nur diese Rampe"))
 
 
 class _Bridge(QObject):
@@ -122,6 +126,21 @@ class MaterialModel(QAbstractListModel):
         self.names = names
         self._rows = {n: i for i, n in enumerate(names)}
         self.endResetModel()
+
+    def flags(self, index: QModelIndex) -> Qt.ItemFlags:
+        base = super().flags(index)
+        return base | Qt.ItemIsDragEnabled if index.isValid() else base
+
+    def mimeTypes(self) -> list[str]:
+        return [MIME_MATERIAL]
+
+    def mimeData(self, indexes) -> QMimeData:
+        mime = QMimeData()
+        if indexes:
+            name = self.names[indexes[0].row()]
+            mime.setData(MIME_MATERIAL, name.encode("utf-8"))
+            mime.setText(name)
+        return mime
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: B008
         return 0 if parent.isValid() else len(self.names)
@@ -217,6 +236,10 @@ class MaterialBrowser(QWidget):
         self.view.setTextElideMode(Qt.ElideMiddle)
         self.view.clicked.connect(self._on_click)
         self.view.doubleClicked.connect(self._on_double_click)
+        self.view.setDragEnabled(True)
+        self.view.setDragDropMode(QListView.DragOnly)
+        self.view.setToolTip(self.tr("Klick wählt, Doppelklick legt auf die Auswahl, "
+                                     "Ziehen auf eine Fläche in der 3D-Ansicht legt es genau dort hin"))
         lay.addWidget(self.view, 1)
 
         bottom = QHBoxLayout()
@@ -234,9 +257,19 @@ class MaterialBrowser(QWidget):
         bottom.addWidget(self.preview)
         bottom.addWidget(self.current_label, 1)
         bottom.addWidget(self.fav_button)
+        self.scope = QComboBox()
+        for key, label in SCOPES:
+            self.scope.addItem(self.tr(label), key)
+        self.scope.setToolTip(self.tr(
+            "Alle Rampen: Eine Textur auf der Surf-Fläche oder den Seiten einer Rampe gilt für alle Rampen "
+            "und für neue. Nur diese Rampe: nur die eine, auf die du sie legst."))
+        self.scope.setCurrentIndex(max(0, self.scope.findData(self.settings.value("material_scope", SCOPE_ALL))))
+        self.scope.currentIndexChanged.connect(self._scope_changed)
+        bottom.addWidget(self.scope)
         bottom.addWidget(self.apply_button)
         lay.addLayout(bottom)
 
+        self._scope_changed()
         editor.materials_changed.connect(self.reload)
         editor.current_material_changed.connect(self._show_current)
         self.reload()
@@ -317,13 +350,18 @@ class MaterialBrowser(QWidget):
         if face_tool is not None and self.editor.tool is face_tool and getattr(face_tool, "faces", None):
             ok = face_tool.apply_material(material)  # type: ignore[attr-defined]
         else:
-            cmd = apply_to_objects(self.editor.doc, self.editor.selection, material)
+            ids = expand_scope(self.editor.doc, self.editor.selection, self.editor.material_scope)
+            cmd = apply_to_objects(self.editor.doc, ids, material)
             ok = cmd is not None and self.editor.run(cmd)
         if ok:
             self.remember(material)
         else:
             self.editor.status_message.emit(self.tr("Erst Objekte oder Seiten auswählen"))
         return ok
+
+    def _scope_changed(self, *_args) -> None:
+        self.editor.material_scope = self.scope.currentData()
+        self.settings.setValue("material_scope", self.editor.material_scope)
 
     def remember(self, material: str) -> None:
         name = normalize(material)

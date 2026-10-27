@@ -31,6 +31,22 @@ _SHAPES: dict[str, str] = {
     "face": '<path d="M3 9 L13 4 L21 10 L11 15 Z" fill="currentColor" fill-opacity="0.3"/>'
             '<path d="M8 6.5 L16 12.5 M6.3 10.7 L17 7"/>'
             '<path d="M3 9 L3 15 L11 21 L21 16 L21 10 M11 15 L11 21"/>',
+    "paint": '<path d="M14.5 4.5l5 5L10 19H5v-5z" fill="currentColor" fill-opacity="0.25"/><path d="M12.5 6.5l5 5"/>',
+    "clip": '<path d="M4 6h10v14H4z" fill="currentColor" fill-opacity="0.25"/>'
+            '<path d="M14 6h6v14h-6" stroke-dasharray="2 2"/><path d="M14 2.5v19"/>',
+    "hole": '<path d="M3 4h18v16H3z" fill="currentColor" fill-opacity="0.25"/><path d="M8.5 8.5h7v7h-7z"/>',
+    "carve": '<path d="M3 9h18v10H3z" fill="currentColor" fill-opacity="0.25"/>'
+             '<path d="M8 4h8v10H8z" stroke-dasharray="2 2"/>',
+    # Formen
+    "shape_block": '<path d="M12 3 L20.5 7.5 L20.5 16.5 L12 21 L3.5 16.5 L3.5 7.5 Z"/>'
+                   '<path d="M3.5 7.5 L12 12 L20.5 7.5 M12 12 L12 21"/>'
+                   '<path d="M3.5 7.5 L12 3 L20.5 7.5 L12 12 Z" fill="currentColor" fill-opacity="0.3" stroke="none"/>',
+    "shape_wedge": '<path d="M3 19 L3 9 L13 19 Z M3 9 L11 4 L21 14 L13 19 M21 14 L21 14"/>'
+                   '<path d="M3 9 L11 4 L21 14 L13 19 Z" fill="currentColor" fill-opacity="0.3" stroke="none"/>',
+    "shape_cylinder": '<ellipse cx="12" cy="6" rx="7" ry="2.8" fill="currentColor" fill-opacity="0.3"/>'
+                      '<path d="M5 6v12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6"/>',
+    "shape_arch": '<path d="M3 20V12a9 9 0 0 1 18 0v8h-4v-8a5 5 0 0 0-10 0v8z" fill="currentColor" fill-opacity="0.3"/>',
+    "shape_stairs": '<path d="M3 20v-4h4.5v-4H12V8h4.5V4H21v16z" fill="currentColor" fill-opacity="0.3"/>',
     # Datei und Bearbeiten
     "new": '<path d="M6 2.5h8l4 4v15H6z M14 2.5v4h4"/><path d="M12 11v7M8.5 14.5h7"/>',
     "open": '<path d="M3 6.5a1.5 1.5 0 0 1 1.5-1.5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7V18a1.5 1.5 0 0 1-1.5 1.5h-15'

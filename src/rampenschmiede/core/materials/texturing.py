@@ -114,10 +114,34 @@ def justify(face: Face, polygon: Sequence[Point], tex_size: tuple[int, int], mod
                                vaxis=TexAxis(v.x, v.y, v.z, ov, round(sv, 6)))
 
 
+def shift_by(face: Face, delta: Point, tex_size: tuple[int, int] | None = None) -> Face:
+    """Textur so verschieben, dass sie einer Bewegung `delta` (Welt-Units) auf der Seite folgt:
+    Der Punkt der Textur, der vorher unter der Maus lag, liegt danach wieder darunter."""
+    u, v = face.uaxis, face.vaxis
+    ou = u.offset - _dot(delta, u.vec) / (u.scale or 1.0)
+    ov = v.offset - _dot(delta, v.vec) / (v.scale or 1.0)
+    if tex_size:
+        ou, ov = _wrap(ou, tex_size[0]), _wrap(ov, tex_size[1])
+    return dataclasses.replace(face, uaxis=TexAxis(u.x, u.y, u.z, round(ou, 4), u.scale),
+                               vaxis=TexAxis(v.x, v.y, v.z, round(ov, 4), v.scale))
+
+
+def scale_by(face: Face, factor: float, anchor: Point, tex_size: tuple[int, int] | None = None) -> Face:
+    """Textur um `factor` größer oder kleiner machen; der Punkt `anchor` bleibt stehen."""
+    out = []
+    for ax, size in ((face.uaxis, tex_size[0] if tex_size else 0), (face.vaxis, tex_size[1] if tex_size else 0)):
+        old = ax.scale or 1.0
+        new = min(64.0, max(0.01, old * factor))
+        p = _dot(anchor, ax.vec)
+        offset = ax.offset + p / old - p / new
+        out.append(TexAxis(ax.x, ax.y, ax.z, round(_wrap(offset, size) if size else offset, 4), round(new, 6)))
+    return dataclasses.replace(face, uaxis=out[0], vaxis=out[1])
+
+
 def _wrap(offset: float, size: int) -> float:
     """Verschiebung in den Bereich einer Texturbreite bringen (wie Hammer)."""
     r = round(offset % size, 4) if size else offset
     return 0.0 if r == size else r
 
 
-__all__ = ["JUSTIFY", "align_face", "align_world", "justify", "set_values"]
+__all__ = ["JUSTIFY", "align_face", "align_world", "justify", "scale_by", "set_values", "shift_by"]

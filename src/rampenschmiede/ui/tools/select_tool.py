@@ -6,6 +6,7 @@ Bedienung wie in Hammer:
 - Erneuter Klick auf die Auswahl wechselt zwischen Skalier- und Drehgriffen
 - Drehen rastet in 15°-Schritten ein, mit Shift frei
 - Pfeiltasten verschieben um eine Rasterweite
+- In 3D: an den farbigen Pfeilen (X rot, Y grün, Z blau) entlang einer Achse ziehen, Shift kopiert
 """
 from __future__ import annotations
 
@@ -30,6 +31,12 @@ if TYPE_CHECKING:
 HANDLE_PX = 7
 DRAG_THRESHOLD_PX = 3
 ROTATE_SNAP_DEG = 15.0
+#: Achsen-Pfeile in 3D: Farbe je Achse, Länge auf dem Bildschirm etwa so viele Pixel
+AXIS_COLORS = ((235, 72, 72), (96, 200, 96), (80, 140, 255))
+AXIS_NAMES = "XYZ"
+AXIS_HOVER = QColor(255, 220, 0)
+GIZMO_PX = 90
+GIZMO_HIT_PX = 9
 HANDLES = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
 
 
@@ -46,6 +53,8 @@ class _Drag:
     toggle_on_click: bool = False
     ctrl: bool = False
     merge_key: object = field(default_factory=object)
+    axis: int | None = None
+    along: float = 0.0
 
 
 class SelectTool(Tool):
@@ -58,6 +67,8 @@ class SelectTool(Tool):
         super().__init__(editor)
         self.handle_mode = "scale"
         self._drag: _Drag | None = None
+        #: Achse, über der die Maus in 3D gerade steht
+        self.hover_axis: int | None = None
         editor.selection_changed.connect(self._on_selection_changed)
 
     def _on_selection_changed(self) -> None:
@@ -275,7 +286,134 @@ class SelectTool(Tool):
         self.editor.set_selection((self.editor.selection | found) if d.ctrl else found)
 
     # ---- 3D ---------------------------------------------------------------------------
+    def gizmo(self, vp: "Viewport") -> tuple[QPointF, list[QPointF | None]] | None:
+        """Mitte der Auswahl und die drei Pfeilspitzen auf dem Bildschirm."""
+        bb = self.editor.selection_bbox()
+        if bb is None:
+            return None
+        center = np.array(bb.center, dtype=float)
+        c = vp.project(center)
+        if c is None:
+            return None
+        dist = float(np.linalg.norm(center - vp.cam3d.position))
+        offsets: list[tuple[float, float] | None] = []
+        for axis in range(3):
+            step = np.zeros(3)
+            step[axis] = max(dist, 1.0) * 0.05
+            t = vp.project(center + step)
+            offsets.append(None if t is None else (t.x() - c.x(), t.y() - c.y()))
+        longest = max((math.hypot(*o) for o in offsets if o is not None), default=0.0)
+        tips: list[QPointF | None] = []
+        for o in offsets:
+            length = math.hypot(*o) if o is not None else 0.0
+            # Schaut man fast genau entlang einer Achse, wird ihr Pfeil kurz und lässt sich nicht greifen
+            if o is None or longest < 1e-6 or length / longest < 0.15:
+                tips.append(None)
+                continue
+            scale = GIZMO_PX / longest
+            tips.append(QPointF(c.x() + o[0] * scale, c.y() + o[1] * scale))
+        return c, tips
+
+    def _hit_axis(self, vp: "Viewport", pos: QPointF) -> int | None:
+        g = self.gizmo(vp)
+        if g is None:
+            return None
+        c, tips = g
+        best, best_d = None, GIZMO_HIT_PX
+        for axis, tip in enumerate(tips):
+            if tip is None:
+                continue
+            d = _segment_distance(pos, c, tip)
+            if d <= best_d:
+                best, best_d = axis, d
+        return best
+
+    def _along(self, vp: "Viewport", pos: QPointF, axis: int, center: np.ndarray) -> float | None:
+        """Wo der Mausstrahl der Achse durch die Mitte am nächsten kommt (Weltkoordinate)."""
+        origin, direction = vp.ray(pos)
+        a = np.zeros(3)
+        a[axis] = 1.0
+        b = float(a @ direction)
+        denom = 1.0 - b * b
+        if denom < 1e-4:
+            return None
+        w = center - origin
+        s = (b * float(direction @ w) - float(a @ w)) / denom
+        return float(center[axis] + s)
+
+    def _start_axis_drag(self, vp: "Viewport", e: QMouseEvent, axis: int) -> bool:
+        bb = self.editor.selection_bbox()
+        if bb is None:
+            return False
+        along = self._along(vp, e.position(), axis, np.array(bb.center, dtype=float))
+        if along is None:
+            return False
+        if e.modifiers() & Qt.ShiftModifier:
+            self.editor.duplicate(self.editor.selected_objects(), (0, 0, 0))
+            bb = self.editor.selection_bbox() or bb
+        self._drag = _Drag("axis", e.position(), (0.0, 0.0), (0.0, 0.0), self._targets(), bb,
+                           clone=bool(e.modifiers() & Qt.ShiftModifier), axis=axis, along=along)
+        return True
+
+    def move_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
+        d = self._drag
+        if d is not None and d.kind == "axis" and d.axis is not None and d.bbox is not None:
+            along = self._along(vp, e.position(), d.axis, np.array(d.bbox.center, dtype=float))
+            if along is None:
+                return
+            delta = [0.0, 0.0, 0.0]
+            delta[d.axis] = self.editor.snap(d.bbox.mins[d.axis] + along - d.along) - d.bbox.mins[d.axis]
+            d.current = (delta[d.axis], 0.0)
+            lock = self.editor.texture_lock
+            self._replace(d, lambda o: transform.translate(o, tuple(delta), lock),  # type: ignore[arg-type]
+                          "Kopieren und verschieben" if d.clone else "Verschieben")
+            self.editor.status_message.emit(f"{AXIS_NAMES[d.axis]} {delta[d.axis]:+g}")
+            vp.update()
+            return
+        hover = self._hit_axis(vp, e.position()) if self.editor.selection else None
+        if hover != self.hover_axis:
+            self.hover_axis = hover
+            vp.update()
+
+    def release_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
+        if self._drag is not None and self._drag.kind == "axis":
+            self._drag = None
+            self.editor.stack.end_merge()
+            self.editor.redraw_requested.emit()
+
+    def cursor_3d(self, vp: "Viewport", pos: QPointF) -> Qt.CursorShape:
+        if self._drag is not None and self._drag.kind == "axis":
+            return Qt.ClosedHandCursor
+        return Qt.OpenHandCursor if self.hover_axis is not None else Qt.ArrowCursor
+
+    def paint_3d(self, vp: "Viewport", p: QPainter) -> None:
+        g = self.gizmo(vp)
+        if g is None:
+            return
+        c, tips = g
+        active = self._drag.axis if self._drag is not None and self._drag.kind == "axis" else self.hover_axis
+        for axis, tip in enumerate(tips):
+            if tip is None:
+                continue
+            color = AXIS_HOVER if axis == active else QColor(*AXIS_COLORS[axis])
+            _arrow(p, c, tip, color, 4 if axis == active else 3)
+            p.setPen(color)
+            dx, dy = tip.x() - c.x(), tip.y() - c.y()
+            n = math.hypot(dx, dy) or 1.0
+            p.drawText(QPointF(tip.x() + dx / n * 10 - 4, tip.y() + dy / n * 10 + 4), AXIS_NAMES[axis])
+        p.setPen(QPen(QColor(0, 0, 0), 1))
+        p.setBrush(QBrush(QColor(255, 255, 255)))
+        p.drawEllipse(c, 4, 4)
+        d = self._drag
+        if d is not None and d.kind == "axis" and d.axis is not None:
+            p.setPen(AXIS_HOVER)
+            p.drawText(QPointF(c.x() + 10, c.y() - 10), f"{AXIS_NAMES[d.axis]} {d.current[0]:+g}")
+
     def press_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
+        if self.editor.selection and not e.modifiers() & Qt.ControlModifier:
+            axis = self._hit_axis(vp, e.position())
+            if axis is not None and self._start_axis_drag(vp, e, axis):
+                return
         origin, direction = vp.ray(e.position())
         hit = pick_3d(self.editor, origin, direction)
         ctrl = bool(e.modifiers() & Qt.ControlModifier)
@@ -347,3 +485,27 @@ class SelectTool(Tool):
             p.setPen(QColor(255, 220, 0))
             p.drawText(QPointF(rect.center().x() + 6, rect.center().y() - 6),
                        f"{self._rotation_angle(vp, d, False):+.0f}°")
+
+
+def _segment_distance(p: QPointF, a: QPointF, b: QPointF) -> float:
+    ax, ay, bx, by = a.x(), a.y(), b.x(), b.y()
+    dx, dy = bx - ax, by - ay
+    length2 = dx * dx + dy * dy
+    t = 0.0 if length2 == 0 else max(0.0, min(1.0, ((p.x() - ax) * dx + (p.y() - ay) * dy) / length2))
+    return math.hypot(p.x() - (ax + t * dx), p.y() - (ay + t * dy))
+
+
+def _arrow(p: QPainter, a: QPointF, b: QPointF, color: QColor, width: float) -> None:
+    p.setPen(QPen(color, width, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(a, b)
+    dx, dy = b.x() - a.x(), b.y() - a.y()
+    n = math.hypot(dx, dy)
+    if n < 1:
+        return
+    ux, uy = dx / n, dy / n
+    size = 12.0
+    left = QPointF(b.x() - ux * size - uy * size * 0.5, b.y() - uy * size + ux * size * 0.5)
+    right = QPointF(b.x() - ux * size + uy * size * 0.5, b.y() - uy * size - ux * size * 0.5)
+    p.setPen(QPen(color, 1))
+    p.setBrush(QBrush(color))
+    p.drawPolygon([QPointF(b.x() + ux * 2, b.y() + uy * 2), left, right])

@@ -44,7 +44,8 @@ Die Steuerung folgt Hammer, damit Umsteiger sich sofort zurechtfinden. **F1** ze
 ihre Kopfzeile umstellen, die Trenner sind verschiebbar. Die Ansicht unter der Maus ist orange
 umrandet. Die 3D-Ansicht kennt die Modi Texturiert, Schattiert, Flach und Drahtgitter.
 
-**Werkzeuge.** Links stehen die Werkzeuge mit Symbol (Auswahl, Formen, Entity, Seiten). Das aktive
+**Werkzeuge.** Links stehen die Werkzeuge mit Symbol (Auswahl, Malen, Formen, Entity, Seiten,
+Schneiden, Loch). Das aktive
 ist orange hinterlegt, oben rechts steht zusätzlich „Werkzeug: …“.
 
 | Kamera | |
@@ -55,14 +56,29 @@ ist orange hinterlegt, oben rechts steht zusätzlich „Werkzeug: …“.
 | Mittlere Maustaste oder Leertaste + Ziehen | Ansicht verschieben |
 | Strg+E | alle Ansichten auf die Auswahl zentrieren |
 
-**Formen bauen (Shift+B).** Form wählen (Block, Keil, Zylinder, Bogen, Treppe), in einer
-2D-Ansicht einen Rahmen aufziehen, in einer zweiten Ansicht die Höhe anpassen, **Enter**.
+**Formen bauen (Shift+B).** Form wählen (Block, Keil, Zylinder, Bogen, Treppe): links in der
+Bibliothek unter *Formen* oder rechts als Bild. In einer 2D-Ansicht einen Rahmen aufziehen, in einer zweiten Ansicht die Höhe anpassen, **Enter**.
 Schneller: in der 3D-Ansicht auf eine Fläche klicken, der Rahmen sitzt dann direkt darauf.
+Eine Form aus der Bibliothek in eine Ansicht ziehen setzt sie in der zuletzt benutzten Größe ab.
+
+**Rampen malen (Shift+R).** Vorlage links in der Bibliothek anklicken, Regler nach Wunsch stellen,
+dann in einer Ansicht vom Anfang zum Ende der Rampe ziehen. Die Vorschau hängt am Mauszeiger,
+beim Loslassen wird gebaut. Der Strich bestimmt Länge und Richtung, bei Kurven Radius und
+Richtung. Ein Klick ohne Ziehen setzt die Vorlage so ab, wie sie ist. Esc beendet das Malen.
+
+**Schneiden (Shift+X), Loch (Shift+L), Aushöhlen (Strg+Shift+C).** Schneiden: Brushes auswählen,
+in einer 2D-Ansicht eine Linie ziehen; Tab wechselt, welche Seite bleibt (beide, hinten, vorne),
+Enter schneidet. Loch: Brushes auswählen, in einer 2D-Ansicht ein Rechteck aufziehen, Enter
+schneidet ein Loch oder Fenster ganz hindurch. Aushöhlen: Der gewählte Brush schneidet sich aus
+allen Brushes heraus, die er berührt, wie Carve in Hammer. Rampen-Bausteine werden nicht
+geschnitten; dafür vorher *Baustein lösen*.
 
 **Auswählen und Bearbeiten (Shift+S).** Klick wählt aus, Strg+Klick ergänzt, Ziehen auf
 leerer Fläche zieht einen Auswahlrahmen auf. Auswahl ziehen verschiebt am Raster, Shift+Ziehen
 kopiert. Die weißen Griffe skalieren; ein zweiter Klick auf die Auswahl schaltet auf Drehgriffe
 (15°-Schritte, mit Shift frei). Pfeiltasten verschieben um eine Rasterweite.
+In der 3D-Ansicht hat die Auswahl drei Pfeile (X rot, Y grün, Z blau): einen Pfeil greifen und
+ziehen verschiebt nur entlang dieser Achse, am Raster. Shift beim Greifen verschiebt eine Kopie.
 Exakte Zahlen: Panel „Auswahl“ oder **Strg+M** (Transformieren).
 
 **Entities (Shift+E).** Spawns (CT, T, Momentum), Punkt-, Spot- und Sonnenlicht sowie Cubemaps
@@ -79,7 +95,7 @@ setzen. Eigenschaften im Panel „Auswahl“ bearbeiten.
 | Strg+Shift+E | Als `.vmf` exportieren |
 
 **Startraum.** Jede neue Map beginnt mit einem Spawn (für CS:S CT und T, für Momentum
-`info_player_start`), einer Sonne und einer dichten Skybox-Hülle von 1024 × 1024 × 512 Units.
+`info_player_start`), einer Sonne und einer dichten Skybox-Hülle von 4096 × 4096 × 1024 Units.
 F9 kompiliert also sofort ohne Leck. Die sechs Hüllen-Brushes sind normale Brushes: verschieben,
 vergrößern oder löschen. *Datei → Neu (leer)* startet ohne Inhalt, *Datei → Neue Maps mit
 Startraum* schaltet den Startraum ab.
@@ -112,8 +128,9 @@ So baut die Bibliothek Rampen, damit es keine Rampbugs durch krumme Geometrie gi
 - Alle Eckpunkte liegen auf ganzen Units, benachbarte Segmente teilen exakt dieselben Nahtpunkte.
 - Kurven drehen höchstens 5° pro Segment (Standard 2,5°), jedes Segment hat eine flache Unterseite.
 - Gerade Rampen sind in jeder Richtung exakte Prismen ohne geknickte Flächen.
-- Kollision: Playerclip-Brushes in der Welt, sichtbar ist ein `func_brush` („nie fest“).
-  Alternativ im Regler *Kollision*: nur `func_detail`.
+- Kollision: glatte Playerclip-Brushes in der Welt, sichtbar ist ein `func_detail`. Die schrägen
+  Flächen haben eine gemeinsame Glättungsgruppe, damit Kurven im Spiel ohne Risse und
+  Lichtkanten aussehen. Alternativ im Regler *Kollision*: nur `func_detail`.
 - Unsichtbare Flächen (Nähte, Unterseite, aneinanderliegende Teile) bekommen Nodraw.
 
 **Zeitnahme-Zonen.** In der Bibliothek unter *Zonen*: Startzone, Zielzone und Stage-Zone,
@@ -140,13 +157,21 @@ für Source (über 32768 Units), sagt der Assistent das, bevor er etwas erzeugt.
 **Texturen und Materialien.** Der Material-Browser (unten) liest alle Materialien des Spiels aus
 dem Spielprofil, auch aus den VPKs, so wie Hammer. Suchen, Favoriten (★), „In dieser Map“ und
 „Zuletzt benutzt“ helfen beim Finden. Klick wählt das aktuelle Material, Doppelklick legt es auf
-die Auswahl. Neue Formen bekommen das aktuelle Material. Bei Rampen-Bausteinen lassen sich
+die Auswahl. Neue Formen bekommen das aktuelle Material. **Ziehen** geht auch: Material aus dem
+Browser auf eine Fläche in der 3D-Ansicht ziehen. Auf einer Rampe landet es standardmäßig auf
+allen Rampen (Fahrfläche oder Seite, je nachdem, wohin es fällt), mit der Auswahl *Nur diese Rampe* im
+Browser nur auf der einen. Bei Rampen-Bausteinen lassen sich
 Surf-Fläche und Seiten getrennt in den Reglern setzen (⇐ übernimmt das aktuelle Material).
 
 **Seiten-Werkzeug (Shift+A).** Wie der Face-Editor in Hammer: in der 3D-Ansicht Seiten anklicken
 (Strg+Klick ergänzt), dann rechts Skalierung, Verschiebung, Drehung und Lightmap-Skalierung
 einstellen, einpassen oder ausrichten. Shift+Klick legt das aktuelle Material direkt auf eine
 Seite, Alt+Klick nimmt das Material einer Seite auf.
+**Textur mit der Maus:** Ziehen auf einer Seite verschiebt ihre Textur, Alt+Ziehen nach oben
+macht sie größer, nach unten kleiner. Rampen passen ihre Textur von sich aus ein: quer genau
+einmal über die Surf-Fläche, längs läuft sie weiter, auch um Kurven. Ziehen und Alt+Ziehen auf
+einer Rampe verschiebt bzw. skaliert die Textur der ganzen Rampe (Regler *Textur längs/quer*,
+*Textur-Größe*); der Regler *Textur* schaltet auf das Welt-Raster wie in Hammer zurück.
 
 **Rampen-Assistent (Strg+Shift+R, Menü *Texturen*).** Farbe der Rampen, der Rampenlinien und
 der Wände wählen oder eine fertige Kombination anklicken. Die Rampenschmiede erzeugt daraus

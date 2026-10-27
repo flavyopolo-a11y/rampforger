@@ -151,9 +151,9 @@ PROFILE_CHOICES = (("voll", "Voll (beidseitig)"), ("halb", "Halb (eine Seite)"),
 
 PROFILE_PARAMS = (
     Param("profil", "Querschnitt", "voll", choices=PROFILE_CHOICES),
-    Param("breite", "Breite", 960, 64, 8192, 16, "u"),
+    Param("breite", "Breite", 640, 64, 8192, 16, "u"),
     Param("winkel", "Surf-Winkel", 50.0, 20, 80, 0.5, "°", hint="Ab 45° surfbar, über 65° sehr steil"),
-    Param("lippe", "Lippe", 32, 0, 512, 8, "u", hint="Senkrechter Rand unten an der Rampe"),
+    Param("lippe", "Lippe", 16, 0, 512, 8, "u", hint="Senkrechter Rand unten an der Rampe"),
     Param("oben", "Obere Breite", 256, 16, 4096, 16, "u", only_if=("profil", "trapez")),
     Param("spiegeln", "Seite tauschen", False, only_if=("profil", "halb")),
 )
@@ -168,7 +168,16 @@ MATERIAL_PARAMS = (
     SIDE_MATERIAL,
     Param("unterseite_nodraw", "Unterseite unsichtbar (Nodraw)", True),
     Param("kollision", "Kollision", "clip", choices=(
-        ("clip", "Playerclip + func_brush (empfohlen)"), ("detail", "Nur func_detail"))),
+        ("clip", "Playerclip + func_detail (empfohlen)"), ("detail", "Nur func_detail"))),
+    Param("textur", "Textur", "einpassen", choices=(
+        ("einpassen", "Quer über die Rampe einpassen"), ("raster", "Welt-Raster (wie Hammer)")),
+          hint="Einpassen: Die Textur geht quer genau einmal über die Surf-Fläche und läuft längs weiter"),
+    Param("textur_groesse", "Textur-Größe", 100, 10, 1000, 5, "%", only_if=("textur", "einpassen"),
+          hint="100 % = quer genau einmal. In der 3D-Ansicht: Seiten-Werkzeug, Alt+Ziehen"),
+    Param("textur_laengs", "Textur längs", 0, -8192, 8192, 8, "u", only_if=("textur", "einpassen"),
+          hint="Verschiebt die Textur entlang der Rampe. In der 3D-Ansicht: Seiten-Werkzeug, Ziehen"),
+    Param("textur_quer", "Textur quer", 0, -8192, 8192, 8, "u", only_if=("textur", "einpassen"),
+          hint="Verschiebt die Textur quer zur Rampe"),
 )
 
 
@@ -208,7 +217,10 @@ def profile_from(v: dict) -> Profile:
 def materials_from(v: dict) -> Materials:
     return Materials(surf=str(v.get("mat_surf", SURF_MATERIAL.default)).upper(),
                      side=str(v.get("mat_seite", SIDE_MATERIAL.default)).upper(),
-                     hide_bottom=bool(v.get("unterseite_nodraw", True)))
+                     hide_bottom=bool(v.get("unterseite_nodraw", True)),
+                     fit_surf=v.get("textur", "einpassen") == "einpassen",
+                     tex_size=float(v.get("textur_groesse", 100)) / 100,
+                     tex_shift=(float(v.get("textur_laengs", 0)), float(v.get("textur_quer", 0))))
 
 
 # ---- Wege ---------------------------------------------------------------------------
@@ -350,7 +362,7 @@ def _r(v: float) -> int:
 
 LENGTH = Param("laenge", "Länge", 1024, 64, 32768, 16, "u")
 DROP = Param("gefaelle", "Höhenänderung", 0, -16384, 16384, 16, "u", hint="Negativ = abwärts")
-RADIUS = Param("radius", "Radius (Mitte)", 1536, 128, 16384, 16, "u")
+RADIUS = Param("radius", "Radius (Mitte)", 1024, 128, 16384, 16, "u")
 BEND = Param("bogen", "Bogenwinkel", 90.0, 5, 1080, 5, "°")
 STEP = Param("schritt", "Grad pro Segment", 2.5, 1, 5, 0.5, "°",
              hint="Kleiner = glatter. Mehr als 5° pro Segment führt zu spürbaren Kanten")
@@ -366,7 +378,7 @@ def _add(t: Template) -> None:
 _add(Template("gerade", "Gerade Rampe", "Rampen", "Klassische Surf-Rampe, beidseitig surfbar.",
               (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight))
 _add(Template("halb", "Halbe Rampe", "Rampen", "Eine Surf-Seite, Rückwand senkrecht. Gut an Wänden.",
-              (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight, (("profil", "halb"), ("breite", 480))))
+              (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight, (("profil", "halb"), ("breite", 320))))
 _add(Template("invertiert", "Invertierte Rampe", "Rampen", "Kopfüber: Surf-Flächen zeigen nach unten.",
               (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight, (("profil", "invertiert"),)))
 _add(Template("trapez", "Trapez-Rampe", "Rampen", "Rampe mit flacher Oberkante zum Landen.",
@@ -375,17 +387,17 @@ _add(Template("ski", "Ski-Rampe", "Rampen", "Lange Rampe mit Gefälle für Tempo
               (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight,
               (("laenge", 4096), ("gefaelle", -1024))))
 _add(Template("pyramide", "Pyramide", "Rampen", "Surf-Flächen in alle Richtungen.",
-              (Param("seiten", "Seiten", 4, 3, 8), Param("breite", "Breite", 1024, 64, 8192, 16, "u"),
+              (Param("seiten", "Seiten", 4, 3, 8), Param("breite", "Breite", 640, 64, 8192, 16, "u"),
                Param("winkel", "Surf-Winkel", 50.0, 20, 80, 0.5, "°"), Param("lippe", "Lippe", 32, 0, 512, 8, "u"),
                *MATERIAL_PARAMS), build_pyramid))
 _add(Template("kurve", "Kurve", "Kurven", "Gebogene Rampe mit gleichmäßigen Segmenten.",
               (RADIUS, BEND, DIRECTION, STEP, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_curve))
 _add(Template("kurve_halb", "Halbe Kurve", "Kurven", "Gebogene Rampe mit einer Surf-Seite.",
               (RADIUS, BEND, DIRECTION, STEP, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_curve,
-              (("profil", "halb"), ("breite", 480))))
+              (("profil", "halb"), ("breite", 320))))
 _add(Template("spirale", "Spirale", "Kurven", "Kurve über mehrere Umdrehungen mit Gefälle.",
               (RADIUS, BEND, DIRECTION, STEP, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_curve,
-              (("bogen", 360.0), ("gefaelle", -1024), ("radius", 2048))))
+              (("bogen", 360.0), ("gefaelle", -1024), ("radius", 1280))))
 _add(Template("s_kurve", "S-Kurve", "Kurven", "Zwei Bögen in entgegengesetzte Richtungen.",
               (RADIUS, BEND, DIRECTION, STEP, Param("mitte", "Gerades Mittelstück", 0, 0, 8192, 16, "u"),
                DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_s_curve, (("bogen", 45.0),)))

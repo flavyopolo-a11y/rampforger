@@ -12,6 +12,7 @@ from ..core.commands import AddObjects, Command, CommandStack, RemoveObjects, Re
 from ..core.geometry import transform
 from ..core.geometry.transform import TransformError
 from ..core.materials import MaterialLibrary
+from ..core.materials.sizes import set_size_lookup
 from ..core.mathutil import BBox, Point
 from ..core.model import DEFAULT_MATERIAL, ChangeSet, MapDocument, MapObject, owner_id
 from ..render.scene_mesh import SceneMesh
@@ -21,6 +22,17 @@ if TYPE_CHECKING:
     from .tools.base import Tool
 
 GRID_SIZES = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
+
+
+def _size_lookup(library: MaterialLibrary | None):
+    """Texturgrößen für Rampen mit eingepasster Textur aus der Material-Bibliothek."""
+    if library is None:
+        return None
+
+    def lookup(material: str) -> tuple[int, int] | None:
+        tex = library.texture(material)
+        return (tex.source_width, tex.source_height) if tex else None
+    return lookup
 LEAK_COLOR = (1.0, 0.1, 0.1)
 
 
@@ -47,6 +59,8 @@ class EditorContext(QObject):
         self.materials: MaterialLibrary | None = None
         self.atlas = TextureAtlas()
         self.current_material = DEFAULT_MATERIAL
+        #: Gilt eine Rampen-Textur für alle Rampen ("alle") oder nur eine ("einer")?
+        self.material_scope = "alle"
         self.scene = SceneMesh(self.doc, self.atlas)
         self.selection: frozenset[int] = frozenset()
         self.file_path: Path | None = None
@@ -85,6 +99,7 @@ class EditorContext(QObject):
     def set_material_library(self, library: MaterialLibrary | None) -> None:
         self.materials = library
         self.atlas.set_library(library)
+        set_size_lookup(_size_lookup(library))
         self.materials_changed.emit()
         self.redraw_requested.emit()
 

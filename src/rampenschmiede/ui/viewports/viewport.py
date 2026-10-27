@@ -16,10 +16,12 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QCursor, QFont, QKeyEvent, QMouseEvent, QPainter, QWheelEvent
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
+from ...core.materials.apply import apply_dropped
 from ...render.camera import VIEW_AXES, Camera2D, Camera3D
 from ...render.gl_renderer import ViewportRenderer
 from ..editor import EditorContext
 from ..panels.library_panel import MIME_TEMPLATE
+from ..panels.material_browser import MIME_MATERIAL
 
 VIEW_TITLES = {
     "3d": "3D",
@@ -162,16 +164,55 @@ class Viewport(QOpenGLWidget):
     def ray(self, pos: QPointF | QPoint) -> tuple[np.ndarray, np.ndarray]:
         return self.cam3d.ray(pos.x(), pos.y(), self.width(), self.height())
 
+    def project(self, point) -> QPointF | None:
+        """Weltpunkt auf den Bildschirm der 3D-Ansicht; None, wenn er hinter der Kamera liegt."""
+        w, h = self.width(), self.height()
+        clip = self.cam3d.mvp(w, h) @ np.array([point[0], point[1], point[2], 1.0])
+        if clip[3] <= 1e-6:
+            return None
+        nx, ny = clip[0] / clip[3], clip[1] / clip[3]
+        return QPointF((nx + 1) * 0.5 * w, (1 - ny) * 0.5 * h)
+
     # ---- Vorlagen hineinziehen ---------------------------------------------------------
     def dragEnterEvent(self, e) -> None:
-        if e.mimeData().hasFormat(MIME_TEMPLATE):
+        if e.mimeData().hasFormat(MIME_TEMPLATE) or e.mimeData().hasFormat(MIME_MATERIAL):
             e.acceptProposedAction()
 
     def dragMoveEvent(self, e) -> None:
         if e.mimeData().hasFormat(MIME_TEMPLATE):
             e.acceptProposedAction()
+        elif e.mimeData().hasFormat(MIME_MATERIAL):
+            # Material nur dort annehmen, wo eine Fläche unter der Maus ist (3D)
+            if self.is_3d and self.face_at(e.position()) is not None:
+                e.acceptProposedAction()
+            else:
+                e.ignore()
+
+    def face_at(self, pos: QPointF):
+        tool = self.editor.tools.get("face")
+        if tool is None:
+            return None
+        origin, direction = self.ray(pos)
+        return tool.pick(origin, direction)
+
+    def drop_material(self, pos: QPointF, material: str) -> bool:
+        """Material auf die Fläche unter der Maus legen (bei Rampen: alle oder nur diese)."""
+        ref = self.face_at(pos) if self.is_3d else None
+        if ref is None:
+            return False
+        cmd = apply_dropped(self.editor.doc, ref, material, self.editor.material_scope)
+        if cmd is None or not self.editor.run(cmd):
+            return False
+        self.editor.set_current_material(material)
+        self.editor.status_message.emit(f"Material {material.lower()} angewendet")
+        return True
 
     def dropEvent(self, e) -> None:
+        if e.mimeData().hasFormat(MIME_MATERIAL):
+            material = bytes(e.mimeData().data(MIME_MATERIAL)).decode("utf-8")
+            if self.drop_material(e.position(), material):
+                e.acceptProposedAction()
+            return
         if not e.mimeData().hasFormat(MIME_TEMPLATE):
             return
         key = bytes(e.mimeData().data(MIME_TEMPLATE)).decode("utf-8")
@@ -398,6 +439,12 @@ class Viewport(QOpenGLWidget):
             self.unsetCursor()
             return
         super().keyReleaseEvent(e)
+
+    def focusNextPrevChild(self, next: bool) -> bool:
+        # Tab gehört dem Werkzeug, wenn es ihn haben will (z. B. Schneiden: was bleibt)
+        if self.editor.tool is not None and self.editor.tool.wants_key(Qt.Key_Tab):
+            return False
+        return super().focusNextPrevChild(next)
 
     def focusOutEvent(self, e) -> None:
         self._keys.clear()

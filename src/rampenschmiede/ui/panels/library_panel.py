@@ -1,6 +1,6 @@
 """Bibliothek: Rampen-Vorlagen einfügen und Bausteine über ihre Regler ändern.
 
-Oben die Vorlagen nach Gruppen. Doppelklick oder „Einfügen“ setzt die Vorlage in die Mitte
+Oben die Vorlagen nach Gruppen, dazu die einfachen Formen (Block, Keil, …). Doppelklick oder „Einfügen“ setzt die Vorlage in die Mitte
 der Ansicht von oben, Ziehen in eine Ansicht setzt sie an die Mausposition. Darunter die
 Regler: für die gewählte Vorlage (Werte für das nächste Einfügen) oder, wenn ein Baustein
 ausgewählt ist, für diesen Baustein. Jede Änderung baut ihn sofort neu.
@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QMimeData, Qt, Signal
+from PySide6.QtCore import QMimeData, QSize, Qt, Signal
 from PySide6.QtGui import QDrag
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -60,12 +60,15 @@ from ...core.surf.sweep import Materials
 from ..editor import EditorContext
 from ..icons import icon
 from ..paths import prefabs_dir
+from ..tools.shape_tool import SHAPE_HINTS, SHAPES
 from ..widgets.material_field import MaterialField
 
 #: Symbol je Gruppe in der Bibliothek
 CATEGORY_ICONS = {"Rampen": "ramp", "Kurven": "curve", "Spezial": "halfpipe", "Bhop": "bhop", "Zonen": "flag"}
 MIME_TEMPLATE = "application/x-rampenschmiede-vorlage"
 PREFAB_PREFIX = "prefab:"
+SHAPE_PREFIX = "shape:"
+TREE_ICON = 22
 OK_STYLE = "color: #3a3;"
 WARN_STYLE = "color: #d80; font-weight: bold;"
 
@@ -79,6 +82,7 @@ class _TemplateTree(QTreeWidget):
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragOnly)
         self.setRootIsDecorated(True)
+        self.setIconSize(QSize(TREE_ICON, TREE_ICON))
 
     def startDrag(self, actions) -> None:
         item = self.currentItem()
@@ -162,6 +166,15 @@ class LibraryPanel(QWidget):
             item.setIcon(0, icon(CATEGORY_ICONS.get(t.category, "shape")))
             item.setData(0, Qt.UserRole, t.key)
             item.setToolTip(0, self.tr(t.description))
+        self.shape_group = QTreeWidgetItem(self.tree, [self.tr("Formen")])
+        self.shape_group.setIcon(0, icon("shape"))
+        self.shape_group.setFlags(self.shape_group.flags() & ~Qt.ItemIsDragEnabled)
+        self.shape_group.setExpanded(True)
+        for key, name in SHAPES.items():
+            item = QTreeWidgetItem(self.shape_group, [self.tr(name)])
+            item.setIcon(0, icon(f"shape_{key}"))
+            item.setData(0, Qt.UserRole, SHAPE_PREFIX + key)
+            item.setToolTip(0, self.tr(SHAPE_HINTS[key]))
         self.prefab_group = QTreeWidgetItem(self.tree, [self.tr("Eigene Prefabs")])
         self.prefab_group.setIcon(0, icon("prefab"))
         self.prefab_group.setFlags(self.prefab_group.flags() & ~Qt.ItemIsDragEnabled)
@@ -170,8 +183,9 @@ class LibraryPanel(QWidget):
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._tree_menu)
         self.tree.currentItemChanged.connect(self._template_changed)
+        self.tree.itemClicked.connect(self._template_clicked)
         self.tree.itemDoubleClicked.connect(lambda item, _col: self.insert_current() if item.data(0, Qt.UserRole) else None)
-        lay.addWidget(self.tree, 2)
+        lay.addWidget(self.tree, 3)
 
         row = QHBoxLayout()
         self.insert_btn = QPushButton(self.tr("Einfügen"))
@@ -199,11 +213,15 @@ class LibraryPanel(QWidget):
             "Macht normale Brushes daraus. Danach lässt sich die Form frei bearbeiten, aber nicht mehr über Regler."))
         self.dissolve_btn.clicked.connect(self._dissolve)
         box_lay.addWidget(self.dissolve_btn)
-        lay.addWidget(self.box, 3)
+        lay.addWidget(self.box, 2)
 
         editor.selection_changed.connect(self._sync_from_selection)
         editor.document_changed.connect(self._sync_from_selection)
         editor.template_dropped.connect(self.insert)
+        editor.tool_changed.connect(self._tool_changed)
+        shape_tool = editor.tools.get("shape")
+        if shape_tool is not None:
+            shape_tool.signals.shape_changed.connect(lambda _k: self._tool_changed("shape"))
         first = self.tree.topLevelItem(0).child(0)
         self.tree.setCurrentItem(first)
         self._sync_from_selection()
@@ -225,6 +243,36 @@ class LibraryPanel(QWidget):
 
     def _template_key(self) -> str | None:
         return self.current_key()
+
+    def _template_clicked(self, item: QTreeWidgetItem, _col: int = 0) -> None:
+        """Vorlage angeklickt: gleich zum Malen bereit (Vorschau am Mauszeiger). Eine Form
+        angeklickt: Formen-Werkzeug mit dieser Form, dann in einer Ansicht aufziehen."""
+        key = item.data(0, Qt.UserRole)
+        if not key:
+            return
+        if key.startswith(SHAPE_PREFIX):
+            if "shape" in self.editor.tools:
+                self.editor.set_tool("shape")
+                self.editor.tools["shape"].set_shape(key[len(SHAPE_PREFIX):])  # type: ignore[attr-defined]
+            return
+        if key.startswith(PREFAB_PREFIX):
+            return
+        if "paint" in self.editor.tools:
+            self.editor.set_selection(set())
+            self.editor.set_tool("paint")
+
+    def _tool_changed(self, name: str) -> None:
+        """Formen-Werkzeug aktiv: die passende Form in der Liste markieren und zeigen."""
+        if name != "shape" or self.editor.tool is not self.editor.tools.get("shape"):
+            return
+        shape = self.editor.tools["shape"].options.shape  # type: ignore[attr-defined]
+        for i in range(self.shape_group.childCount()):
+            child = self.shape_group.child(i)
+            if child.data(0, Qt.UserRole) == SHAPE_PREFIX + shape:
+                if self.tree.currentItem() is not child:
+                    self.tree.setCurrentItem(child)
+                self.tree.scrollToItem(child)
+                return
 
     def _template_changed(self, *_args) -> None:
         if self.selected_block() is None:
@@ -255,12 +303,21 @@ class LibraryPanel(QWidget):
             self.box.setTitle(self.tr("Baustein: {0}").format(self.tr(template.name) if template else "?"))
         else:
             template = self.current_template()
-            values = template.values(self._insert_values(template)) if template else {}
+            values = template.values(self.insert_values(template)) if template else {}
             at = None
             self.box.setTitle(self.tr("Vorlage: {0}").format(self.tr(template.name)) if template else "")
         self.dissolve_btn.setVisible(root is not None)
         key = self.current_key()
-        self.insert_btn.setEnabled(template is not None or bool(key and key.startswith(PREFAB_PREFIX)))
+        self.insert_btn.setEnabled(template is not None or bool(key and key.startswith((PREFAB_PREFIX, SHAPE_PREFIX))))
+        if root is None and key and key.startswith(SHAPE_PREFIX):
+            self._clear_form()
+            shape = key[len(SHAPE_PREFIX):]
+            self.box.setTitle(self.tr("Form: {0}").format(self.tr(SHAPES[shape])))
+            self.description.setText(self.tr(SHAPE_HINTS[shape]) + "\n\n" + self.tr(
+                "In einer Ansicht ein Rechteck aufziehen, Enter baut die Form. Einfügen oder Ziehen setzt sie in "
+                "der zuletzt benutzten Größe ab. Seiten, Stufen usw. rechts unter Werkzeug."))
+            self.angle_label.setText("")
+            return
         if root is None and key and key.startswith(PREFAB_PREFIX):
             self._clear_form()
             item = self.tree.currentItem()
@@ -380,7 +437,7 @@ class LibraryPanel(QWidget):
         self._shown = ("block", root.id, block_info(root))
         self._show_angles(gen)
 
-    def _insert_values(self, template: Template) -> dict:
+    def insert_values(self, template: Template) -> dict:
         """Werte fürs nächste Einfügen: Map-Thema, darüber die selbst gestellten Regler."""
         return {**block_defaults(self.editor.doc, template), **self.next_values.get(template.key, {})}
 
@@ -398,12 +455,19 @@ class LibraryPanel(QWidget):
     def insert(self, key: str, point: tuple[float, float, float], yaw: float = 0.0) -> int | None:
         if key.startswith(PREFAB_PREFIX):
             return self._insert_prefab(Path(key[len(PREFAB_PREFIX):]), point)
+        if key.startswith(SHAPE_PREFIX):
+            return self._insert_shape(key[len(SHAPE_PREFIX):], point)
         template = CATALOG.get(key)
         if template is None:
             return None
         snap = self.editor.snap
         at = Placement(snap(point[0]), snap(point[1]), snap(point[2]), yaw)
-        objs, gen = insert_block(self.editor.doc, key, self._insert_values(template), at)
+        return self.place(key, self.insert_values(template), at)
+
+    def place(self, key: str, values: dict, at: Placement) -> int | None:
+        """Vorlage mit genau diesen Werten und dieser Platzierung einfügen (z. B. gemalt)."""
+        template = CATALOG[key]
+        objs, gen = insert_block(self.editor.doc, key, values, at)
         if not self.editor.run(AddObjects(objs, self.tr("{0} einfügen").format(self.tr(template.name)))):
             return None
         self.editor.set_selection({objs[0].id})
@@ -441,6 +505,15 @@ class LibraryPanel(QWidget):
                 self.tree.setCurrentItem(child)
         self.editor.status_message.emit(self.tr("Prefab „{0}“ gespeichert").format(name.strip()))
         return path
+
+    def _insert_shape(self, shape: str, point: tuple[float, float, float]) -> int | None:
+        tool = self.editor.tools.get("shape")
+        if tool is None or shape not in SHAPES:
+            return None
+        tool.set_shape(shape)  # type: ignore[attr-defined]
+        if not tool.create_at(point):  # type: ignore[attr-defined]
+            return None
+        return min(self.editor.selection) if self.editor.selection else None
 
     def _insert_prefab(self, path: Path, point: tuple[float, float, float]) -> int | None:
         try:

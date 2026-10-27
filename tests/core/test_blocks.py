@@ -34,14 +34,18 @@ def parts(doc, root_id):
     return kids, clips
 
 
-def test_block_has_visual_func_brush_and_clip_collision():
+def test_block_has_visual_detail_and_clip_collision():
     doc, _, root, gen = make()
-    assert root.classname == "func_brush" and root.get("Solidity") == "1"
+    # func_detail statt func_brush: vbsp verschweißt die Segmente, keine Risse im Spiel
+    assert root.classname == "func_detail" and not root.get("Solidity")
     kids, clips = parts(doc, root.id)
     assert len(kids) == len(clips) == len(gen.face_sets) == 12  # 30° in 2,5°-Schritten
     assert all(f.material == PLAYERCLIP for c in clips for f in c.faces)
     assert all(c.parent_id is None for c in clips)
     assert [c.vertices() for c in clips] == [k.vertices() for k in kids]
+    # Surf-Flächen teilen eine Glättungsgruppe, damit das Licht über die Segmente weich läuft
+    slanted = [f for k in kids for f in k.faces if 0.05 < abs(f.plane.normal[2]) < 0.95]
+    assert slanted and all(f.smoothing_groups & 1 for f in slanted)
 
 
 def test_detail_variant_has_no_clips():
@@ -150,11 +154,12 @@ def test_block_survives_rsmap_roundtrip(tmp_path):
     assert len(again.children(root.id)) == 18
 
 
-def test_vmf_export_has_clip_world_brushes_and_func_brush():
+def test_vmf_export_has_clip_world_brushes_and_detail():
     doc, _, root, _ = make()
     text = vmf.export_vmf(doc).text
     assert text.count('"material" "TOOLS/TOOLSPLAYERCLIP"') == sum(len(c.faces) for c in parts(doc, root.id)[1])
-    assert '"classname" "func_brush"' in text and '"Solidity" "1"' in text
+    assert '"classname" "func_detail"' in text and '"func_brush"' not in text
+    assert '"smoothing_groups" "1"' in text
     assert isinstance(root, Entity)
 
 
@@ -194,3 +199,17 @@ def test_teleporter_gets_unique_destination():
     triggers = [e for e in doc.entities() if e.classname == "trigger_teleport"]
     dests = [e for e in doc.entities() if e.classname == "info_teleport_destination"]
     assert sorted(t.get("target") for t in triggers) == sorted(d.get("targetname") for d in dests) == ["ziel", "ziel_2"]
+
+
+def test_old_func_brush_roots_are_upgraded():
+    import dataclasses
+
+    from rampenschmiede.core.blocks import upgrade_roots
+
+    doc, _, root, _ = make()
+    old = dataclasses.replace(root, classname="func_brush", keyvalues=(("Solidity", "1"),))
+    doc._replace([old])
+    assert upgrade_roots(doc) == 1
+    new = doc.get(root.id)
+    assert new.classname == "func_detail" and not new.get("Solidity")
+    assert upgrade_roots(doc) == 0

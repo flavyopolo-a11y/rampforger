@@ -20,9 +20,10 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
-from ..core.blocks import clone_objects
+from ..core.blocks import clone_objects, upgrade_roots
 from ..core.commands import AddObjects, Command, MacroCommand
 from ..core.compile import CompileSettings, Level, LogLine
+from ..core.cutting import carve_with
 from ..core.io import rsmap, vmf
 from ..core.materials import MaterialLibrary
 from ..core.materials.authoring import import_image, ramp_material, wall_material
@@ -57,13 +58,17 @@ from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
 from .paths import profiles_file, textures_dir
 from .seal_watcher import SealWatcher
+from .tools.clip_tool import ClipTool, HoleTool
 from .tools.entity_tool import EntityTool
 from .tools.face_tool import FaceTool
+from .tools.paint_tool import PaintTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
 from .viewports.layout import ViewportGrid
 
 APP_NAME = "Rampenschmiede"
+#: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
+TOOL_ORDER = ("select", "paint", "shape", "entity", "face", "clip", "hole")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -117,7 +122,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.editor = EditorContext()
-        for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor)):
+        for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor),
+                     ClipTool(self.editor), HoleTool(self.editor)):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")
@@ -172,6 +178,7 @@ class MainWindow(QMainWindow):
         self.lib_dock.setObjectName("dock_library")
         self.library = LibraryPanel(self.editor, self._insert_point)
         self.lib_dock.setWidget(self.library)
+        self.editor.register_tool(PaintTool(self.editor, self.library))
         self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
         # Ohne Mindestbreite drücken die Ansichten die Panels auf wenige Pixel zusammen.
         for dock in (self.tool_dock, self.sel_dock, self.lib_dock):
@@ -235,6 +242,9 @@ class MainWindow(QMainWindow):
         self.act_select_all = self._action("&Alles auswählen", ed.select_all, QKeySequence.SelectAll)
         self.act_transform = self._action("&Transformieren …", self.edit_transform, "Ctrl+M",
                                           "Verschieben, Drehen, Skalieren mit exakten Zahlen")
+        self.act_carve = self._action("Mit Auswahl a&ushöhlen", self.carve_selection, "Ctrl+Shift+C",
+                                      "Die ausgewählten Brushes schneiden sich aus allen anderen Brushes heraus "
+                                      "(Carve wie in Hammer)")
         self.act_flip_h = self._action("Spiegeln &horizontal", lambda: self._flip(0), "Ctrl+L")
         self.act_flip_v = self._action("Spiegeln &vertikal", lambda: self._flip(1), "Ctrl+I")
 
@@ -254,7 +264,8 @@ class MainWindow(QMainWindow):
 
         self.tool_group = QActionGroup(self)
         self.tool_actions: dict[str, QAction] = {}
-        for name, tool in ed.tools.items():
+        order = [n for n in TOOL_ORDER if n in ed.tools] + [n for n in ed.tools if n not in TOOL_ORDER]
+        for name, tool in ((n, ed.tools[n]) for n in order):
             a = self._action(tool.label, lambda _=False, n=name: ed.set_tool(n), tool.shortcut, tool.hint, True)
             self.tool_group.addAction(a)
             self.tool_actions[name] = a
@@ -306,7 +317,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("&Bearbeiten"))
         for a in (self.act_undo, self.act_redo, None, self.act_cut, self.act_copy, self.act_paste, self.act_delete,
-                  None, self.act_select_all, None, self.act_transform, self.act_flip_h, self.act_flip_v):
+                  None, self.act_select_all, None, self.act_carve, None, self.act_transform, self.act_flip_h, self.act_flip_v):
             m.addSeparator() if a is None else m.addAction(a)
 
         m = mb.addMenu(self.tr("&Ansicht"))
@@ -344,7 +355,7 @@ class MainWindow(QMainWindow):
                              (self.act_undo, "undo"), (self.act_redo, "redo"),
                              (self.act_grid_finer, "grid_finer"), (self.act_grid_coarser, "grid_coarser"),
                              (self.act_compile, "compile"), (self.act_expert, "expert"),
-                             (self.act_ramp_assistant, "palette"), (self.act_world_style, "sun")):
+                             (self.act_ramp_assistant, "palette"), (self.act_carve, "carve"), (self.act_world_style, "sun")):
             action.setIcon(icon(name))
         for name, action in self.tool_actions.items():
             action.setIcon(icon(name))
@@ -565,6 +576,7 @@ class MainWindow(QMainWindow):
             return self._import_vmf(path)
         try:
             doc = rsmap.load(path)
+            upgrade_roots(doc)
         except (OSError, rsmap.ProjectFormatError, KeyError, ValueError, TypeError) as exc:
             QMessageBox.critical(self, APP_NAME, self.tr("Datei konnte nicht geöffnet werden:\n{0}").format(exc))
             return False
@@ -675,6 +687,18 @@ class MainWindow(QMainWindow):
         new, roots = clone_objects(self.editor.doc, self._clipboard)
         self.editor.run(AddObjects(new, self.tr("Einfügen")))
         self.editor.set_selection(roots)
+
+    def carve_selection(self) -> bool:
+        if not self.editor.selection:
+            self.editor.status_message.emit(self.tr("Erst die Brushes auswählen, die herausgeschnitten werden sollen"))
+            return False
+        cmd, ids = carve_with(self.editor.doc, self.editor.selection)
+        if cmd is None:
+            self.editor.status_message.emit(self.tr("Die Auswahl durchdringt keine anderen Brushes"))
+            return False
+        self.editor.run(cmd)
+        self.editor.status_message.emit(self.tr("Ausgehöhlt: {0} Brushes").format(len(ids)))
+        return True
 
     def edit_transform(self) -> None:
         if not self.editor.selection:
