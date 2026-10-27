@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QDockWidget,
     QFileDialog,
@@ -24,7 +25,7 @@ from ..core.blocks import clone_objects, upgrade_roots
 from ..core.commands import AddObjects, Command, MacroCommand
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.cutting import carve_with
-from ..core.io import rsmap, vmf
+from ..core.io import bsp, rsmap, vmf
 from ..core.materials import MaterialLibrary
 from ..core.materials.authoring import import_image, ramp_material, wall_material
 from ..core.materials.styles import WorldStyle, pick_sky, pick_wall, style_command
@@ -54,6 +55,7 @@ from .icons import ACTIVE, icon, pixmap
 from .panels.compile_log import CompileLogPanel
 from .panels.library_panel import LibraryPanel
 from .panels.material_browser import MaterialBrowser
+from .panels.scene_panel import ScenePanel
 from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
 from .paths import profiles_file, textures_dir
@@ -65,6 +67,7 @@ from .tools.paint_tool import PaintTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
 from .viewports.layout import ViewportGrid
+from .viewports.viewport import MAP_SUFFIXES, dropped_maps
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
@@ -76,11 +79,13 @@ QToolButton:hover { background: rgba(255, 255, 255, 0.08); }
 QToolButton:checked { background: rgba(255, 140, 40, 0.25); border: 1px solid #ff8c28; color: #ffb070; }
 """
 FILE_FILTER = "Rampenschmiede-Projekt (*.rsmap)"
-OPEN_FILTER = "Maps (*.rsmap *.vmf);;Rampenschmiede-Projekt (*.rsmap);;Hammer-Map (*.vmf)"
+OPEN_FILTER = ("Maps (*.rsmap *.vmf *.bsp);;Rampenschmiede-Projekt (*.rsmap);;Hammer-Map (*.vmf);;"
+               "Kompilierte Map (*.bsp)")
+BSP_FILTER = "Kompilierte Map (*.bsp)"
 VMF_FILTER = "Hammer-Map (*.vmf)"
 MAX_RECENT = 8
 #: Steigt, wenn neue Panels dazukommen: Alte gespeicherte Anordnungen werden dann verworfen
-LAYOUT_VERSION = 2
+LAYOUT_VERSION = 3
 DOCK_MIN_WIDTH = 320
 
 CONTROLS_HELP = """
@@ -160,6 +165,8 @@ class MainWindow(QMainWindow):
         ed.set_tool("select")
         self._restore_window()
         self.seal.checked.connect(self._on_seal_checked)
+        self.setAcceptDrops(True)
+        ed.files_dropped.connect(lambda paths: QTimer.singleShot(0, lambda: self.open_dropped(paths)))
         self._new_document()
         self._update_undo_actions()
 
@@ -180,8 +187,15 @@ class MainWindow(QMainWindow):
         self.lib_dock.setWidget(self.library)
         self.editor.register_tool(PaintTool(self.editor, self.library))
         self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
+        self.scene_dock = QDockWidget(self.tr("Szene"), self)
+        self.scene_dock.setObjectName("dock_scene")
+        self.scene = ScenePanel(self.editor, self.center_on_selection)
+        self.scene_dock.setWidget(self.scene)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.scene_dock)
+        self.tabifyDockWidget(self.lib_dock, self.scene_dock)
+        self.lib_dock.raise_()
         # Ohne Mindestbreite drücken die Ansichten die Panels auf wenige Pixel zusammen.
-        for dock in (self.tool_dock, self.sel_dock, self.lib_dock):
+        for dock in (self.tool_dock, self.sel_dock, self.lib_dock, self.scene_dock):
             dock.widget().setMinimumWidth(DOCK_MIN_WIDTH)
         self.log_dock = QDockWidget(self.tr("Kompilieren"), self)
         self.log_dock.setObjectName("dock_compile_log")
@@ -228,6 +242,9 @@ class MainWindow(QMainWindow):
         self.act_save_as = self._action("Speichern &unter …", self.file_save_as, "Ctrl+Shift+S")
         self.act_import_vmf = self._action("VMF &importieren …", self.file_import_vmf, None,
                                            "Hammer-Map (.vmf) öffnen")
+        self.act_open_bsp = self._action("&BSP öffnen …", self.file_open_bsp, None,
+                                         "Kompilierte Map (.bsp) öffnen, z. B. zum Nachbauen oder Ansehen. "
+                                         "Geht auch per Ziehen ins Fenster")
         self.act_export_vmf = self._action("Als VMF e&xportieren …", self.file_export_vmf, "Ctrl+Shift+E",
                                            "Map als .vmf für Hammer oder andere Werkzeuge speichern")
         self.act_quit = self._action("&Beenden", self.close, QKeySequence.Quit)
@@ -310,7 +327,7 @@ class MainWindow(QMainWindow):
         self.recent_menu = m.addMenu(self.tr("&Zuletzt geöffnet"))
         self.recent_menu.aboutToShow.connect(self._fill_recent)
         m.addSeparator()
-        for a in (self.act_save, self.act_save_as, None, self.act_import_vmf, self.act_export_vmf):
+        for a in (self.act_save, self.act_save_as, None, self.act_import_vmf, self.act_open_bsp, self.act_export_vmf):
             m.addSeparator() if a is None else m.addAction(a)
         m.addSeparator()
         m.addAction(self.act_quit)
@@ -570,10 +587,27 @@ class MainWindow(QMainWindow):
         if path:
             self.open_path(Path(path))
 
+    def file_open_bsp(self) -> None:
+        if not self._confirm_discard():
+            return
+        start = self.settings.value("last_dir", str(Path.home()))
+        path, _ = QFileDialog.getOpenFileName(self, self.tr("BSP öffnen"), start, self.tr(BSP_FILTER))
+        if path:
+            self.open_path(Path(path))
+
+    def open_dropped(self, paths: list[Path]) -> bool:
+        """Ins Fenster gezogene Dateien: die erste passende Map wird geöffnet."""
+        path = next((p for p in paths if p.suffix.lower() in MAP_SUFFIXES), None)
+        if path is None or not self._confirm_discard():
+            return False
+        return self.open_path(path)
+
     def open_path(self, path: Path) -> bool:
         path = path.absolute()
         if path.suffix.lower() == ".vmf":
             return self._import_vmf(path)
+        if path.suffix.lower() == ".bsp":
+            return self._open_bsp(path)
         try:
             doc = rsmap.load(path)
             upgrade_roots(doc)
@@ -601,6 +635,38 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(msg, 8000)
         self.center_on_selection()
         return True
+
+    def _open_bsp(self, path: Path) -> bool:
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            doc, report = bsp.load_bsp(path)
+        except (OSError, bsp.BspError) as exc:
+            QMessageBox.critical(self, APP_NAME, self.tr("BSP konnte nicht geöffnet werden:\n{0}").format(exc))
+            return False
+        finally:
+            QApplication.restoreOverrideCursor()
+        # Eigener Name, damit Kompilieren nie die Original-BSP überschreibt
+        self.editor.set_document(doc, None, import_path=path.with_name(f"{path.stem}_bearbeitet.vmf"))
+        self._remember(path)
+        self._update_title()
+        msg = self.tr("{0} geöffnet: {1} Brushes, {2} Entities").format(path.name, report.solids, report.entities)
+        if report.warnings:
+            msg += " · " + " · ".join(report.warnings)
+        self.statusBar().showMessage(msg, 12000)
+        self.center_on_selection()
+        self.scene_dock.show()
+        self.scene_dock.raise_()
+        return True
+
+    def dragEnterEvent(self, e) -> None:
+        if dropped_maps(e.mimeData()):
+            e.acceptProposedAction()
+
+    def dropEvent(self, e) -> None:
+        paths = dropped_maps(e.mimeData())
+        if paths:
+            e.acceptProposedAction()
+            self.editor.files_dropped.emit(paths)
 
     def file_export_vmf(self) -> bool:
         ed = self.editor
@@ -979,6 +1045,11 @@ class MainWindow(QMainWindow):
         self.lib_dock.setFloating(False)
         self.lib_dock.show()
         self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
+        self.scene_dock.setFloating(False)
+        self.scene_dock.show()
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.scene_dock)
+        self.tabifyDockWidget(self.lib_dock, self.scene_dock)
+        self.lib_dock.raise_()
         self.mat_dock.setFloating(False)
         self.mat_dock.show()
         self.addDockWidget(Qt.BottomDockWidgetArea, self.mat_dock)
@@ -1006,7 +1077,8 @@ class MainWindow(QMainWindow):
             self.resize(1600, 960)
         state = self.settings.value("window_state")
         restored = state is not None and self.restoreState(state, LAYOUT_VERSION)
-        self.resizeDocks([self.tool_dock, self.sel_dock, self.lib_dock], [DOCK_MIN_WIDTH] * 3, Qt.Horizontal)
+        self.resizeDocks([self.tool_dock, self.sel_dock, self.lib_dock, self.scene_dock], [DOCK_MIN_WIDTH] * 4,
+                         Qt.Horizontal)
         if not restored:
             self.resizeDocks([self.mat_dock], [260], Qt.Vertical)
         try:
@@ -1025,3 +1097,4 @@ class MainWindow(QMainWindow):
         self.settings.setValue("window_state", self.saveState(LAYOUT_VERSION))
         self.settings.setValue("viewports", json.dumps(self.grid_view.save_state()))
         e.accept()
+

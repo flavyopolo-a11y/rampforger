@@ -277,7 +277,8 @@ class SceneMesh:
 
     def _mesh(self, obj: MapObject) -> ObjectMesh | None:
         hit = self._cache.get(obj.id)
-        if hit is not None and hit[0] is obj:
+        if hit is not None and (hit[0] is obj or _same_look(hit[0], obj)):
+            self._cache[obj.id] = (obj, hit[1])
             return hit[1]
         parent_id = getattr(obj, "parent_id", None)
         parent = self.doc.get(parent_id) if parent_id is not None else None
@@ -324,3 +325,10 @@ class SceneMesh:
             version=self.version,
         )
         return self._arrays
+
+
+def _same_look(old: MapObject, new: MapObject) -> bool:
+    """Brush, bei dem sich nur Unsichtbares geändert hat (z. B. ausgeblendet und wieder
+    eingeblendet): das alte Mesh passt noch."""
+    return (isinstance(old, Solid) and isinstance(new, Solid) and old.faces is new.faces
+            and old.parent_id == new.parent_id and old.editor.color == new.editor.color)

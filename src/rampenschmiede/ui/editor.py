@@ -48,6 +48,8 @@ class EditorContext(QObject):
     redraw_requested = Signal()
     #: Eine Vorlage aus der Bibliothek wurde in eine Ansicht gezogen: (Schlüssel, Weltpunkt)
     template_dropped = Signal(str, object)
+    #: Map-Dateien (rsmap, vmf, bsp) wurden ins Fenster gezogen
+    files_dropped = Signal(list)
     #: Neue Material-Bibliothek (anderes Spielprofil, neue eigene Texturen)
     materials_changed = Signal()
     #: Aktuelles Material für neue Brushes und „Material anwenden“

@@ -9,6 +9,7 @@ Die linke Maustaste gehört dem aktiven Werkzeug.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import moderngl
 import numpy as np
@@ -175,11 +176,12 @@ class Viewport(QOpenGLWidget):
 
     # ---- Vorlagen hineinziehen ---------------------------------------------------------
     def dragEnterEvent(self, e) -> None:
-        if e.mimeData().hasFormat(MIME_TEMPLATE) or e.mimeData().hasFormat(MIME_MATERIAL):
+        mime = e.mimeData()
+        if mime.hasFormat(MIME_TEMPLATE) or mime.hasFormat(MIME_MATERIAL) or dropped_maps(mime):
             e.acceptProposedAction()
 
     def dragMoveEvent(self, e) -> None:
-        if e.mimeData().hasFormat(MIME_TEMPLATE):
+        if e.mimeData().hasFormat(MIME_TEMPLATE) or dropped_maps(e.mimeData()):
             e.acceptProposedAction()
         elif e.mimeData().hasFormat(MIME_MATERIAL):
             # Material nur dort annehmen, wo eine Fläche unter der Maus ist (3D)
@@ -208,6 +210,11 @@ class Viewport(QOpenGLWidget):
         return True
 
     def dropEvent(self, e) -> None:
+        maps = dropped_maps(e.mimeData())
+        if maps:
+            e.acceptProposedAction()
+            self.editor.files_dropped.emit(maps)
+            return
         if e.mimeData().hasFormat(MIME_MATERIAL):
             material = bytes(e.mimeData().data(MIME_MATERIAL)).decode("utf-8")
             if self.drop_material(e.position(), material):
@@ -470,3 +477,15 @@ def _join_lines(*parts):
     if not present:
         return None
     return present[0] if len(present) == 1 else np.concatenate(present)
+
+
+#: Map-Dateien, die man ins Fenster ziehen kann
+MAP_SUFFIXES = (".rsmap", ".vmf", ".bsp")
+
+
+def dropped_maps(mime) -> list[Path]:
+    """Gezogene Map-Dateien (lokale Pfade) aus den Drag-Daten."""
+    if not mime.hasUrls():
+        return []
+    paths = [Path(u.toLocalFile()) for u in mime.urls() if u.isLocalFile()]
+    return [p for p in paths if p.suffix.lower() in MAP_SUFFIXES]
