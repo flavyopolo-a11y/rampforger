@@ -1,10 +1,11 @@
-"""Startpunkt: python -m rampenschmiede"""
+"""Startpunkt: python -m rampenschmiede [datei.rsmap]"""
+import sys
 
 
 def main() -> int:
-    # Fenster und Ansichten folgen in Etappe 1.
-    print("Rampenschmiede: Grundgerüst, noch keine Oberfläche.")
-    return 0
+    from .app import run
+
+    return run(sys.argv)
 
 
 if __name__ == "__main__":
