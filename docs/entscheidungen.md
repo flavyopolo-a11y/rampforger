@@ -22,3 +22,12 @@ werden vorher mit Flavio abgestimmt und hier mit „abgestimmt“ markiert.
 | E15 | 2026-10-27 | 2D-Overlays (Griffe, Maße, Rahmen) mit QPainter über dem OpenGL-Bild | Text und Griffe in Pixelgröße, ohne eigenen Text-Renderer |
 | E16 | 2026-10-27 | Brushes neuer Formen bekommen wie in Hammer eine Zufallsfarbe für die 2D-Ansichten; in 3D färbt das Material | Einzelne Brushes sind in 2D leicht zu unterscheiden |
 | E17 | 2026-10-27 | Dunkles Fusion-Farbschema mit Orange als Akzentfarbe | Moderner Look, gut lesbar neben den schwarzen 2D-Ansichten |
+| E18 | 2026-10-27 | VMF-Import übernimmt alles Verstandene ins Modell; Unbekanntes (dispinfo, Gruppen, Visgroups, Kameras, Cordons, unbekannte Keys) bleibt als roher Baum an Ort und Stelle | Export liefert denselben KeyValues-Baum zurück (per Test geprüft), auch über `.rsmap` hinweg |
+| E19 | 2026-10-27 | VMF-IDs: importierte Objekte behalten ihre ID, Kopien und neue Objekte bekommen freie Nummern aus einem gemeinsamen Zähler | Wie Hammer; Compiler-Meldungen mit „Brush N“ zeigen auf das richtige Objekt |
+| E20 | 2026-10-27 | I/O-Trennzeichen (Komma oder ESC) bleiben je Output wie importiert; neue Outputs mit Komma im Parameter bekommen ESC | Alte Maps bleiben unverändert, neue Outputs sind eindeutig |
+| E21 | 2026-10-27 | Beim Kompilieren wird ausgeblendetes mitgebaut | Ausblenden ist eine Ansichtssache: gespielt wird, was gebaut wurde |
+| E22 | 2026-10-27 | Kompiliert wird in einem eigenen Ordner neben dem Projekt (`<name>_kompilieren`), nie neben einer importierten VMF | Eine Original-VMF kann so nie überschrieben werden |
+| E23 | 2026-10-27 | Voreinstellungen „Nur Geometrie“, „Schnell“, „Normal“, „Final“; eigene Parameter im Experten-Modus | „Nur Geometrie“ baut in Sekunden, ideal zum Testen von Rampen |
+| E24 | 2026-10-27 | Bei einem Leck bricht das Kompilieren standardmäßig nach VBSP ab und zeigt die Leck-Spur | Ohne VIS läuft die Map langsam; das Leck zu beheben ist fast immer der richtige nächste Schritt |
+| E25 | 2026-10-27 | Spiel standardmäßig über `steam -applaunch <AppID>` starten, alternativ direkt über die Exe | Funktioniert für CS:S und Momentum ohne Wissen über 32/64-Bit-Exes |
+| E26 | 2026-10-27 | Spielerkennung über Registry/Standardpfade, `libraryfolders.vdf` und `steamapps/common/<Ordner>/<Mod>/gameinfo.txt`; Compiler in `bin/x64`, `bin/win64` oder `bin` | Deckt alle Steam-Bibliotheken ab; Momentum-App-ID 1802710 und Ordnernamen sind angenommen und im Profil änderbar |

@@ -39,6 +39,19 @@ und Vertices auf ganze Units gerundet; leere oder entartete Ergebnisse werden ve
 Geteilter moderngl-Kontext für 3D- und drei 2D-Ansichten. Räumliche Zellen × Material als
 Vertex-Puffer, nur betroffene Zellen werden neu gebaut. Picking per Strahl gegen BVH auf der CPU.
 
+## VMF und Kompilieren
+
+- `core/io/vmf.py`: Import nach `MapDocument`, Export zurück. Unbekannte Blöcke hängen als roher
+  Baum am Objekt (`extra["raw"]`) bzw. am Dokument (`extra["vmf_layout"]`) und kommen beim
+  Export an dieselbe Stelle. `ExportResult` merkt sich VMF-ID → Objekt für Compiler-Meldungen.
+- `core/profiles/`: Spielprofile (`GameProfile`), Steam- und Spielerkennung, Speichern als JSON.
+- `core/compile/`: `build_plan` macht aus Profil und Einstellungen eine Schrittliste (VBSP, VVIS,
+  VRAD, Kopieren, Starten); `CompileRunner` führt sie blockierend aus und meldet jede Zeile;
+  `classify` ordnet Zeilen ein und liest Brush-ID, Entity-Nummer und Position heraus;
+  `resolve` macht daraus ein Objekt im Dokument.
+- `ui/compile_controller.py` startet den Runner in einem Thread und reicht alles per Qt-Signal
+  an Log-Panel und Fenster weiter.
+
 ## Vorlagen-Bibliothek
 
 Alle gängigen Rampenarten als parametrische Vorlagen (gerade, Trapez, Pyramide, Kurve,

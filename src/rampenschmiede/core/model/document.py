@@ -59,6 +59,8 @@ class MapDocument:
     def __init__(self) -> None:
         self.world_keyvalues: tuple[tuple[str, str], ...] = DEFAULT_WORLD_KEYVALUES
         self.editor = EditorState()
+        # Unverstandene Daten aus importierten Dateien (z. B. VMF-Blöcke), JSON-fähig
+        self.extra: dict = {}
         self._objects: dict[int, MapObject] = {}
         self._next_id = 1
         self._listeners: list[Callable[[ChangeSet], None]] = []

@@ -1,3 +1,3 @@
-from . import rsmap
+from . import rsmap, vmf
 
-__all__ = ["rsmap"]
+__all__ = ["rsmap", "vmf"]

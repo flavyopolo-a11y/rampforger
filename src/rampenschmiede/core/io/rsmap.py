@@ -106,6 +106,7 @@ def to_dict(doc: MapDocument) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "app_version": __version__,
         "world": {"keyvalues": [list(kv) for kv in doc.world_keyvalues]},
+        "extra": doc.extra,
         "editor": {
             "grid_size": e.grid_size,
             "camera_position": [_num(c) for c in e.camera_position],
@@ -208,6 +209,7 @@ def from_dict(data: dict[str, Any]) -> MapDocument:
         )
     doc = MapDocument()
     doc.world_keyvalues = tuple((str(k), str(v)) for k, v in data.get("world", {}).get("keyvalues", []))
+    doc.extra = data.get("extra", {})
     ed = data.get("editor", {})
     doc.editor = EditorState(
         grid_size=int(ed.get("grid_size", 16)),

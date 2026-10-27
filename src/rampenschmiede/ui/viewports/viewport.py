@@ -114,10 +114,10 @@ class Viewport(QOpenGLWidget):
             self.renderer.sync(self.editor.scene.arrays())
             tool = self.editor.tool
             if self.is_3d:
-                extra = tool.lines_3d(self) if tool else None
+                extra = _join_lines(tool.lines_3d(self) if tool else None, self.editor.leak_lines)
                 self.renderer.draw_3d(fbo, self.cam3d, w, h, self.render_mode, extra, pixels)
             else:
-                extra = tool.lines_2d(self) if tool else None
+                extra = _join_lines(tool.lines_2d(self) if tool else None, self.editor.leak_lines)
                 self.renderer.draw_2d(fbo, self.cam2d, w, h, self.editor.grid, extra, pixels)
             self.ctx.disable(moderngl.DEPTH_TEST)
         finally:
@@ -366,3 +366,11 @@ class Viewport(QOpenGLWidget):
     def focusInEvent(self, e) -> None:
         super().focusInEvent(e)
         self.update()
+
+
+def _join_lines(*parts):
+    """Werkzeug-Linien und Leck-Spur in einen Puffer, leere Teile fallen weg."""
+    present = [p for p in parts if p is not None and len(p)]
+    if not present:
+        return None
+    return present[0] if len(present) == 1 else np.concatenate(present)
