@@ -88,6 +88,12 @@ class EditorContext(QObject):
         self.materials_changed.emit()
         self.redraw_requested.emit()
 
+    def refresh_materials(self) -> None:
+        """Neu einlesen, z. B. nachdem eigene Texturen dazugekommen sind."""
+        if self.materials is not None:
+            self.materials.forget()
+        self.set_material_library(self.materials)
+
     def set_current_material(self, name: str) -> None:
         name = name.strip().upper()
         if name and name != self.current_material:

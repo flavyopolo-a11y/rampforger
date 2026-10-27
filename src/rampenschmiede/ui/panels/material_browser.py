@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListView,
+    QMenu,
     QPushButton,
     QToolButton,
     QVBoxLayout,
@@ -195,6 +196,12 @@ class MaterialBrowser(QWidget):
         top.addWidget(self.search, 1)
         top.addWidget(self.filter)
         top.addWidget(self.count_label)
+        self.more_button = QToolButton()
+        self.more_button.setText(self.tr("Eigene Texturen"))
+        self.more_button.setPopupMode(QToolButton.InstantPopup)
+        self.more_button.setMenu(QMenu(self.more_button))
+        self.more_button.setVisible(False)
+        top.addWidget(self.more_button)
         lay.addLayout(top)
 
         self.model = MaterialModel(self)
@@ -234,6 +241,13 @@ class MaterialBrowser(QWidget):
         editor.current_material_changed.connect(self._show_current)
         self.reload()
         self._show_current(editor.current_material)
+
+    def add_actions(self, actions) -> None:
+        """Menü „Eigene Texturen“ füllen (Rampen-Assistent, Import, Texturpakete)."""
+        menu = self.more_button.menu()
+        for a in actions:
+            menu.addSeparator() if a is None else menu.addAction(a)
+        self.more_button.setVisible(not menu.isEmpty())
 
     # ---- Index -------------------------------------------------------------------------
     def reload(self) -> None:

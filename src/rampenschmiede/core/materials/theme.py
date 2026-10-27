@@ -13,7 +13,7 @@ from typing import Iterable
 
 from ..blocks import MEMBER_KEY, block_info, change_block
 from ..commands import Command, MacroCommand, ReplaceObjects
-from ..model import Entity, MapDocument, MapObject, Solid
+from ..model import ChangeSet, Entity, MapDocument, MapObject, Solid
 from ..surf.catalog import CATALOG, Template
 
 THEME_KEY = "theme"
@@ -47,6 +47,27 @@ def set_theme(doc: MapDocument, theme: Theme) -> None:
     doc.extra[THEME_KEY] = asdict(theme)
 
 
+class SetTheme(Command):
+    """Thema der Map setzen, rückgängig machbar."""
+
+    def __init__(self, theme: Theme, description: str = "Map-Thema ändern") -> None:
+        self.new = asdict(theme)
+        self.old: object = None
+        self.description = description
+
+    def do(self, doc: MapDocument) -> ChangeSet:
+        self.old = doc.extra.get(THEME_KEY)
+        doc.extra[THEME_KEY] = dict(self.new)
+        return ChangeSet(world_changed=True)
+
+    def undo(self, doc: MapDocument) -> ChangeSet:
+        if self.old is None:
+            doc.extra.pop(THEME_KEY, None)
+        else:
+            doc.extra[THEME_KEY] = self.old
+        return ChangeSet(world_changed=True)
+
+
 def block_defaults(doc: MapDocument, template: Template) -> dict:
     """Werte, die eine neue Vorlage aus dem Thema der Map bekommt."""
     return theme_values(get_theme(doc), template)
@@ -75,8 +96,10 @@ def _is_tool(material: str) -> bool:
     return material.upper().startswith("TOOLS/")
 
 
-def apply_theme(doc: MapDocument, theme: Theme, ids: Iterable[int] | None = None) -> Command | None:
-    """Thema auf die ganze Map (ids=None) oder nur auf die genannten Objekte anwenden."""
+def apply_theme(doc: MapDocument, theme: Theme, ids: Iterable[int] | None = None,
+                remember: bool = False) -> Command | None:
+    """Thema auf die ganze Map (ids=None) oder nur auf die genannten Objekte anwenden.
+    Mit remember=True wird es zugleich das Thema der Map (für neue Bausteine)."""
     if ids is None:
         roots = [o for o in doc.objects() if not (isinstance(o, Solid) and (o.parent_id is not None or MEMBER_KEY in o.extra))]
     else:
@@ -98,9 +121,28 @@ def apply_theme(doc: MapDocument, theme: Theme, ids: Iterable[int] | None = None
             replaced += _walls([obj], theme.wall)
     if replaced:
         cmds.insert(0, ReplaceObjects(replaced, "Thema anwenden"))
+    if remember:
+        cmds.insert(0, SetTheme(theme))
     if not cmds:
         return None
     return cmds[0] if len(cmds) == 1 else MacroCommand(cmds, "Thema anwenden")
+
+
+def apply_collision(doc: MapDocument, collision: str) -> Command:
+    """Playerclip für alle Rampen der Map an ("clip") oder aus ("detail") und als Standard
+    für neue Rampen merken. Ein Undo-Schritt."""
+    theme = dataclasses.replace(get_theme(doc), collision=collision)
+    cmds: list[Command] = [SetTheme(theme, "Playerclip umschalten")]
+    for obj in doc.objects():
+        info = block_info(obj) if isinstance(obj, Entity) else None
+        if info is None:
+            continue
+        template = CATALOG.get(info["template"])
+        if template is None or "kollision" not in {p.key for p in template.params}:
+            continue
+        if info["values"].get("kollision") != collision:
+            cmds.append(change_block(doc, obj.id, {"kollision": collision})[0])
+    return MacroCommand(cmds, "Playerclip umschalten")
 
 
 def _walls(solids: Iterable[Solid], wall: str) -> list[Solid]:
@@ -115,4 +157,4 @@ def _walls(solids: Iterable[Solid], wall: str) -> list[Solid]:
     return out
 
 
-__all__ = ["THEME_KEY", "Theme", "apply_theme", "block_defaults", "get_theme", "set_theme", "theme_values"]
+__all__ = ["THEME_KEY", "SetTheme", "Theme", "apply_collision", "apply_theme", "block_defaults", "get_theme", "set_theme", "theme_values"]

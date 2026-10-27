@@ -43,6 +43,7 @@ from ...core.blocks import (
 )
 from ...core.commands import AddObjects
 from ...core.io.rsmap import ProjectFormatError
+from ...core.materials.theme import block_defaults
 from ...core.model import Entity
 from ...core.prefabs import list_prefabs, load_prefab, make_prefab, place_prefab, save_prefab
 from ...core.surf.catalog import (
@@ -248,7 +249,7 @@ class LibraryPanel(QWidget):
             self.box.setTitle(self.tr("Baustein: {0}").format(self.tr(template.name) if template else "?"))
         else:
             template = self.current_template()
-            values = template.values(self.next_values.get(template.key)) if template else {}
+            values = template.values(self._insert_values(template)) if template else {}
             at = None
             self.box.setTitle(self.tr("Vorlage: {0}").format(self.tr(template.name)) if template else "")
         self.dissolve_btn.setVisible(root is not None)
@@ -359,7 +360,8 @@ class LibraryPanel(QWidget):
             template = self.current_template()
             if template is None:
                 return
-            self.next_values[template.key] = values
+            # Nur die geänderten Regler merken, der Rest kommt weiter aus dem Map-Thema
+            self.next_values.setdefault(template.key, {})[key] = values[key]
             self._show_angles(generate(template, values))
             return
         cmd, gen = change_block(self.editor.doc, root.id, values, at, merge_key=("baustein", root.id, key))
@@ -371,6 +373,15 @@ class LibraryPanel(QWidget):
         root = self.editor.doc.get(root.id)
         self._shown = ("block", root.id, block_info(root))
         self._show_angles(gen)
+
+    def _insert_values(self, template: Template) -> dict:
+        """Werte fürs nächste Einfügen: Map-Thema, darüber die selbst gestellten Regler."""
+        return {**block_defaults(self.editor.doc, template), **self.next_values.get(template.key, {})}
+
+    def refresh(self) -> None:
+        """Formular neu aufbauen, z. B. nachdem sich das Map-Thema geändert hat."""
+        self._shown = None
+        self._sync_from_selection()
 
     # ---- Aktionen ----------------------------------------------------------------------
     def insert_current(self) -> None:
@@ -386,7 +397,7 @@ class LibraryPanel(QWidget):
             return None
         snap = self.editor.snap
         at = Placement(snap(point[0]), snap(point[1]), snap(point[2]), yaw)
-        objs, gen = insert_block(self.editor.doc, key, self.next_values.get(key), at)
+        objs, gen = insert_block(self.editor.doc, key, self._insert_values(template), at)
         if not self.editor.run(AddObjects(objs, self.tr("{0} einfügen").format(self.tr(template.name)))):
             return None
         self.editor.set_selection({objs[0].id})
