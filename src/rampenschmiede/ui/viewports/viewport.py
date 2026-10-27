@@ -164,6 +164,15 @@ class Viewport(QOpenGLWidget):
     def ray(self, pos: QPointF | QPoint) -> tuple[np.ndarray, np.ndarray]:
         return self.cam3d.ray(pos.x(), pos.y(), self.width(), self.height())
 
+    def project(self, point) -> QPointF | None:
+        """Weltpunkt auf den Bildschirm der 3D-Ansicht; None, wenn er hinter der Kamera liegt."""
+        w, h = self.width(), self.height()
+        clip = self.cam3d.mvp(w, h) @ np.array([point[0], point[1], point[2], 1.0])
+        if clip[3] <= 1e-6:
+            return None
+        nx, ny = clip[0] / clip[3], clip[1] / clip[3]
+        return QPointF((nx + 1) * 0.5 * w, (1 - ny) * 0.5 * h)
+
     # ---- Vorlagen hineinziehen ---------------------------------------------------------
     def dragEnterEvent(self, e) -> None:
         if e.mimeData().hasFormat(MIME_TEMPLATE) or e.mimeData().hasFormat(MIME_MATERIAL):
