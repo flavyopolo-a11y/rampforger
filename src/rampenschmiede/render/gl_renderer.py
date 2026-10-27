@@ -9,6 +9,7 @@ import numpy as np
 
 from .camera import Camera2D, Camera3D
 from .scene_mesh import SceneArrays
+from .textures import LAYER_SIZE, MAX_LAYERS, TextureAtlas
 
 
 def _shader(name: str) -> str:
@@ -41,6 +42,10 @@ class ViewportRenderer:
         self._dyn_vbo = ctx.buffer(reserve=6 * 4 * 4096, dynamic=True)
         self._dyn_vao = ctx.vertex_array(self.prog_lines, [(self._dyn_vbo, "3f 3f", "in_pos", "in_color")])
         self._version = -1
+        self._tex: moderngl.TextureArray | None = None
+        self._tex_atlas: TextureAtlas | None = None
+        self._tex_generation = -1
+        self._tex_uploaded = 0
 
     # ---- Hochladen ---------------------------------------------------------
     def _upload(self, data: np.ndarray, vbo: moderngl.Buffer | None, prog: moderngl.Program, fmt: str,
@@ -55,15 +60,42 @@ class ViewportRenderer:
         vbo.write(raw)
         return vbo, self.ctx.vertex_array(prog, [(vbo, fmt, *names)])
 
-    def sync(self, arrays: SceneArrays) -> None:
+    def sync_textures(self, atlas: TextureAtlas | None) -> None:
+        """Neue Ebenen des Atlas hochladen. Das Array wächst bei Bedarf (verdoppelt)."""
+        if atlas is None:
+            return
+        if atlas is not self._tex_atlas or atlas.generation != self._tex_generation:
+            self._tex_atlas, self._tex_generation, self._tex_uploaded = atlas, atlas.generation, 0
+        count = atlas.layer_count
+        if count <= self._tex_uploaded and self._tex is not None:
+            return
+        capacity = self._tex.size[2] if self._tex is not None else 0
+        if count > capacity:
+            new_capacity = min(MAX_LAYERS, max(32, capacity * 2))
+            while new_capacity < count:
+                new_capacity = min(MAX_LAYERS, new_capacity * 2)
+            if self._tex is not None:
+                self._tex.release()
+            self._tex = self.ctx.texture_array((LAYER_SIZE, LAYER_SIZE, new_capacity), 4)
+            self._tex.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+            self._tex.repeat_x = self._tex.repeat_y = True
+            self._tex_uploaded = 0
+        assert self._tex is not None
+        for layer in range(self._tex_uploaded, count):
+            self._tex.write(atlas.layer_data(layer), viewport=(0, 0, layer, LAYER_SIZE, LAYER_SIZE, 1))
+        self._tex.build_mipmaps()
+        self._tex_uploaded = count
+
+    def sync(self, arrays: SceneArrays, atlas: TextureAtlas | None = None) -> None:
+        self.sync_textures(atlas)
         if arrays.version == self._version:
             return
         for vao in (self._faces_vao, self._lines_vao, self._sel_vao):
             if vao is not None:
                 vao.release()
         self._faces_vbo, self._faces_vao = self._upload(
-            arrays.faces, self._faces_vbo, self.prog_faces, "3f 3f 3f 1f",
-            ("in_pos", "in_normal", "in_color", "in_selected"))
+            arrays.faces, self._faces_vbo, self.prog_faces, "3f 3f 3f 2f 1f 1f",
+            ("in_pos", "in_normal", "in_color", "in_uv", "in_layer", "in_selected"))
         self._faces_count = len(arrays.faces)
         self._lines_vbo, self._lines_vao = self._upload(
             arrays.lines2d, self._lines_vbo, self.prog_lines, "3f 3f", ("in_pos", "in_color"))
@@ -99,6 +131,11 @@ class ViewportRenderer:
             self.prog_faces["u_mvp"].write(mvp)
             self.prog_faces["u_light_dir"].value = tuple(_normalize((0.35, 0.55, 0.9)))
             self.prog_faces["u_flat"].value = 1.0 if mode == "flat" else 0.0
+            textured = mode == "textured" and self._tex is not None
+            self.prog_faces["u_textured"].value = 1.0 if textured else 0.0
+            if textured:
+                self._tex.use(0)
+                self.prog_faces["u_textures"].value = 0
             self.ctx.polygon_offset = (1.0, 1.0)
             self._faces_vao.render(moderngl.TRIANGLES, vertices=self._faces_count)
             self.ctx.polygon_offset = (0.0, 0.0)
@@ -133,7 +170,7 @@ class ViewportRenderer:
 
     def release(self) -> None:
         for obj in (self._faces_vao, self._lines_vao, self._sel_vao, self._faces_vbo, self._lines_vbo,
-                    self._sel_vbo, self._dyn_vao, self._dyn_vbo, self.prog_faces, self.prog_lines):
+                    self._sel_vbo, self._dyn_vao, self._dyn_vbo, self.prog_faces, self.prog_lines, self._tex):
             if obj is not None:
                 obj.release()
 

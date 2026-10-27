@@ -32,6 +32,14 @@ def prefabs_dir() -> Path:
     return d
 
 
+def textures_dir() -> Path:
+    """Eigene Texturen (importiert oder vom Rampen-Assistenten erzeugt), Aufbau wie ein
+    Spielordner: materials/rampenschmiede/..."""
+    d = data_dir() / "texturen"
+    (d / "materials").mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def compile_dir(project_path: Path | None, create: bool = True) -> Path:
     """Arbeitsordner fürs Kompilieren. Neben dem Projekt, damit nie eine fremde VMF
     überschrieben wird, in einem eigenen Unterordner."""

@@ -81,9 +81,10 @@ class ToolOptionsPanel(QStackedWidget):
         for key, label in SHAPES.items():
             shape.addItem(self.tr(label), key)
         form.addRow(self.tr("Form"), shape)
-        material = QLineEdit(opts.material)
-        material.setToolTip(self.tr("Material für alle Seiten. Der Material-Browser folgt in Etappe 4."))
-        material.editingFinished.connect(lambda: setattr(opts, "material", material.text().strip().upper() or opts.material))
+        material = QLineEdit(self.editor.current_material)
+        material.setToolTip(self.tr("Material für alle Seiten. Im Material-Browser per Doppelklick wählen."))
+        material.editingFinished.connect(lambda: self.editor.set_current_material(material.text()))
+        self.editor.current_material_changed.connect(material.setText)
         form.addRow(self.tr("Material"), material)
 
         def spin(value: int, lo: int, hi: int, attr: str, tip: str) -> QSpinBox:

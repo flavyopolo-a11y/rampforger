@@ -16,7 +16,7 @@ from PySide6.QtGui import QColor, QKeyEvent, QMouseEvent, QPainter, QPen
 from ...core.commands import AddObjects, solids_from_faces
 from ...core.geometry import primitives
 from ...core.mathutil import BBox
-from ...core.model import DEFAULT_MATERIAL, Solid
+from ...core.model import Solid
 from .base import Tool, box_lines, pick_3d
 
 if TYPE_CHECKING:
@@ -36,7 +36,6 @@ DRAFT_COLOR = (1.0, 1.0, 1.0)
 @dataclass
 class ShapeOptions:
     shape: str = "block"
-    material: str = DEFAULT_MATERIAL
     sides: int = 8
     wall: int = 16
     arc: float = 180.0
@@ -146,7 +145,7 @@ class ShapeTool(Tool):
     # ---- Erstellen ----------------------------------------------------------------------
     def build(self, box: BBox) -> list[tuple]:
         o = self.options
-        mat = o.material
+        mat = self.editor.current_material
         if o.shape == "wedge":
             return primitives.wedge(box.mins, box.maxs, mat, o.wedge_high)  # type: ignore[arg-type]
         if o.shape == "cylinder":
