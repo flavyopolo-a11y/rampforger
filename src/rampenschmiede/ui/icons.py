@@ -31,6 +31,11 @@ _SHAPES: dict[str, str] = {
     "face": '<path d="M3 9 L13 4 L21 10 L11 15 Z" fill="currentColor" fill-opacity="0.3"/>'
             '<path d="M8 6.5 L16 12.5 M6.3 10.7 L17 7"/>'
             '<path d="M3 9 L3 15 L11 21 L21 16 L21 10 M11 15 L11 21"/>',
+    "clip": '<path d="M4 6h10v14H4z" fill="currentColor" fill-opacity="0.25"/>'
+            '<path d="M14 6h6v14h-6" stroke-dasharray="2 2"/><path d="M14 2.5v19"/>',
+    "hole": '<path d="M3 4h18v16H3z" fill="currentColor" fill-opacity="0.25"/><path d="M8.5 8.5h7v7h-7z"/>',
+    "carve": '<path d="M3 9h18v10H3z" fill="currentColor" fill-opacity="0.25"/>'
+             '<path d="M8 4h8v10H8z" stroke-dasharray="2 2"/>',
     # Datei und Bearbeiten
     "new": '<path d="M6 2.5h8l4 4v15H6z M14 2.5v4h4"/><path d="M12 11v7M8.5 14.5h7"/>',
     "open": '<path d="M3 6.5a1.5 1.5 0 0 1 1.5-1.5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7V18a1.5 1.5 0 0 1-1.5 1.5h-15'

@@ -399,6 +399,12 @@ class Viewport(QOpenGLWidget):
             return
         super().keyReleaseEvent(e)
 
+    def focusNextPrevChild(self, next: bool) -> bool:
+        # Tab gehört dem Werkzeug, wenn es ihn haben will (z. B. Schneiden: was bleibt)
+        if self.editor.tool is not None and self.editor.tool.wants_key(Qt.Key_Tab):
+            return False
+        return super().focusNextPrevChild(next)
+
     def focusOutEvent(self, e) -> None:
         self._keys.clear()
         self._space_down = False
