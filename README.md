@@ -167,6 +167,11 @@ Surf-Fläche und Seiten getrennt in den Reglern setzen (⇐ übernimmt das aktue
 (Strg+Klick ergänzt), dann rechts Skalierung, Verschiebung, Drehung und Lightmap-Skalierung
 einstellen, einpassen oder ausrichten. Shift+Klick legt das aktuelle Material direkt auf eine
 Seite, Alt+Klick nimmt das Material einer Seite auf.
+**Textur mit der Maus:** Ziehen auf einer Seite verschiebt ihre Textur, Alt+Ziehen nach oben
+macht sie größer, nach unten kleiner. Rampen passen ihre Textur von sich aus ein: quer genau
+einmal über die Surf-Fläche, längs läuft sie weiter, auch um Kurven. Ziehen und Alt+Ziehen auf
+einer Rampe verschiebt bzw. skaliert die Textur der ganzen Rampe (Regler *Textur längs/quer*,
+*Textur-Größe*); der Regler *Textur* schaltet auf das Welt-Raster wie in Hammer zurück.
 
 **Rampen-Assistent (Strg+Shift+R, Menü *Texturen*).** Farbe der Rampen, der Rampenlinien und
 der Wände wählen oder eine fertige Kombination anklicken. Die Rampenschmiede erzeugt daraus

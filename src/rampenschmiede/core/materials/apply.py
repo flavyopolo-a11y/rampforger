@@ -116,6 +116,20 @@ def face_role(doc: MapDocument, ref: FaceRef) -> tuple[Entity, str] | None:
     return None
 
 
+def fitted_block(doc: MapDocument, ref: FaceRef) -> Entity | None:
+    """Rampen-Baustein, zu dessen Surf-Fläche die Seite gehört, wenn er seine Textur
+    einpasst. Seine Textur wird über die Regler verschoben und skaliert, nicht je Seite."""
+    role = face_role(doc, ref)
+    if role is None or role[1] != "mat_surf":
+        return None
+    info = block_info(role[0])
+    assert info is not None
+    if "textur" not in {p.key for p in CATALOG[info["template"]].params}:
+        return None
+    mode = info["values"].get("textur", CATALOG[info["template"]].values({}).get("textur"))
+    return role[0] if mode == "einpassen" else None
+
+
 def apply_dropped(doc: MapDocument, ref: FaceRef, material: str, scope: str = SCOPE_ALL) -> Command | None:
     """Material auf eine Seite fallen lassen. Bei Bausteinen gilt es für die Surf-Fläche oder
     die Seiten, je nachdem, wo es landet: bei SCOPE_ALL für alle Rampen (bzw. alle Bhop-Blöcke)
