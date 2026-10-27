@@ -10,6 +10,11 @@ from .viewport import RENDER_MODES, VIEW_TITLES, Viewport
 
 DEFAULT_LAYOUT = ("3d", "top", "front", "side")
 
+#: Rahmen der aktiven Ansicht (wie in Hammer hervorgehoben)
+ACTIVE_STYLE = ("ViewportFrame { border: 2px solid #ff8c28; }"
+                " #viewHeader { background: rgba(255, 140, 40, 0.22); }")
+INACTIVE_STYLE = "ViewportFrame { border: 2px solid transparent; }"
+
 
 class ViewportFrame(QFrame):
     def __init__(self, editor: EditorContext, view: str, parent=None) -> None:
@@ -19,6 +24,8 @@ class ViewportFrame(QFrame):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         header = QWidget()
+        header.setObjectName("viewHeader")
+        header.setAttribute(Qt.WA_StyledBackground, True)
         hl = QHBoxLayout(header)
         hl.setContentsMargins(4, 2, 4, 2)
         self.view_combo = QComboBox()
@@ -36,6 +43,12 @@ class ViewportFrame(QFrame):
         lay.addWidget(header)
         lay.addWidget(self.viewport, 1)
         self.mode_combo.setVisible(view == "3d")
+        self.active = False
+        self.set_active(False)
+
+    def set_active(self, on: bool) -> None:
+        self.active = on
+        self.setStyleSheet(ACTIVE_STYLE if on else INACTIVE_STYLE)
 
     def _on_view(self, _: int) -> None:
         view = self.view_combo.currentData()
@@ -61,9 +74,19 @@ class ViewportGrid(QSplitter):
                 frame = ViewportFrame(editor, DEFAULT_LAYOUT[r * 2 + c])
                 row.addWidget(frame)
                 self.frames.append(frame)
+                frame.viewport.activated.connect(lambda f=frame: self.set_active(f))
             self.addWidget(row)
             self.rows.append(row)
         self.reset()
+        self.set_active(self.frames[0])
+
+    def set_active(self, frame: ViewportFrame) -> None:
+        for f in self.frames:
+            if f.active != (f is frame):
+                f.set_active(f is frame)
+
+    def active_frame(self) -> ViewportFrame | None:
+        return next((f for f in self.frames if f.active), None)
 
     def reset(self) -> None:
         self.setSizes([1, 1])

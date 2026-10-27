@@ -58,9 +58,12 @@ from ...core.surf.catalog import (
 )
 from ...core.surf.sweep import Materials
 from ..editor import EditorContext
+from ..icons import icon
 from ..paths import prefabs_dir
 from ..widgets.material_field import MaterialField
 
+#: Symbol je Gruppe in der Bibliothek
+CATEGORY_ICONS = {"Rampen": "ramp", "Kurven": "curve", "Spezial": "halfpipe", "Bhop": "bhop", "Zonen": "flag"}
 MIME_TEMPLATE = "application/x-rampenschmiede-vorlage"
 PREFAB_PREFIX = "prefab:"
 OK_STYLE = "color: #3a3;"
@@ -152,12 +155,15 @@ class LibraryPanel(QWidget):
             g = groups.get(t.category)
             if g is None:
                 g = groups[t.category] = QTreeWidgetItem(self.tree, [self.tr(t.category)])
+                g.setIcon(0, icon(CATEGORY_ICONS.get(t.category, "shape")))
                 g.setFlags(g.flags() & ~Qt.ItemIsDragEnabled)
                 g.setExpanded(True)
             item = QTreeWidgetItem(g, [self.tr(t.name)])
+            item.setIcon(0, icon(CATEGORY_ICONS.get(t.category, "shape")))
             item.setData(0, Qt.UserRole, t.key)
             item.setToolTip(0, self.tr(t.description))
         self.prefab_group = QTreeWidgetItem(self.tree, [self.tr("Eigene Prefabs")])
+        self.prefab_group.setIcon(0, icon("prefab"))
         self.prefab_group.setFlags(self.prefab_group.flags() & ~Qt.ItemIsDragEnabled)
         self.prefab_group.setExpanded(True)
         self.refresh_prefabs()
@@ -411,6 +417,7 @@ class LibraryPanel(QWidget):
         self.prefab_group.takeChildren()
         for name, path in list_prefabs(prefabs_dir()):
             item = QTreeWidgetItem(self.prefab_group, [name])
+            item.setIcon(0, icon("prefab"))
             item.setData(0, Qt.UserRole, PREFAB_PREFIX + str(path))
             item.setToolTip(0, str(path))
         if not self.prefab_group.childCount():
