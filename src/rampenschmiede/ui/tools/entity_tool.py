@@ -1,7 +1,7 @@
 """Entity-Werkzeug: Punkt-Entities setzen (Spawns, Lichter).
 
-Etappe 1 bietet eine feste Auswahl. Ab Etappe 5 kommen alle Entities aus den FGD-Dateien
-des Spielprofils, ab Etappe 6 die Licht-Eigenschaften mit Vorschau.
+Schnellauswahl für die häufigsten (Spawns, Lichter, Cubemap, Teleport-Ziel); jede andere
+Klasse aus der FGD lässt sich über die Suche setzen und bekommt deren Standardwerte.
 """
 from __future__ import annotations
 
@@ -18,6 +18,9 @@ from .base import Tool, pick_3d
 if TYPE_CHECKING:
     from ..viewports.viewport import Viewport
 
+#: Abstand neuer Entities zur angeklickten Fläche, wenn die Schnellauswahl nichts sagt
+DEFAULT_LIFT = 16
+
 # Klassenname -> (Anzeigename, Standard-Keyvalues, Höhe des Ursprungs über der Fläche)
 POINT_ENTITIES: dict[str, tuple[str, tuple[tuple[str, str], ...], int]] = {
     "info_player_counterterrorist": ("Spawn CT", (("angles", "0 0 0"),), 0),
@@ -32,6 +35,7 @@ POINT_ENTITIES: dict[str, tuple[str, tuple[tuple[str, str], ...], int]] = {
                                                         ("_ambient", "150 170 200 40"),
                                                         ("angles", "-50 45 0"), ("pitch", "-50")), 32),
     "env_cubemap": ("Cubemap", (("cubemapsize", "0"),), 64),
+    "info_teleport_destination": ("Teleport-Ziel", (("angles", "0 0 0"),), 0),
 }
 
 
@@ -46,14 +50,23 @@ class EntityTool(Tool):
         self.classname = "info_player_counterterrorist"
         self.depth = 0  # Tiefe für 2D-Klicks (Höhe in der Oben-Ansicht)
 
+    def preset(self) -> tuple[str, tuple[tuple[str, str], ...], int]:
+        """Anzeigename, Start-Keyvalues und Abstand zur Fläche der gewählten Klasse. Klassen
+        außerhalb der Schnellauswahl bekommen die Standardwerte aus der FGD."""
+        hit = POINT_ENTITIES.get(self.classname)
+        if hit is not None:
+            return hit
+        cls = self.editor.entity_catalog.get(self.classname)
+        return (self.classname, cls.defaults() if cls else (), DEFAULT_LIFT)
+
     def _place(self, origin: tuple[int, int, int]) -> None:
-        _, kvs, _ = POINT_ENTITIES[self.classname]
+        label, kvs, _ = self.preset()
         ent = Entity(
             id=self.editor.doc.new_id(),
             classname=self.classname,
             keyvalues=(("origin", f"{origin[0]} {origin[1]} {origin[2]}"), *kvs),
         )
-        self.editor.run(AddObjects([ent], f"{POINT_ENTITIES[self.classname][0]} setzen"))
+        self.editor.run(AddObjects([ent], f"{label} setzen"))
         self.editor.set_selection({ent.id})
 
     def press_2d(self, vp: "Viewport", e: QMouseEvent) -> None:
@@ -76,7 +89,7 @@ class EntityTool(Tool):
         if isinstance(hit[0], Solid):
             face = min(hit[0].faces, key=lambda f: abs(f.plane.distance(tuple(point))))
             normal = np.array(face.plane.normal)
-        lift = POINT_ENTITIES[self.classname][2]
+        lift = self.preset()[2]
         pos = point + normal * max(lift, 1)
         snap = self.editor.snap
         self._place((snap(pos[0]), snap(pos[1]), int(round(pos[2]))))

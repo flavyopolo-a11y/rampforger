@@ -131,7 +131,7 @@ class Solid:
 
 @dataclass(frozen=True)
 class Output:
-    """Eine I/O-Verbindung. Wird ab Etappe 5 vollständig bearbeitbar."""
+    """Eine I/O-Verbindung (Ausgang einer Entity auf den Eingang eines Ziels)."""
 
     output: str
     target: str

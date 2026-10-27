@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
+    QCompleter,
     QDoubleSpinBox,
     QFormLayout,
     QGridLayout,
@@ -292,14 +293,54 @@ class ToolOptionsPanel(QStackedWidget):
         combo = QComboBox()
         for cls, (label, _, _) in POINT_ENTITIES.items():
             combo.addItem(f"{self.tr(label)}  ({cls})", cls)
-        combo.currentIndexChanged.connect(lambda _: setattr(tool, "classname", combo.currentData()))
-        form.addRow(self.tr("Entity"), combo)
+        form.addRow(self.tr("Schnell"), combo)
+        search = QComboBox()
+        search.setEditable(True)
+        search.setInsertPolicy(QComboBox.NoInsert)
+        search.completer().setFilterMode(Qt.MatchContains)
+        search.completer().setCompletionMode(QCompleter.PopupCompletion)
+        search.lineEdit().setPlaceholderText(self.tr("Alle Entities: Namen tippen …"))
+        self._entity_classes_loaded = False
+
+        def load_classes() -> None:
+            if not self._entity_classes_loaded:
+                self._entity_classes_loaded = True
+                text = search.currentText()
+                search.addItems(self.editor.entity_catalog.classnames("point"))
+                search.setEditText(text)
+
+        def choose(cls: str) -> None:
+            cls = cls.strip()
+            if not cls:
+                return
+            tool.classname = cls
+            idx = combo.findData(cls)
+            combo.blockSignals(True)
+            combo.setCurrentIndex(idx)
+            combo.blockSignals(False)
+            info = self.editor.entity_catalog.get(cls)
+            desc.setText(info.desc if info and info.desc else "")
+
+        def quick(_: int) -> None:
+            tool.classname = combo.currentData()
+            search.setEditText("")
+            info = self.editor.entity_catalog.get(tool.classname)
+            desc.setText(info.desc if info and info.desc else "")
+
+        combo.currentIndexChanged.connect(quick)
+        search.lineEdit().textEdited.connect(lambda _: load_classes())
+        search.activated.connect(lambda _: choose(search.currentText()))
+        search.lineEdit().editingFinished.connect(lambda: choose(search.currentText()))
+        form.addRow(self.tr("Suche"), search)
         lay.addLayout(form)
+        desc = _hint("")
+        lay.addWidget(desc)
         lay.addWidget(_hint(self.tr(
             "Klick in die 3D-Ansicht setzt die Entity auf die angeklickte Fläche, Klick in eine 2D-Ansicht "
-            "an die Mausposition. Alle Entities aus den FGD-Dateien folgen in Etappe 5, "
-            "die Licht-Vorschau in Etappe 6."
+            "an die Mausposition. Eigenschaften und Ausgänge stehen danach rechts im Panel Auswahl."
         )))
         lay.addStretch(1)
+        self.entity_search = search
+        self.entity_quick = combo
         return w
 
