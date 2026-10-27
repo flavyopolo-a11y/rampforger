@@ -171,3 +171,10 @@ def test_rendering_produces_pixels(window, qtbot):
     img = vp3d.grabFramebuffer()
     center = img.pixelColor(img.width() // 2, img.height() // 2)
     assert center.red() > 60  # grauer Block statt dunklem Hintergrund
+
+
+def test_side_panels_keep_usable_width(window, qtbot):
+    window.resize(1000, 700)
+    qtbot.wait(50)
+    assert window.tool_dock.width() >= 300
+    assert window.sel_dock.width() >= 300

@@ -31,6 +31,7 @@ from .viewports.layout import ViewportGrid
 APP_NAME = "Rampenschmiede"
 FILE_FILTER = "Rampenschmiede-Projekt (*.rsmap)"
 MAX_RECENT = 8
+DOCK_MIN_WIDTH = 320
 
 CONTROLS_HELP = """
 <h3>Kamera</h3>
@@ -97,6 +98,9 @@ class MainWindow(QMainWindow):
         self.sel_dock.setObjectName("dock_selection")
         self.sel_dock.setWidget(SelectionPanel(self.editor))
         self.addDockWidget(Qt.RightDockWidgetArea, self.sel_dock)
+        # Ohne Mindestbreite drücken die Ansichten die Panels auf wenige Pixel zusammen.
+        for dock in (self.tool_dock, self.sel_dock):
+            dock.widget().setMinimumWidth(DOCK_MIN_WIDTH)
 
     def _action(self, text: str, slot, shortcut: str | QKeySequence | None = None, tip: str = "",
                 checkable: bool = False) -> QAction:
@@ -421,6 +425,7 @@ class MainWindow(QMainWindow):
         state = self.settings.value("window_state")
         if state is not None:
             self.restoreState(state)
+        self.resizeDocks([self.tool_dock, self.sel_dock], [DOCK_MIN_WIDTH, DOCK_MIN_WIDTH], Qt.Horizontal)
         try:
             self.grid_view.restore_state(json.loads(self.settings.value("viewports", "{}")))
         except (TypeError, ValueError):
