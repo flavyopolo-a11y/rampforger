@@ -619,10 +619,12 @@ def angle_warnings(angle_range: tuple[float, float] | None) -> list[str]:
 ORIGIN = Placement()
 
 
-def generate(template: Template | str, values: dict | None = None, at: Placement = ORIGIN) -> Generated:
+def generate(template: Template | str, values: dict | None = None, at: Placement = ORIGIN,
+             exact: bool = False) -> Generated:
+    """`exact`: gebogene Wege ungerundet bauen (glatte sichtbare Flächen, siehe Materials.exact)."""
     t = CATALOG[template] if isinstance(template, str) else template
     v = t.values(values)
-    m = materials_from(v)
+    m = dataclasses.replace(materials_from(v), exact=exact)
     pieces: list[SweepPiece] = []
     for shape in t.builder(v, at, m):
         pieces += shape.build()

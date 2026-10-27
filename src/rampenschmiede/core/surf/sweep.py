@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Sequence
 
-from ..geometry.brush import solid_polygons
+from ..geometry.brush import faces_from_loops, solid_polygons
 from ..materials.sizes import texture_size
 from ..model.objects import Face, TexAxis
 from .hull import IPoint, hull_faces
@@ -53,6 +53,10 @@ class Materials:
     tex_size: float = 1.0
     #: Verschiebung der eingepassten Textur in Units (längs, quer)
     tex_shift: tuple[float, float] = (0.0, 0.0)
+    #: Gebogene Wege ohne Runden auf ganze Units bauen: jedes Segment hat dann genau eine ebene
+    #: Fläche je Profilkante (keine hauchdünnen Splitter-Dreiecke, die im Spiel kaputtes Licht
+    #: bekommen). Für die sichtbaren Rampen; die Playerclip-Hülle bleibt ganzzahlig.
+    exact: bool = False
 
 
 @dataclass
@@ -127,7 +131,29 @@ class Sweep:
         a = math.radians(j.yaw)
         # Querachse zeigt nach links von der Laufrichtung
         lx, ly = -math.sin(a) * j.miter, math.cos(a) * j.miter
+        if self._loft():
+            # Querschnitt = Schnitt des geraden Segment-Prismas mit der Gelenk-Ebene: Die Breite
+            # wächst mit 1 / cos(Winkel zur Sehne). So ist jede Fläche eines Segments exakt eben,
+            # auch an den Enden, wo das Gelenk der Tangente folgt statt der Sehne.
+            m = self._miter(k)
+            lx, ly = -math.sin(a) * m, math.cos(a) * m
+            return [[(round(j.x + o * lx, 3), round(j.y + o * ly, 3), round(j.z + h, 3)) for o, h in poly]
+                    for poly in inset_profile(prof)]  # type: ignore[misc]
         return [[(_round(j.x + o * lx), _round(j.y + o * ly), _round(j.z + h)) for o, h in poly] for poly in prof]
+
+    def _miter(self, k: int) -> float:
+        js = self.joints
+        j = js[k]
+        a, b = (js[k], js[k + 1]) if k + 1 < len(js) else (js[k - 1], js[k])
+        if math.hypot(b.x - a.x, b.y - a.y) < 1e-9:
+            return j.miter
+        chord = math.degrees(math.atan2(b.y - a.y, b.x - a.x))
+        c = math.cos(math.radians(j.yaw - chord))
+        return 1.0 / c if c > 0.5 else j.miter
+
+    def _loft(self) -> bool:
+        """Segmente direkt aus den ungerundeten Querschnitten bauen (siehe Materials.exact)."""
+        return self.materials.exact and not self.lattice
 
     def build(self) -> list[SweepPiece]:
         pieces: list[SweepPiece] = []
@@ -165,7 +191,10 @@ class Sweep:
                     nz = normal[2] / math.sqrt(normal[0] ** 2 + normal[1] ** 2 + normal[2] ** 2)
                     return mats.side if abs(nz) < 0.01 else mats.surf
 
-                faces = hull_faces([*start, *end], material_for)
+                if self._loft():
+                    faces = loft_faces(start, end, material_for)
+                else:
+                    faces = hull_faces([*start, *end], material_for)
                 if faces is not None:
                     if mats.fit_surf:
                         faces = self._fit_surf(faces, start_set, k, part, chains)
@@ -206,7 +235,8 @@ class Sweep:
             prev = chains.get(key)
             # Maßstab einmal je Hang, damit alle Segmente gleich groß texturiert sind
             scale = prev[4] if prev else round(max((max(vs) - min(vs)) / h * mats.tex_size, 0.01), 6)
-            seam_pts = [p for p in points if (round(p[0]), round(p[1]), round(p[2])) in seam] or points
+            seam_pts = [p for p in points if any(max(abs(p[c] - q[c]) for c in range(3)) < 0.01 for q in seam)] \
+                or points
             mid = tuple(sum(p[c] for p in seam_pts) / len(seam_pts) for c in range(3))
             if prev:
                 # Texturkoordinaten (in Units) an der Naht vom vorigen Segment übernehmen
@@ -222,6 +252,142 @@ class Sweep:
             for i, _n, _poly in members:
                 out[i] = dataclasses.replace(faces[i], uaxis=uaxis, vaxis=vaxis, rotation=0.0)
         return tuple(out)
+
+
+#: So weit (Units) liegt die ungerundete sichtbare Rampe innerhalb ihrer ganzzahligen
+#: Playerclip-Hülle. Das Runden verschiebt Punkte um bis zu 0,75 Units; mit 1 Unit Abstand
+#: berührt der Spieler nur die Hülle, nie die Kommazahl-Flächen (keine Rampbugs).
+VISIBLE_INSET = 1.0
+
+
+def inset_profile(prof, d: float = VISIBLE_INSET) -> list[list[tuple[float, float]]]:
+    """Profilteile um `d` nach innen versetzen. Unterkanten (Außennormale nach unten) und
+    Kanten, an denen zwei Teile aneinanderliegen, bleiben, damit nichts aufklafft. Wird ein
+    Teil dabei entartet, bleibt es unverändert."""
+    key = tuple(tuple((float(o), float(h)) for o, h in poly) for poly in prof)
+    return _inset_cached(key, d)
+
+
+@lru_cache(maxsize=256)
+def _inset_cached(prof: tuple, d: float) -> list[list[tuple[float, float]]]:
+    def edge_key(a, b):
+        return frozenset({(round(a[0], 3), round(a[1], 3)), (round(b[0], 3), round(b[1], 3))})
+
+    count: dict = {}
+    for poly in prof:
+        for i in range(len(poly)):
+            k = edge_key(poly[i], poly[(i + 1) % len(poly)])
+            count[k] = count.get(k, 0) + 1
+    out = []
+    for poly in prof:
+        n = len(poly)
+        area = sum(poly[i][0] * poly[(i + 1) % n][1] - poly[(i + 1) % n][0] * poly[i][1] for i in range(n)) / 2
+        if n < 3 or abs(area) < 1e-9:
+            out.append([tuple(p) for p in poly])
+            continue
+        sign = 1.0 if area > 0 else -1.0
+        lines = []  # (Punkt, Richtung) je Kante, ggf. nach innen versetzt
+        for i in range(n):
+            a, b = poly[i], poly[(i + 1) % n]
+            ex, ey = b[0] - a[0], b[1] - a[1]
+            length = math.hypot(ex, ey)
+            if length < 1e-9:
+                lines.append(None)
+                continue
+            # Außennormale (bei Gegen-Uhrzeigersinn rechts der Kante)
+            nx, ny = sign * ey / length, -sign * ex / length
+            shift = 0.0 if ny < -0.5 or count[edge_key(a, b)] > 1 else d
+            lines.append(((a[0] - nx * shift, a[1] - ny * shift), (ex, ey)))
+        new = []
+        for i in range(n):
+            l1, l2 = lines[i - 1], lines[i]
+            if l1 is None or l2 is None:
+                new = None
+                break
+            (p1, d1), (p2, d2) = l1, l2
+            den = d1[0] * d2[1] - d1[1] * d2[0]
+            if abs(den) < 1e-9:
+                new.append(p2)
+                continue
+            t = ((p2[0] - p1[0]) * d2[1] - (p2[1] - p1[1]) * d2[0]) / den
+            new.append((p1[0] + t * d1[0], p1[1] + t * d1[1]))
+        ok = new is not None
+        if ok:
+            new_area = sum(new[i][0] * new[(i + 1) % n][1] - new[(i + 1) % n][0] * new[i][1] for i in range(n)) / 2
+            # gleiche Umlaufrichtung, kleiner, und jede Kante zeigt noch in ihre alte Richtung
+            ok = new_area * area > 0 and abs(new_area) <= abs(area) + 1e-9 and all(
+                (new[(i + 1) % n][0] - new[i][0]) * (poly[(i + 1) % n][0] - poly[i][0])
+                + (new[(i + 1) % n][1] - new[i][1]) * (poly[(i + 1) % n][1] - poly[i][1]) > -1e-9
+                for i in range(n))
+        out.append(new if ok else [tuple(p) for p in poly])
+    return out
+
+
+def loft_faces(start: Sequence, end: Sequence, material_for) -> tuple[Face, ...] | None:
+    """Brush zwischen zwei Querschnitten mit gleich vielen, einander entsprechenden Punkten:
+    zwei Kappen und je Profilkante ein Viereck. Bei Querschnitten, die Schnitte desselben
+    geraden Prismas sind (Gehrung), ist jedes Viereck exakt eben. Verdrehte Vierecke (Kurven
+    mit Gefälle) werden entlang der Diagonale geteilt, die den Brush konvex hält: zwei große
+    Dreiecke statt Splittern. Ist das Ergebnis nicht konvex, kommt None (dann ganzzahlige Hülle)."""
+    n = len(start)
+    if n < 3 or len(end) != n:
+        return None
+    pts = [*start, *end]
+    center = tuple(sum(p[c] for p in pts) / len(pts) for c in range(3))
+    loops = [list(start), list(end)]
+    for i in range(n):
+        quad = [start[i], start[(i + 1) % n], end[(i + 1) % n], end[i]]
+        loops += _planar_parts(quad, center)
+    faces: list[Face] = []
+    for loop in loops:
+        loop = [p for k, p in enumerate(loop) if p != loop[k - 1]]
+        if len(loop) < 3:
+            continue
+        normal = _newell(loop)
+        if _dot(normal, normal) < 1e-6:
+            continue
+        mid = tuple(sum(p[c] for p in loop) / len(loop) for c in range(3))
+        if _dot(normal, tuple(mid[c] - center[c] for c in range(3))) < 0:
+            loop.reverse()
+            normal = (-normal[0], -normal[1], -normal[2])
+        unit = _unit(normal)
+        if any(_dot(unit, tuple(p[c] - loop[0][c] for c in range(3))) > LOFT_TOLERANCE for p in pts):
+            return None
+        faces += faces_from_loops([loop], material_for(normal, loop))
+    return tuple(faces) if len(faces) >= 4 else None
+
+
+#: Abweichung in Units, ab der ein Viereck als verdreht gilt und geteilt wird
+LOFT_TOLERANCE = 0.01
+
+
+def _planar_parts(quad: list, center) -> list[list]:
+    """Ein ebenes Viereck bleibt eins; ein verdrehtes wird in zwei Dreiecke geteilt, und zwar
+    entlang der Diagonale, bei der der Knick nach außen zeigt (konvex)."""
+    a, b, c, d = quad
+    if len({a, b, c, d}) < 4:
+        return [quad]
+    normal = _unit(_newell([a, b, c]))
+    if abs(_dot(normal, tuple(d[k] - a[k] for k in range(3)))) <= LOFT_TOLERANCE:
+        return [quad]
+    for tri1, tri2 in (([a, b, c], [a, c, d]), ([a, b, d], [b, c, d])):
+        n1 = _unit(_newell(tri1))
+        if _dot(n1, tuple(tri1[0][k] - center[k] for k in range(3))) < 0:
+            n1 = (-n1[0], -n1[1], -n1[2])
+        other = next(p for p in quad if p not in tri1)
+        if _dot(n1, tuple(other[k] - tri1[0][k] for k in range(3))) < 0:
+            return [tri1, tri2]
+    return [quad]
+
+
+def _newell(loop) -> tuple[float, float, float]:
+    nx = ny = nz = 0.0
+    for k in range(len(loop)):
+        a, b = loop[k], loop[(k + 1) % len(loop)]
+        nx += (a[1] - b[1]) * (a[2] + b[2])
+        ny += (a[2] - b[2]) * (a[0] + b[0])
+        nz += (a[0] - b[0]) * (a[1] + b[1])
+    return (nx, ny, nz)
 
 
 def _dot(a, b) -> float:
