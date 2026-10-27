@@ -16,11 +16,14 @@ void main() {
     float fill = max(dot(n, normalize(vec3(-0.6, -0.3, 0.2))), 0.0);
     float light = mix(0.38 + 0.5 * key + 0.18 * fill, 1.0, u_flat);
     vec3 base = v_color;
+    // Auswahl nur leicht rot färben, damit die Textur sichtbar bleibt (die Kanten sind gelb)
+    float tint = 0.45;
     if (u_textured > 0.5 && v_layer > 0.5) {
+        tint = 0.2;
         base = texture(u_textures, vec3(v_uv, v_layer)).rgb;
         light = mix(0.55 + 0.4 * key + 0.12 * fill, 1.0, u_flat);
     }
     vec3 color = base * light;
-    color = mix(color, vec3(1.0, 0.25, 0.2), v_selected * 0.45);
+    color = mix(color, vec3(1.0, 0.25, 0.2), v_selected * tint);
     f_color = vec4(color, 1.0);
 }

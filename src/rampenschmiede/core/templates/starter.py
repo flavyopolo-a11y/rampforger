@@ -41,7 +41,7 @@ def hull_around(doc: MapDocument, inner: BBox, thickness: int = 16, floor_materi
     ]
 
 
-def starter_room(doc: MapDocument, game: str | None = None, half_size: int = 512, height: int = 512) -> list[MapObject]:
+def starter_room(doc: MapDocument, game: str | None = None, half_size: int = 2048, height: int = 1024) -> list[MapObject]:
     """Innenraum von (-half, -half, 0) bis (half, half, height), Boden-Oberkante bei z = 0."""
     inner = BBox((-half_size, -half_size, 0), (half_size, half_size, height))
     objs: list[MapObject] = list(hull_around(doc, inner, floor_material=FLOOR))

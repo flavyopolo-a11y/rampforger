@@ -170,6 +170,7 @@ class LibraryPanel(QWidget):
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._tree_menu)
         self.tree.currentItemChanged.connect(self._template_changed)
+        self.tree.itemClicked.connect(self._template_clicked)
         self.tree.itemDoubleClicked.connect(lambda item, _col: self.insert_current() if item.data(0, Qt.UserRole) else None)
         lay.addWidget(self.tree, 2)
 
@@ -226,6 +227,12 @@ class LibraryPanel(QWidget):
     def _template_key(self) -> str | None:
         return self.current_key()
 
+    def _template_clicked(self, item: QTreeWidgetItem, _col: int = 0) -> None:
+        """Vorlage angeklickt: gleich zum Malen bereit (Vorschau am Mauszeiger)."""
+        if item.data(0, Qt.UserRole) and "paint" in self.editor.tools:
+            self.editor.set_selection(set())
+            self.editor.set_tool("paint")
+
     def _template_changed(self, *_args) -> None:
         if self.selected_block() is None:
             self._show_form()
@@ -255,7 +262,7 @@ class LibraryPanel(QWidget):
             self.box.setTitle(self.tr("Baustein: {0}").format(self.tr(template.name) if template else "?"))
         else:
             template = self.current_template()
-            values = template.values(self._insert_values(template)) if template else {}
+            values = template.values(self.insert_values(template)) if template else {}
             at = None
             self.box.setTitle(self.tr("Vorlage: {0}").format(self.tr(template.name)) if template else "")
         self.dissolve_btn.setVisible(root is not None)
@@ -380,7 +387,7 @@ class LibraryPanel(QWidget):
         self._shown = ("block", root.id, block_info(root))
         self._show_angles(gen)
 
-    def _insert_values(self, template: Template) -> dict:
+    def insert_values(self, template: Template) -> dict:
         """Werte fürs nächste Einfügen: Map-Thema, darüber die selbst gestellten Regler."""
         return {**block_defaults(self.editor.doc, template), **self.next_values.get(template.key, {})}
 
@@ -403,7 +410,12 @@ class LibraryPanel(QWidget):
             return None
         snap = self.editor.snap
         at = Placement(snap(point[0]), snap(point[1]), snap(point[2]), yaw)
-        objs, gen = insert_block(self.editor.doc, key, self._insert_values(template), at)
+        return self.place(key, self.insert_values(template), at)
+
+    def place(self, key: str, values: dict, at: Placement) -> int | None:
+        """Vorlage mit genau diesen Werten und dieser Platzierung einfügen (z. B. gemalt)."""
+        template = CATALOG[key]
+        objs, gen = insert_block(self.editor.doc, key, values, at)
         if not self.editor.run(AddObjects(objs, self.tr("{0} einfügen").format(self.tr(template.name)))):
             return None
         self.editor.set_selection({objs[0].id})

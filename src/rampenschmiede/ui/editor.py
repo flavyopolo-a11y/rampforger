@@ -47,6 +47,8 @@ class EditorContext(QObject):
         self.materials: MaterialLibrary | None = None
         self.atlas = TextureAtlas()
         self.current_material = DEFAULT_MATERIAL
+        #: Gilt eine Rampen-Textur für alle Rampen ("alle") oder nur eine ("einer")?
+        self.material_scope = "alle"
         self.scene = SceneMesh(self.doc, self.atlas)
         self.selection: frozenset[int] = frozenset()
         self.file_path: Path | None = None
