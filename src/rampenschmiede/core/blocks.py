@@ -90,7 +90,10 @@ def build_block(doc: MapDocument, template: str, values: dict | None = None, at:
         rng = random.Random()
         color = (rng.randint(80, 255), rng.randint(80, 255), rng.randint(80, 255))
     objs: list[MapObject] = [root]
-    for faces in gen.face_sets:
+    # Mit Playerclip-Hülle sorgt die Hülle (ganzzahlig, gegen Rampbugs) für die Kollision; die
+    # sichtbare Rampe darf dann ungerundet und damit splitterfrei glatt sein
+    visible = generate(t, v, at, exact=True) if collision == "clip" else gen
+    for faces in visible.face_sets:
         objs.append(Solid(id=doc.new_id(), faces=_smooth(faces), parent_id=root.id, editor=EditorInfo(color=color)))
     if collision == "clip":
         for faces in gen.face_sets:

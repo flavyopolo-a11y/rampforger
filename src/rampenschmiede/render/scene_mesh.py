@@ -173,13 +173,24 @@ def feature_edges(faces: list[Face], polys: list, hide_nodraw: bool = False) -> 
     `hide_nodraw`: Kanten zu unsichtbaren Seiten weglassen (Nähte zwischen Rampen-Segmenten)."""
     owners: dict[tuple, list[int]] = {}
     ends: dict[tuple, tuple] = {}
+    reps: list = []
+
+    def vertex(p) -> int:
+        # Ungerundete Brushes: dieselbe Ecke kommt je Seite minimal anders heraus
+        for n, q in enumerate(reps):
+            if abs(p[0] - q[0]) < 0.05 and abs(p[1] - q[1]) < 0.05 and abs(p[2] - q[2]) < 0.05:
+                return n
+        reps.append(p)
+        return len(reps) - 1
+
     for k, poly in enumerate(polys):
         if not poly:
             continue
         for i in range(len(poly)):
             a, b = poly[i], poly[(i + 1) % len(poly)]
-            ka = tuple(round(c, 2) for c in a)
-            kb = tuple(round(c, 2) for c in b)
+            ka, kb = vertex(a), vertex(b)
+            if ka == kb:
+                continue
             key = (ka, kb) if ka <= kb else (kb, ka)
             owners.setdefault(key, []).append(k)
             ends.setdefault(key, (a, b))
