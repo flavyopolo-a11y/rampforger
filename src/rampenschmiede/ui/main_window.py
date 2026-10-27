@@ -26,6 +26,7 @@ from ..core.compile import CompileSettings, Level, LogLine
 from ..core.io import rsmap, vmf
 from ..core.materials import MaterialLibrary
 from ..core.materials.authoring import import_image, ramp_material, wall_material
+from ..core.materials.styles import WorldStyle, pick_sky, pick_wall, style_command
 from ..core.materials.theme import SetTheme, Theme, apply_collision, apply_theme, get_theme
 from ..core.model import Entity, MapDocument, MapObject
 from ..core.profiles import ProfileStore, detect_profiles
@@ -46,6 +47,7 @@ from .dialogs.ramp_assistant import (
 from .dialogs.surf_wizard import SurfWizard
 from .dialogs.texture_packs import TexturePacksDialog
 from .dialogs.transform_dialog import TransformDialog
+from .dialogs.world_styles import WorldStylesDialog
 from .editor import EditorContext
 from .icons import ACTIVE, icon, pixmap
 from .panels.compile_log import CompileLogPanel
@@ -130,7 +132,7 @@ class MainWindow(QMainWindow):
         self._build_docks()
         self._build_actions()
         self._set_icons()
-        self.material_browser.add_actions([self.act_ramp_assistant, None, self.act_import_texture,
+        self.material_browser.add_actions([self.act_ramp_assistant, self.act_world_style, None, self.act_import_texture,
                                            self.act_texture_packs])
         self._build_menus()
         self._build_toolbars()
@@ -276,6 +278,8 @@ class MainWindow(QMainWindow):
         self.act_ramp_assistant = self._action("&Rampen-Assistent …", self.ramp_assistant, "Ctrl+Shift+R",
                                                "Farben für Rampen, Linien und Wände wählen, den Rest macht die "
                                                "Rampenschmiede")
+        self.act_world_style = self._action("&Welt-Stil …", self.world_style, None,
+                                            "Himmel, Sonne, Nebel, Wände und Rampenfarben mit einem Klick")
         self.act_ramp_clip = self._action("&Playerclip auf Rampen", self.set_ramp_clip, None,
                                           "Glatte Playerclip-Hülle auf allen Rampen (empfohlen). Aus: Die Rampe "
                                           "selbst ist die Kollision.", checkable=True)
@@ -320,7 +324,7 @@ class MainWindow(QMainWindow):
             m.addAction(a)
 
         m = mb.addMenu(self.tr("Te&xturen"))
-        for a in (self.act_ramp_assistant, self.act_ramp_clip, None, self.act_import_texture,
+        for a in (self.act_ramp_assistant, self.act_world_style, self.act_ramp_clip, None, self.act_import_texture,
                   self.act_texture_packs):
             m.addSeparator() if a is None else m.addAction(a)
 
@@ -340,7 +344,7 @@ class MainWindow(QMainWindow):
                              (self.act_undo, "undo"), (self.act_redo, "redo"),
                              (self.act_grid_finer, "grid_finer"), (self.act_grid_coarser, "grid_coarser"),
                              (self.act_compile, "compile"), (self.act_expert, "expert"),
-                             (self.act_ramp_assistant, "palette")):
+                             (self.act_ramp_assistant, "palette"), (self.act_world_style, "sun")):
             action.setIcon(icon(name))
         for name, action in self.tool_actions.items():
             action.setIcon(icon(name))
@@ -763,6 +767,30 @@ class MainWindow(QMainWindow):
         self.library.refresh()
         self.editor.set_current_material(ramp)
         self.editor.status_message.emit(self.tr("Rampenfarben angewendet"))
+        return True
+
+    def world_style(self) -> bool:
+        dlg = WorldStylesDialog(get_theme(self.editor.doc).collision == "clip", self)
+        if dlg.exec() != QDialog.Accepted:
+            return False
+        return self.apply_world_style(dlg.chosen(), dlg.clip.isChecked())
+
+    def apply_world_style(self, style: WorldStyle, clip: bool = True) -> bool:
+        lib = self.editor.materials
+        root = textures_dir()
+        try:
+            ramp = ramp_material(root, style.ramp, style.lines).upper()
+            side = wall_material(root, side_color(style.ramp)).upper()
+            wall = (pick_wall(style, lib) or wall_material(root, style.wall)).upper()
+        except OSError as exc:
+            QMessageBox.critical(self, APP_NAME, self.tr("Texturen konnten nicht gespeichert werden:\n{0}").format(exc))
+            return False
+        colors = {"ramp": to_hex(style.ramp), "lines": to_hex(style.lines), "wall": to_hex(style.wall)}
+        theme = Theme(ramp, side, wall, "clip" if clip else "detail", colors)
+        self.editor.refresh_materials()
+        self.editor.run(style_command(self.editor.doc, style, pick_sky(style, lib), theme))
+        self.library.refresh()
+        self.editor.status_message.emit(self.tr("Welt-Stil „{0}“ angewendet").format(self.tr(style.name)))
         return True
 
     def set_ramp_clip(self, on: bool) -> None:

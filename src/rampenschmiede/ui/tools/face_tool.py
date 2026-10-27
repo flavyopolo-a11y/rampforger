@@ -16,7 +16,7 @@ from PySide6.QtGui import QKeyEvent, QMouseEvent
 
 from ...core.blocks import is_clip_member
 from ...core.geometry.brush import ray_intersect_solid
-from ...core.materials.apply import FaceRef, edit_faces
+from ...core.materials.apply import FaceRef, edit_faces, replace_material
 from ...core.model import Face, Solid
 from .base import Tool, _ray_box, _visible
 
@@ -35,7 +35,7 @@ class FaceTool(Tool):
     label = "Seiten"
     shortcut = "Shift+A"
     hint = ("Seite anklicken, Strg+Klick ergänzt. Shift+Klick: aktuelles Material auf die Seite, "
-            "Alt+Klick: Material der Seite aufnehmen")
+            "Strg+Shift+Klick: überall umfärben, Alt+Klick: Material der Seite aufnehmen")
 
     def __init__(self, editor) -> None:
         super().__init__(editor)
@@ -129,6 +129,21 @@ class FaceTool(Tool):
         material = material.upper()
         return self.edit(lambda f: dataclasses.replace(f, material=material), "Material anwenden", refs=refs)
 
+    def recolor(self, ref: FaceRef, material: str | None = None) -> bool:
+        """Umfärben per Klick: Das Material dieser Seite wird in der ganzen Map ersetzt."""
+        s = self.editor.doc.get(ref[0])
+        if not isinstance(s, Solid) or ref[1] >= len(s.faces):
+            return False
+        old = s.faces[ref[1]].material
+        new = (material or self.editor.current_material).upper()
+        if old.upper() == new:
+            return False
+        cmd = replace_material(self.editor.doc, old, new)
+        if cmd is None or not self.editor.run(cmd):
+            return False
+        self.editor.status_message.emit(f"Umgefärbt: {old} → {new}")
+        return True
+
     # ---- Maus ---------------------------------------------------------------------------
     def press_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
         origin, direction = vp.ray(e.position())
@@ -143,6 +158,9 @@ class FaceTool(Tool):
             assert isinstance(s, Solid)
             self.editor.set_current_material(s.faces[ref[1]].material)
             self.editor.status_message.emit(f"Material aufgenommen: {s.faces[ref[1]].material}")
+            return
+        if mods & Qt.ShiftModifier and mods & Qt.ControlModifier:
+            self.recolor(ref)
             return
         if mods & Qt.ShiftModifier:
             self.apply_material(self.editor.current_material, [ref])

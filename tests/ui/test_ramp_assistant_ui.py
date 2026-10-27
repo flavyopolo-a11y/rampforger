@@ -119,3 +119,40 @@ def test_texture_packs(window, tmp_path, qtbot):
     assert window.texture_packs() == [str(pack)]
     assert window.editor.materials.exists("paket/boden")
     assert window.editor.materials.is_own("paket/boden")
+
+
+def test_world_style_dialog_and_apply(window, qtbot):
+    from rampenschmiede.core.materials.styles import STYLE_BY_KEY
+    from rampenschmiede.core.model import Entity
+    from rampenschmiede.ui.dialogs.world_styles import WorldStylesDialog, style_preview
+
+    dlg = WorldStylesDialog(clip=False)
+    qtbot.addWidget(dlg)
+    assert dlg.chosen().key == "tag" and not dlg.clip.isChecked()
+    dlg.list.setCurrentRow(2)
+    assert dlg.chosen().key == "nacht" and "Mond" in dlg.description.text()
+    assert style_preview(STYLE_BY_KEY["wueste"]).size == (168, 108)
+
+    root = window.library.insert("gerade", (0, 0, 0))
+    wall = _wall(window)
+    assert window.apply_world_style(STYLE_BY_KEY["nacht"], clip=True)
+    doc = window.editor.doc
+    theme = get_theme(doc)
+    assert block_info(doc.get(root))["values"]["mat_surf"] == theme.ramp
+    assert {f.material for f in doc.get(wall.id).faces} == {theme.wall}
+    assert any(isinstance(o, Entity) and o.classname == "env_fog_controller" for o in doc.objects())
+    window.editor.undo()
+    assert not get_theme(doc).is_set()
+
+
+def test_recolor_by_click(window):
+    a = _wall(window)
+    b = solids_from_faces(window.editor.doc, primitives.block((1024, 0, -64), (1536, 512, 0)))[0]
+    window.editor.run(AddObjects([b]))
+    face_tool = window.editor.tools["face"]
+    window.editor.set_current_material("NEU/FARBE")
+    assert face_tool.recolor((a.id, 0))
+    doc = window.editor.doc
+    assert {f.material for f in doc.get(a.id).faces} == {"NEU/FARBE"}
+    assert {f.material for f in doc.get(b.id).faces} == {"NEU/FARBE"}
+    assert not face_tool.recolor((a.id, 0))
