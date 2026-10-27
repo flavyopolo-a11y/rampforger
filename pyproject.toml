@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rampenschmiede"
+version = "0.0.1"
+description = "Map-Editor für Surf-, Bhop- und Trick-Maps (Counter-Strike: Source, Momentum Mod)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6>=6.7",
+    "moderngl>=5.10",
+    "numpy>=1.26",
+    "srctools>=2.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-qt>=4.4", "hypothesis>=6", "ruff>=0.5", "pyinstaller>=6.6"]
+
+[project.gui-scripts]
+rampenschmiede = "rampenschmiede.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rampenschmiede = ["resources/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
