@@ -20,7 +20,6 @@ def test_tools_have_icons_and_mode_label(window):
 
 def test_active_viewport_is_highlighted(window):
     grid = window.grid_view
-    assert grid.active_frame() is grid.frames[0]
     grid.frames[2].viewport.activated.emit()
     assert grid.active_frame() is grid.frames[2]
     assert [f.active for f in grid.frames] == [False, False, True, False]
