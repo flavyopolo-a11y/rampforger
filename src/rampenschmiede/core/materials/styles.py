@@ -115,6 +115,11 @@ def _anchor(doc: MapDocument) -> tuple[int, int, int]:
     return (round((bb.mins[0] + bb.maxs[0]) / 2), round((bb.mins[1] + bb.maxs[1]) / 2), round(bb.maxs[2] - 64))
 
 
+def sky_command(doc: MapDocument, sky: str) -> Command:
+    """Nur den Himmel der Map wechseln (ein Undo-Schritt)."""
+    return SetWorldKeyvalues(_set_kv(doc.world_keyvalues, "skyname", sky), "Himmel ändern")
+
+
 def style_command(doc: MapDocument, style: WorldStyle, sky: str, theme: Theme) -> Command:
     """Himmel, Sonne, Nebel und Thema in einem Undo-Schritt setzen. Vorhandene Sonne und
     Nebel-Steuerung werden angepasst, fehlende neu angelegt."""
@@ -163,4 +168,5 @@ def style_command(doc: MapDocument, style: WorldStyle, sky: str, theme: Theme) -
     return MacroCommand(cmds, f"Welt-Stil „{style.name}“")
 
 
-__all__ = ["DEFAULT_SKY", "STYLES", "STYLE_BY_KEY", "Fog", "WorldStyle", "pick_sky", "pick_wall", "style_command"]
+__all__ = ["DEFAULT_SKY", "STYLES", "STYLE_BY_KEY", "Fog", "WorldStyle", "pick_sky", "pick_wall", "sky_command",
+           "style_command"]

@@ -75,7 +75,11 @@ class CompileDialog(QDialog):
         self.c_copy = QCheckBox(self.tr("BSP in den maps-Ordner kopieren"))
         self.c_launch = QCheckBox(self.tr("Spiel starten"))
         self.c_leak = QCheckBox(self.tr("Bei Leck abbrechen"))
-        for c in (self.c_copy, self.c_launch, self.c_leak):
+        self.c_cubemaps = QCheckBox(self.tr("Cubemaps bauen"))
+        self.c_cubemaps.setToolTip(self.tr(
+            "Startet das Spiel mit -buildcubemaps: Es baut die Spiegelungen aller env_cubemap in die BSP und "
+            "schließt sich danach. Nötig für glänzende Materialien, sobald das Licht fertig ist."))
+        for c in (self.c_copy, self.c_launch, self.c_leak, self.c_cubemaps):
             c.toggled.connect(self._store)
             opts.addWidget(c)
         lay.addLayout(opts)
@@ -147,7 +151,8 @@ class CompileDialog(QDialog):
             return
         keep = self.settings
         self.settings = replace(preset(key), copy_to_game=keep.copy_to_game, launch_game=keep.launch_game,
-                                stop_on_leak=keep.stop_on_leak, extra_launch_args=keep.extra_launch_args)
+                                stop_on_leak=keep.stop_on_leak, extra_launch_args=keep.extra_launch_args,
+                                build_cubemaps=keep.build_cubemaps)
         self._load_settings()
 
     def _load_settings(self) -> None:
@@ -164,6 +169,8 @@ class CompileDialog(QDialog):
         self.c_copy.setChecked(s.copy_to_game)
         self.c_launch.setChecked(s.launch_game)
         self.c_leak.setChecked(s.stop_on_leak)
+        self.c_cubemaps.setChecked(s.build_cubemaps)
+        self.c_cubemaps.setEnabled(s.launch_game)
         self.c_vbsp.setChecked(s.run_vbsp)
         self.c_vvis.setChecked(s.run_vvis)
         self.c_vrad.setChecked(s.run_vrad)
@@ -180,7 +187,8 @@ class CompileDialog(QDialog):
         s = self.settings
         new = replace(
             s, copy_to_game=self.c_copy.isChecked(), launch_game=self.c_launch.isChecked(),
-            stop_on_leak=self.c_leak.isChecked(), run_vbsp=self.c_vbsp.isChecked(),
+            stop_on_leak=self.c_leak.isChecked(), build_cubemaps=self.c_cubemaps.isChecked(),
+            run_vbsp=self.c_vbsp.isChecked(),
             run_vvis=self.c_vvis.isChecked(), run_vrad=self.c_vrad.isChecked(),
             vbsp_args=self.e_vbsp.text(), vvis_args=self.e_vvis.text(), vrad_args=self.e_vrad.text(),
             extra_launch_args=self.e_launch.text(),
@@ -199,6 +207,7 @@ class CompileDialog(QDialog):
                 self.preset_group.setExclusive(True)
                 self._loading = False
         self.settings = new
+        self.c_cubemaps.setEnabled(new.launch_game)
         self._update_preview()
 
     # ---- Vorschau ---------------------------------------------------------------------------

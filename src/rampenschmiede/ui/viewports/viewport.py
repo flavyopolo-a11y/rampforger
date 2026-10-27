@@ -19,7 +19,7 @@ from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
 from ...core.materials.apply import apply_dropped
 from ...render.camera import VIEW_AXES, Camera2D, Camera3D
-from ...render.gl_renderer import ViewportRenderer
+from ...render.gl_renderer import SKY_MODES, ViewportRenderer
 from ..editor import EditorContext
 from ..panels.library_panel import MIME_TEMPLATE
 from ..panels.material_browser import MIME_MATERIAL
@@ -31,7 +31,8 @@ VIEW_TITLES = {
     "side": "Seite (X/Z)",
 }
 
-RENDER_MODES = {"textured": "Texturiert", "shaded": "Schattiert", "flat": "Flach", "wireframe": "Drahtgitter"}
+RENDER_MODES = {"textured": "Texturiert", "lit": "Licht-Vorschau", "shaded": "Schattiert", "flat": "Flach",
+                "wireframe": "Drahtgitter"}
 
 FLY_KEYS = {Qt.Key_W, Qt.Key_A, Qt.Key_S, Qt.Key_D, Qt.Key_Q, Qt.Key_E}
 
@@ -122,10 +123,17 @@ class Viewport(QOpenGLWidget):
             self.renderer.sync(self.editor.scene.arrays(), self.editor.scene.atlas if self.is_3d else None)
             tool = self.editor.tool
             if self.is_3d:
-                extra = _join_lines(tool.lines_3d(self) if tool else None, self.editor.leak_lines, self.editor.io_lines())
-                self.renderer.draw_3d(fbo, self.cam3d, w, h, self.render_mode, extra, pixels)
+                # Zuletzt gezeichnete 3D-Kamera, z. B. zum Ausrichten von Lichtern
+                self.editor.camera3d = self.cam3d
+                extra = _join_lines(tool.lines_3d(self) if tool else None, self.editor.leak_lines,
+                                    self.editor.io_lines(), self.editor.light_lines())
+                lit = self.render_mode == "lit"
+                sky = self.editor.sky_images() if self.render_mode in SKY_MODES else None
+                self.renderer.draw_3d(fbo, self.cam3d, w, h, self.render_mode, extra, pixels,
+                                      self.editor.lights() if lit else None, sky)
             else:
-                extra = _join_lines(tool.lines_2d(self) if tool else None, self.editor.leak_lines, self.editor.io_lines())
+                extra = _join_lines(tool.lines_2d(self) if tool else None, self.editor.leak_lines,
+                                    self.editor.io_lines(), self.editor.light_lines())
                 self.renderer.draw_2d(fbo, self.cam2d, w, h, self.editor.grid, extra, pixels)
             self.ctx.disable(moderngl.DEPTH_TEST)
         finally:

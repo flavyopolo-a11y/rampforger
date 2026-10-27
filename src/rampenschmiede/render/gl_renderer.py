@@ -7,13 +7,18 @@ from importlib import resources
 import moderngl
 import numpy as np
 
+from ..core.lights import LightSet, nearest_lights
 from .camera import Camera2D, Camera3D
 from .scene_mesh import SceneArrays
+from .sky import SkyImages
 from .textures import LAYER_SIZE, MAX_LAYERS, TextureAtlas
 
 
 def _shader(name: str) -> str:
-    return resources.files("rampenschmiede.resources.shaders").joinpath(name).read_text(encoding="utf-8")
+    text = resources.files("rampenschmiede.resources.shaders").joinpath(name).read_text(encoding="utf-8")
+    if "//SKY" in text:
+        text = text.replace("//SKY", _shader("sky.glsl"))
+    return text
 
 
 def _mat(m: np.ndarray) -> bytes:
@@ -23,6 +28,10 @@ def _mat(m: np.ndarray) -> bytes:
 
 BACKGROUND_3D = (0.12, 0.13, 0.15)
 BACKGROUND_2D = (0.0, 0.0, 0.0)
+#: So viele Lichter rechnet die Vorschau gleichzeitig (die für die Kamera wichtigsten)
+MAX_LIGHTS = 32
+#: Ansichtsmodi, in denen der Himmel gezeigt wird
+SKY_MODES = ("textured", "lit")
 
 
 class ViewportRenderer:
@@ -30,6 +39,11 @@ class ViewportRenderer:
         self.ctx = ctx
         self.prog_faces = ctx.program(vertex_shader=_shader("faces.vert"), fragment_shader=_shader("faces.frag"))
         self.prog_lines = ctx.program(vertex_shader=_shader("lines.vert"), fragment_shader=_shader("lines.frag"))
+        self.prog_sky = ctx.program(vertex_shader=_shader("sky_bg.vert"), fragment_shader=_shader("sky_bg.frag"))
+        self._sky_vbo = ctx.buffer(np.array([-1, -1, 3, -1, -1, 3], dtype="f4").tobytes())
+        self._sky_vao = ctx.vertex_array(self.prog_sky, [(self._sky_vbo, "2f", "in_pos")])
+        self._sky_tex: moderngl.TextureArray | None = None
+        self._sky_images: SkyImages | None = None
         self._faces_vbo: moderngl.Buffer | None = None
         self._faces_vao: moderngl.VertexArray | None = None
         self._faces_count = 0
@@ -89,6 +103,42 @@ class ViewportRenderer:
         self._tex.build_mipmaps()
         self._tex_uploaded = count
 
+    def sync_sky(self, sky: SkyImages | None) -> None:
+        if sky is self._sky_images:
+            return
+        self._sky_images = sky
+        if self._sky_tex is not None:
+            self._sky_tex.release()
+            self._sky_tex = None
+        if sky is None:
+            return
+        self._sky_tex = self.ctx.texture_array((sky.size, sky.size, len(sky.layers)), 4, b"".join(sky.layers))
+        self._sky_tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        self._sky_tex.repeat_x = self._sky_tex.repeat_y = False
+
+    def _set_lights(self, lights: LightSet | None, eye) -> None:
+        prog = self.prog_faces
+        if lights is None:
+            prog["u_fullbright"].value = 1.0
+            prog["u_light_count"].value = 0
+            return
+        prog["u_fullbright"].value = 1.0 if lights.fullbright else 0.0
+        chosen = nearest_lights(lights.lights, tuple(eye), MAX_LIGHTS)
+        data = np.zeros((5, MAX_LIGHTS, 4), dtype="f4")
+        for i, li in enumerate(chosen):
+            data[0, i] = (*li.position, li.range())
+            data[1, i] = (*li.color, 1.0 if li.is_spot else 0.0)
+            data[2, i] = (*li.attn, li.fifty)
+            data[3, i] = (*(li.direction or (0.0, 0.0, -1.0)), li.zero)
+            data[4, i] = (li.inner_cos, li.outer_cos, li.exponent, 0.0)
+        for k, name in enumerate(("u_lpos", "u_lcolor", "u_lattn", "u_ldir", "u_lcone")):
+            prog[name].write(data[k].tobytes())
+        prog["u_light_count"].value = len(chosen)
+        sun = lights.sun
+        prog["u_sun_dir"].value = sun.direction if sun else (0.0, 0.0, -1.0)
+        prog["u_sun_color"].value = sun.color if sun else (0.0, 0.0, 0.0)
+        prog["u_ambient"].value = sun.ambient if sun else (0.0, 0.0, 0.0)
+
     def sync(self, arrays: SceneArrays, atlas: TextureAtlas | None = None) -> None:
         self.sync_textures(atlas)
         if arrays.version == self._version:
@@ -126,22 +176,42 @@ class ViewportRenderer:
     # ---- 3D ------------------------------------------------------------------
     def draw_3d(self, fbo: moderngl.Framebuffer, cam: Camera3D, width: int, height: int,
                 mode: str = "shaded", extra_lines: np.ndarray | None = None,
-                pixel_size: tuple[int, int] | None = None) -> None:
-        """width/height in logischen Pixeln (für die Kamera), pixel_size in echten Pixeln."""
+                pixel_size: tuple[int, int] | None = None, lights: LightSet | None = None,
+                sky: SkyImages | None = None) -> None:
+        """width/height in logischen Pixeln (für die Kamera), pixel_size in echten Pixeln.
+        mode "lit" ist die Licht-Vorschau (texturiert, beleuchtet von `lights`)."""
         fbo.use()
         self.ctx.viewport = (0, 0, *(pixel_size or (width, height)))
         fbo.clear(*BACKGROUND_3D, 1.0, depth=1.0)
+        mvp_m = cam.mvp(width, height)
+        mvp = _mat(mvp_m)
+        self.sync_sky(sky if mode in SKY_MODES else self._sky_images)
+        show_sky = mode in SKY_MODES and sky is not None and self._sky_tex is not None
+        if show_sky:
+            self.ctx.disable(moderngl.DEPTH_TEST)
+            self._sky_tex.use(1)
+            self.prog_sky["u_sky"].value = 1
+            self.prog_sky["u_inv_vp"].write(_mat(np.linalg.inv(mvp_m)))
+            self._sky_vao.render(moderngl.TRIANGLES, vertices=3)
         self.ctx.enable(moderngl.DEPTH_TEST)
-        mvp = _mat(cam.mvp(width, height))
         if mode != "wireframe" and self._faces_vao is not None:
-            self.prog_faces["u_mvp"].write(mvp)
-            self.prog_faces["u_light_dir"].value = tuple(_normalize((0.35, 0.55, 0.9)))
-            self.prog_faces["u_flat"].value = 1.0 if mode == "flat" else 0.0
-            textured = mode == "textured" and self._tex is not None
-            self.prog_faces["u_textured"].value = 1.0 if textured else 0.0
+            prog = self.prog_faces
+            prog["u_mvp"].write(mvp)
+            prog["u_light_dir"].value = tuple(_normalize((0.35, 0.55, 0.9)))
+            prog["u_flat"].value = 1.0 if mode == "flat" else 0.0
+            textured = mode in ("textured", "lit") and self._tex is not None
+            prog["u_textured"].value = 1.0 if textured else 0.0
             if textured:
                 self._tex.use(0)
-                self.prog_faces["u_textures"].value = 0
+                prog["u_textures"].value = 0
+            prog["u_lit"].value = 1.0 if mode == "lit" else 0.0
+            if mode == "lit":
+                self._set_lights(lights, cam.position)
+            prog["u_has_sky"].value = 1.0 if show_sky else 0.0
+            prog["u_eye"].value = tuple(float(c) for c in cam.position)
+            if show_sky:
+                self._sky_tex.use(1)
+                prog["u_sky"].value = 1
             self.ctx.polygon_offset = (1.0, 1.0)
             self._faces_vao.render(moderngl.TRIANGLES, vertices=self._faces_count)
             self.ctx.polygon_offset = (0.0, 0.0)
@@ -179,7 +249,8 @@ class ViewportRenderer:
 
     def release(self) -> None:
         for obj in (self._faces_vao, self._lines_vao, self._sel_vao, self._edges_vao, self._faces_vbo,
-                    self._lines_vbo, self._sel_vbo, self._edges_vbo, self._dyn_vao, self._dyn_vbo, self.prog_faces, self.prog_lines, self._tex):
+                    self._lines_vbo, self._sel_vbo, self._edges_vbo, self._dyn_vao, self._dyn_vbo, self.prog_faces,
+                    self.prog_lines, self._tex, self._sky_vao, self._sky_vbo, self.prog_sky, self._sky_tex):
             if obj is not None:
                 obj.release()
 

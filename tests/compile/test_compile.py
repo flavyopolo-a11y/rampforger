@@ -86,6 +86,17 @@ def test_plan_launch_via_steam_and_exe(tmp_path):
     assert launch.program == prof.game_exe and launch.args[:2] == ["-game", prof.game_dir]
 
 
+def test_plan_builds_cubemaps_on_request(tmp_path):
+    prof = fake_profile(tmp_path)
+    prof.game_exe = str(tmp_path / "hl2.exe")
+    plan = build_plan(prof, vmf_file(tmp_path), CompileSettings(build_cubemaps=True))
+    launch = plan.steps[-1]
+    assert "-buildcubemaps" in launch.args and launch.args[-2:] == ["+map", "surf_test"]
+    assert any("Cubemaps" in n for n in plan.notes)
+    plain = build_plan(prof, vmf_file(tmp_path), CompileSettings()).steps[-1]
+    assert "-buildcubemaps" not in plain.args
+
+
 def test_plan_reports_missing_tools(tmp_path):
     prof = fake_profile(tmp_path)
     prof.bin_dir = str(tmp_path / "nirgends")

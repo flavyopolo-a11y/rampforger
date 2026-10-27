@@ -31,6 +31,11 @@ FOLDERS: tuple[Folder, ...] = (
     Folder("sonstiges", "Sonstiges", "entity"),
 )
 
+#: Was ein einzelnes Objekt eines Ordners ist (für die Anzeige der Auswahl)
+SINGULAR = {
+    "rampen": "Rampe", "welt": "Brush", "trigger": "Trigger", "spawns": "Spawn", "teleport": "Teleport-Ziel",
+    "lichter": "Licht", "props": "Prop", "brush_entities": "Brush-Entity", "sonstiges": "Entity",
+}
 LIGHTS = {"light", "light_spot", "light_environment", "light_dynamic", "point_spotlight", "env_projectedtexture"}
 #: Surf-Fläche: steiler als 44° (Normale z ≤ 0,72), aber nicht senkrecht
 RAMP_NZ = (0.1, 0.72)
@@ -109,6 +114,20 @@ class SceneIndex:
         return "rampen" if is_ramp_solid(obj) else "welt"
 
 
+def kind_of(doc: MapDocument, obj: MapObject) -> str:
+    """Art eines Objekts in Worten (Rampe, Brush, Licht …), wie der Szenen-Ordner es einteilt."""
+    if isinstance(obj, Entity):
+        if _plain_detail(obj):
+            return "Detail-Gruppe"
+        key = entity_folder(obj, bool(doc.children(obj.id)))
+    else:
+        parent = doc.get(obj.parent_id) if obj.parent_id is not None else None
+        if isinstance(parent, Entity) and not _plain_detail(parent) and not is_block_root(parent):
+            return f"Brush von {parent.classname}"
+        key = "rampen" if is_ramp_solid(obj) else "welt"
+    return SINGULAR[key]
+
+
 def members(doc: MapDocument, ids: list[int]) -> list[int]:
     """Einträge plus alles, was an ihnen hängt (Brushes von Entities, Clip-Hüllen)."""
     return list(ids) + [s.id for s in doc.attached(ids)]
@@ -120,6 +139,13 @@ def label(obj: MapObject) -> str:
         info = obj.extra.get("block")
         if isinstance(info, dict):
             return f"{info.get('template', 'Rampe')} #{obj.id}"
+        if obj.classname.lower() in LIGHTS and not name:
+            # Ohne Namen sehen alle Lichter gleich aus: Farbe und Helligkeit unterscheiden sie
+            light = obj.get("_light").split()
+            if len(light) >= 3:
+                rgb = " ".join(light[:3])
+                return f"{obj.classname} · {rgb}" + (f" · {light[3]}" if len(light) > 3 else "")
+            return obj.classname
         if obj.classname == "prop_static" or obj.classname.startswith("prop_"):
             model = obj.get("model").rsplit("/", 1)[-1]
             return f"{obj.classname} · {model}" if model else obj.classname
