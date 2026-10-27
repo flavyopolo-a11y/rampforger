@@ -154,6 +154,12 @@ passende Texturen und färbt die ganze Map oder nur die Auswahl in einem Undo-Sc
 Rampen bekommen die Farben automatisch. Der Haken „Playerclip auf Rampen“ (auch im Menü
 *Texturen*) schaltet die glatte Clip-Hülle für alle Rampen an oder aus.
 
+**Welt-Stile (Menü *Texturen*).** Sonniger Tag, Sonnenuntergang, Nacht, Wüste, Industrie oder
+Neon: Ein Klick setzt Himmel, Sonne, Nebel, Wand-Texturen und Rampenfarben der ganzen Map. Hat
+das Spiel passende CS:S- oder HL2-Texturen, werden die genommen, sonst erzeugt die Rampenschmiede
+sie. **Umfärben per Klick:** Im Seiten-Werkzeug färbt Strg+Shift+Klick das Material dieser Seite
+in der ganzen Map in das aktuelle Material um.
+
 **Eigene Texturen.** *Texturen → Bild als Textur importieren* macht aus PNG, JPG, TGA oder BMP
 ein Source-Material (VTF und VMT). *Texturen → Texturpakete* bindet eigene Ordner ein, die wie
 ein Spielordner einen Unterordner `materials` haben. Eigene Texturen werden beim Kompilieren
