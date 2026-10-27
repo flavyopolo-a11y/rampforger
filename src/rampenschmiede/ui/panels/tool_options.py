@@ -27,6 +27,7 @@ from ..icons import icon
 from ..tools.entity_tool import POINT_ENTITIES, EntityTool
 from ..tools.face_tool import FaceTool
 from ..tools.shape_tool import SHAPE_HINTS, SHAPES, ShapeTool
+from ..widgets.scope_switch import ScopeSwitch
 
 
 def _hint(text: str) -> QLabel:
@@ -88,6 +89,7 @@ class ToolOptionsPanel(QStackedWidget):
         self.face_info = QLabel()
         self.face_info.setWordWrap(True)
         lay.addWidget(self.face_info)
+        lay.addWidget(ScopeSwitch(self.editor))
         apply = QPushButton(self.tr("Aktuelles Material anwenden"))
         apply.setToolTip(self.tr("Die ausgewählten Seiten bekommen das Material aus dem Material-Browser"))
         apply.clicked.connect(lambda: tool.apply_material(self.editor.current_material))

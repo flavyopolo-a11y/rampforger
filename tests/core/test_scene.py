@@ -3,7 +3,7 @@ from rampenschmiede.core.blocks import build_block
 from rampenschmiede.core.commands import AddObjects, CommandStack, solids_from_faces
 from rampenschmiede.core.geometry import primitives
 from rampenschmiede.core.model import Entity, MapDocument
-from rampenschmiede.core.scene import SceneIndex, label, members
+from rampenschmiede.core.scene import SceneIndex, kind_of, label, members
 
 
 def _doc():
@@ -55,3 +55,20 @@ def test_members_include_brushes_and_labels():
     assert set(members(doc, [tele.id])) == {tele.id, *(s.id for s in doc.children(tele.id))}
     assert label(tele) == "trigger_teleport"
     assert label(root).startswith("gerade")
+
+
+def test_kind_of_says_what_an_object_is():
+    doc, floor, wedge, root, tele, ents = _doc()
+    assert kind_of(doc, floor) == "Brush"
+    assert kind_of(doc, root) == "Rampe"
+    assert kind_of(doc, tele) == "Trigger"
+    assert kind_of(doc, ents[2]) == "Licht"
+    trig_brush = next(s for s in doc.solids() if s.parent_id == tele.id)
+    assert kind_of(doc, trig_brush) == "Brush von trigger_teleport"
+
+
+def test_lights_without_name_show_color_and_brightness():
+    plain = Entity(id=1, classname="light", keyvalues=(("_light", "255 200 150 300"),))
+    assert label(plain) == "light · 255 200 150 · 300"
+    named = Entity(id=2, classname="light", keyvalues=(("_light", "255 200 150 300"), ("targetname", "lampe")))
+    assert label(named) == "light · lampe"

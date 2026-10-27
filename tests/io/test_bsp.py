@@ -2,7 +2,7 @@
 import pytest
 
 from rampenschmiede.core.io import bsp as bsp_io
-from rampenschmiede.core.io.bsp import BspError, load_bsp
+from rampenschmiede.core.io.bsp import BspError, extract_materials, load_bsp, original_material
 from rampenschmiede.core.model import Entity, Solid
 
 from .bsp_builder import build_bsp
@@ -86,3 +86,36 @@ def test_broken_file_reports_error(tmp_path):
 def test_imported_solids_are_solid_objects(opened):
     doc, _ = opened
     assert all(isinstance(s, Solid) and s.is_valid() for s in doc.solids())
+
+
+def test_cubemap_patched_materials_get_their_real_names():
+    assert original_material("MAPS/SURF_X/CONCRETE/WALL01_-128_256_64") == "CONCRETE/WALL01"
+    assert original_material("MAPS/SURF_X/NATURE/BLEND01_WVT_PATCH") == "NATURE/BLEND01"
+    assert original_material("MAPS/SURF_X/WATER/WATER01_DEPTH_128") == "WATER/WATER01"
+    assert original_material("CONCRETE/WALL01") == "CONCRETE/WALL01"
+    # Ohne Suffix bleibt der Name, wie er ist
+    assert original_material("MAPS/SURF_X/EIGENES") == "MAPS/SURF_X/EIGENES"
+
+
+def test_bsp_faces_use_unpatched_material(tmp_path):
+    path = build_bsp(tmp_path / "surf_patch.bsp", world_mat="maps/surf_patch/dev/dev_measuregeneric01_0_0_64")
+    doc, _ = load_bsp(path)
+    mats = {f.material for s in doc.solids() for f in s.faces}
+    assert "DEV/DEV_MEASUREGENERIC01" in mats
+    assert not any(m.startswith("MAPS/") for m in mats)
+
+
+def test_packed_materials_are_extracted(tmp_path):
+    path = build_bsp(tmp_path / "surf_pack.bsp", pack={
+        "materials/eigen/rampe.vmt": b'"LightmappedGeneric" { "$basetexture" "eigen/rampe" }',
+        "materials/eigen/rampe.vtf": b"VTF",
+        "materials/maps/surf_pack/eigen/rampe_0_0_0.vmt": b"patch",
+        "materials/maps/surf_pack/c0_0_0.vtf": b"cubemap",
+        "sound/musik.wav": b"RIFF",
+    })
+    target = tmp_path / "aus"
+    assert extract_materials(path, target) == 2
+    assert (target / "materials/eigen/rampe.vmt").read_bytes().startswith(b'"LightmappedGeneric"')
+    assert not (target / "materials/maps").exists() and not (target / "sound").exists()
+    # Ohne Pakfile: nichts
+    assert extract_materials(build_bsp(tmp_path / "leer.bsp"), tmp_path / "leer") == 0

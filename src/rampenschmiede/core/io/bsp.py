@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,6 +48,9 @@ _FALLBACK = {
     "WATER": "TOOLS/TOOLSNODRAW",
 }
 DETAIL_COLOR = (255, 200, 60)
+#: vbsp benennt Materialien um und packt sie in die BSP: in Reichweite einer env_cubemap als
+#: maps/<map>/<name>_x_y_z, für Displacement-Überblendungen <name>_wvt_patch, Wasser <name>_depth_n
+_PATCHED = re.compile(r"^MAPS/[^/]+/(?P<name>.+?)(?:_-?\d+_-?\d+_-?\d+|_WVT_PATCH|_DEPTH_-?\d+)$")
 #: Größe eines Displacement-Eintrags in der Datei (ddispinfo_t)
 DISPINFO_SIZE = 176
 
@@ -191,7 +195,7 @@ def _face(loop, texinfo, plane: Plane, fallback: str, offset) -> Face:
     if texinfo is None:
         u, v = default_tex_axes(plane.normal)
         return Face(points=points, material=fallback, uaxis=u, vaxis=v)
-    material = (texinfo.mat or fallback).upper().replace("\\", "/")
+    material = original_material((texinfo.mat or fallback).upper().replace("\\", "/"))
     u = _axis(texinfo.s_off, texinfo.s_shift, offset)
     v = _axis(texinfo.t_off, texinfo.t_shift, offset)
     if u is None or v is None:
@@ -200,6 +204,39 @@ def _face(loop, texinfo, plane: Plane, fallback: str, offset) -> Face:
     lm_len = math.sqrt(lm.x * lm.x + lm.y * lm.y + lm.z * lm.z)
     lightmapscale = max(1, round(1 / lm_len)) if lm_len > 1e-9 else 16
     return Face(points=points, material=material, uaxis=u, vaxis=v, lightmapscale=lightmapscale)
+
+
+def original_material(name: str) -> str:
+    """Name vor dem Umbenennen durch vbsp (siehe _PATCHED), sonst unverändert."""
+    hit = _PATCHED.match(name)
+    return hit.group("name") if hit else name
+
+
+def extract_materials(path: str | os.PathLike[str], target: str | os.PathLike[str]) -> int:
+    """In die BSP gepackte Materialien und Texturen nach target/materials/... auspacken, damit
+    Ansicht und Material-Browser sie finden (und sie beim Kompilieren wieder mitkommen).
+    Umbenannte Kopien und Cubemap-Bilder unter materials/maps/ bleiben weg. Gibt die Anzahl
+    der ausgepackten Dateien zurück."""
+    from srctools.bsp import BSP
+
+    try:
+        pak = BSP(Path(path)).pakfile
+    except Exception:  # noqa: BLE001 - beschädigter Pakfile-Lump: dann eben ohne
+        return 0
+    root = Path(target)
+    count = 0
+    for info in pak.infolist():
+        name = info.filename.replace("\\", "/")
+        low = name.lower()
+        if info.is_dir() or not low.startswith("materials/") or low.startswith("materials/maps/"):
+            continue
+        if not low.endswith((".vmt", ".vtf")) or ".." in Path(low).parts:
+            continue
+        out = root / low
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(pak.read(info))
+        count += 1
+    return count
 
 
 def _axis(vec, shift: float, offset) -> TexAxis | None:

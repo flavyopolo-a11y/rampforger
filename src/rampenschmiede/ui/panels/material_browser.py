@@ -35,9 +35,10 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.materials import MaterialLibrary, normalize
-from ...core.materials.apply import SCOPE_ALL, SCOPE_ONE, apply_to_objects, expand_scope
+from ...core.materials.apply import SCOPE_ALL, apply_to_objects, expand_scope
 from ...render.scene_mesh import material_color
 from ..editor import EditorContext
+from ..widgets.scope_switch import ScopeSwitch
 
 THUMB = 72
 FILTERS = (("all", "Alle"), ("favorites", "Favoriten"), ("map", "In dieser Map"), ("recent", "Zuletzt benutzt"),
@@ -45,7 +46,6 @@ FILTERS = (("all", "Alle"), ("favorites", "Favoriten"), ("map", "In dieser Map")
 MAX_RECENT = 40
 #: Material per Ziehen aus dem Browser in eine Ansicht
 MIME_MATERIAL = "application/x-rampenschmiede-material"
-SCOPES = ((SCOPE_ALL, "Alle Rampen"), (SCOPE_ONE, "Nur diese Rampe"))
 
 
 class _Bridge(QObject):
@@ -201,7 +201,12 @@ class MaterialBrowser(QWidget):
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
+        self.scope = ScopeSwitch(editor)
+        editor.set_material_scope(str(self.settings.value("material_scope", SCOPE_ALL)))
+        editor.material_scope_changed.connect(lambda k: self.settings.setValue("material_scope", k))
         top = QHBoxLayout()
+        top.addWidget(self.scope)
+        top.addSpacing(12)
         self.search = QLineEdit()
         self.search.setPlaceholderText(self.tr("Suchen … (z. B. concrete, brick, metal)"))
         self.search.setClearButtonEnabled(True)
@@ -257,19 +262,9 @@ class MaterialBrowser(QWidget):
         bottom.addWidget(self.preview)
         bottom.addWidget(self.current_label, 1)
         bottom.addWidget(self.fav_button)
-        self.scope = QComboBox()
-        for key, label in SCOPES:
-            self.scope.addItem(self.tr(label), key)
-        self.scope.setToolTip(self.tr(
-            "Alle Rampen: Eine Textur auf der Surf-Fläche oder den Seiten einer Rampe gilt für alle Rampen "
-            "und für neue. Nur diese Rampe: nur die eine, auf die du sie legst."))
-        self.scope.setCurrentIndex(max(0, self.scope.findData(self.settings.value("material_scope", SCOPE_ALL))))
-        self.scope.currentIndexChanged.connect(self._scope_changed)
-        bottom.addWidget(self.scope)
         bottom.addWidget(self.apply_button)
         lay.addLayout(bottom)
 
-        self._scope_changed()
         editor.materials_changed.connect(self.reload)
         editor.current_material_changed.connect(self._show_current)
         self.reload()
@@ -358,10 +353,6 @@ class MaterialBrowser(QWidget):
         else:
             self.editor.status_message.emit(self.tr("Erst Objekte oder Seiten auswählen"))
         return ok
-
-    def _scope_changed(self, *_args) -> None:
-        self.editor.material_scope = self.scope.currentData()
-        self.settings.setValue("material_scope", self.editor.material_scope)
 
     def remember(self, material: str) -> None:
         name = normalize(material)

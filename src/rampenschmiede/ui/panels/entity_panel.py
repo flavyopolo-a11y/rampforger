@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 from ...core.commands import ReplaceObjects
 from ...core.entities.fgd import EntityCatalog, EntityClass, KeyDef, builtin_catalog, flag_bits
 from ...core.entities.io import entities_named, incoming, target_names
+from ...core.lights import LIGHT_CLASSES
 from ...core.model import Entity, Output
 from ..editor import EditorContext
 
@@ -43,6 +44,8 @@ from ..editor import EditorContext
 LABEL_WIDTH = 120
 #: Keys, die das Auswahl-Panel über Position und Größe schon abdeckt
 GEOMETRY_KEYS = {"origin"}
+#: Lichter mit Richtung (bekommen den Knopf „In Blickrichtung ausrichten“)
+AIMED_LIGHTS = {"light_spot", "light_environment"}
 
 
 class ColorField(QWidget):
@@ -256,6 +259,16 @@ class EntityPanel(QWidget):
         self._editors = {}
         known: set[str] = set()
         names = target_names(self.editor.doc)
+        if ent.classname.lower() in LIGHT_CLASSES:
+            hint = QLabel(self.tr("Vorschau: 3D-Ansicht oben links auf „Licht-Vorschau“ stellen."))
+            hint.setWordWrap(True)
+            hint.setStyleSheet("color: #9aa0a6;")
+            form.addRow(hint)
+        if ent.classname.lower() in AIMED_LIGHTS:
+            aim = QPushButton(self.tr("In Blickrichtung der 3D-Kamera ausrichten"))
+            aim.setToolTip(self.tr("Schau in der 3D-Ansicht dorthin, wohin das Licht scheinen soll, und klick hier."))
+            aim.clicked.connect(self.aim_at_camera)
+            form.addRow(aim)
         for k in cls.keys if cls else ():
             if k.name.lower() in GEOMETRY_KEYS:
                 continue
@@ -296,6 +309,20 @@ class EntityPanel(QWidget):
         add_row.addWidget(add)
         form.addRow(add_row)
         self.props_area.setWidget(w)
+
+    def aim_at_camera(self) -> bool:
+        """Spot oder Sonne in die Richtung drehen, in die die 3D-Kamera schaut."""
+        ent = self.entity()
+        cam = getattr(self.editor, "camera3d", None)
+        if ent is None or cam is None:
+            return False
+        pitch, yaw = round(cam.pitch), round(cam.yaw) % 360
+        new = ent
+        for key, value in (("pitch", str(pitch)), ("angles", f"{pitch} {yaw} 0")):
+            new = new.with_keyvalue(_existing_key(new, key) or key, value)
+        if new != ent:
+            self._run(new, self.tr("Licht ausrichten"))
+        return True
 
     def _field(self, k: KeyDef, value: str, names: list[str]) -> QWidget:
         if k.kind == "boolean":

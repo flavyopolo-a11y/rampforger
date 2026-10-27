@@ -64,7 +64,8 @@ def _tree(brushes: list[Brush]) -> VisTree:
     return VisTree(Plane(Vec(0, 0, 1), 0), Vec(-4096, -4096, -4096), Vec(4096, 4096, 4096), [], 0, leaf, empty)
 
 
-def build_bsp(path: Path) -> Path:
+def build_bsp(path: Path, world_mat: str = "DEV/DEV_MEASUREGENERIC01", pack: dict[str, bytes] | None = None) -> Path:
+    """`world_mat`: Material des Bodens, `pack`: Dateien für den Pakfile-Lump (Name -> Inhalt)."""
     _empty_file(path)
     bsp = BSP(path)
     vmf = VMF()
@@ -76,7 +77,7 @@ def build_bsp(path: Path) -> Path:
     vmf.create_ent("light", origin="0 0 200", _light="255 255 255 200")
     bsp.ents = vmf
 
-    world = Brush(BrushContents.SOLID, _box_sides(bsp, (-512, -512, -64), (512, 512, 0), "DEV/DEV_MEASUREGENERIC01",
+    world = Brush(BrushContents.SOLID, _box_sides(bsp, (-512, -512, -64), (512, 512, 0), world_mat,
                                                   bevel=True))
     clip = Brush(BrushContents.PLAYER_CLIP, _box_sides(bsp, (0, 0, 0), (64, 64, 64), "TOOLS/TOOLSPLAYERCLIP"))
     ramp = Brush(BrushContents.SOLID | BrushContents.DETAIL, _ramp_sides(bsp, "DEV/DEV_MEASUREGENERIC01B"))
@@ -86,5 +87,7 @@ def build_bsp(path: Path) -> Path:
     models[vmf.spawn] = BModel(Vec(-512, -512, -64), Vec(512, 1024, 256), Vec(), _tree([world, clip, ramp]), [])
     models[trigger] = BModel(Vec(100, 100, 0), Vec(200, 200, 100), Vec(), _tree([trig]), [])
     bsp.bmodels = models
+    for name, data in (pack or {}).items():
+        bsp.pakfile.writestr(name, data)
     bsp.save()
     return path

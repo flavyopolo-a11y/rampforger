@@ -13,12 +13,14 @@ from ..core.entities.fgd import EntityCatalog, builtin_catalog, load_catalog
 from ..core.entities.io import io_segments
 from ..core.geometry import transform
 from ..core.geometry.transform import TransformError
+from ..core.lights import LightSet, collect_lights, gizmo_segments
 from ..core.materials import MaterialLibrary
 from ..core.materials.sizes import set_size_lookup
 from ..core.mathutil import BBox, Point
 from ..core.model import DEFAULT_MATERIAL, ChangeSet, MapDocument, MapObject, owner_id
 from ..core.templates.starter import grow_hull
 from ..render.scene_mesh import SceneMesh
+from ..render.sky import SkyCache, SkyImages
 from ..render.textures import TextureAtlas
 
 if TYPE_CHECKING:
@@ -56,6 +58,8 @@ class EditorContext(QObject):
     materials_changed = Signal()
     #: Aktuelles Material für neue Brushes und „Material anwenden“
     current_material_changed = Signal(str)
+    #: Gilt eine Rampen-Textur für alle Rampen oder nur eine ("alle"/"einer")?
+    material_scope_changed = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -79,6 +83,10 @@ class EditorContext(QObject):
         self.leak_points: list[Point] = []
         self._entity_fgds: list[str] = []
         self._entity_catalog: EntityCatalog | None = None
+        self._lights: LightSet | None = None
+        self.sky_cache = SkyCache()
+        #: Kamera der zuletzt gezeichneten 3D-Ansicht (setzt die Ansicht selbst)
+        self.camera3d = None
         self._hook_document()
 
     # ---- Dokument --------------------------------------------------------------
@@ -96,6 +104,7 @@ class EditorContext(QObject):
         self.import_path = import_path
         self.selection = frozenset()
         self.leak_points, self.leak_lines = [], None
+        self._lights = None
         self._hook_document()
         self.document_replaced.emit()
         self.selection_changed.emit()
@@ -120,8 +129,19 @@ class EditorContext(QObject):
                 self.status_message.emit(f"FGD-Dateien nicht lesbar, nutze eingebaute Entity-Liste ({exc})")
         return self._entity_catalog
 
+    def lights(self) -> LightSet:
+        """Lichter der Map für die Licht-Vorschau (nach jeder Änderung neu gelesen)."""
+        if self._lights is None:
+            self._lights = collect_lights(self.doc)
+        return self._lights
+
+    def sky_images(self) -> SkyImages | None:
+        """Bilder des eingestellten Himmels (skyname), None wenn das Spiel ihn nicht hat."""
+        return self.sky_cache.get(self.materials, self.doc.world_get("skyname"))
+
     def set_material_library(self, library: MaterialLibrary | None) -> None:
         self.materials = library
+        self.sky_cache.forget()
         self.atlas.set_library(library)
         set_size_lookup(_size_lookup(library))
         self.materials_changed.emit()
@@ -133,6 +153,11 @@ class EditorContext(QObject):
             self.materials.forget()
         self.set_material_library(self.materials)
 
+    def set_material_scope(self, scope: str) -> None:
+        if scope != self.material_scope:
+            self.material_scope = scope
+            self.material_scope_changed.emit(scope)
+
     def set_current_material(self, name: str) -> None:
         name = name.strip().upper()
         if name and name != self.current_material:
@@ -140,6 +165,7 @@ class EditorContext(QObject):
             self.current_material_changed.emit(name)
 
     def _on_doc_change(self, cs: ChangeSet) -> None:
+        self._lights = None
         if cs.removed & self.selection:
             self.set_selection(self.selection - cs.removed)
         self.document_changed.emit()
@@ -201,6 +227,13 @@ class EditorContext(QObject):
     def io_lines(self) -> np.ndarray | None:
         """Verbindungslinien der gewählten Entities (Ausgänge grün, Eingänge orange)."""
         segs = io_segments(self.doc, self.selection) if self.selection else []
+        if not segs:
+            return None
+        return np.asarray([[*p, *c] for a, b, c in segs for p in (a, b)], dtype=np.float32)
+
+    def light_lines(self) -> np.ndarray | None:
+        """Reichweite, Kegel und Sonnenrichtung der gewählten Lichter."""
+        segs = gizmo_segments(self.doc, self.selection) if self.selection else []
         if not segs:
             return None
         return np.asarray([[*p, *c] for a, b, c in segs for p in (a, b)], dtype=np.float32)

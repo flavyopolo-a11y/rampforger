@@ -40,6 +40,13 @@ def textures_dir() -> Path:
     return d
 
 
+def bsp_textures_dir(map_name: str) -> Path:
+    """Aus einer geöffneten BSP ausgepackte Materialien (Aufbau wie ein Spielordner)."""
+    d = data_dir() / "bsp_texturen" / map_name
+    (d / "materials").mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def compile_dir(project_path: Path | None, create: bool = True) -> Path:
     """Arbeitsordner fürs Kompilieren. Neben dem Projekt, damit nie eine fremde VMF
     überschrieben wird, in einem eigenen Unterordner."""

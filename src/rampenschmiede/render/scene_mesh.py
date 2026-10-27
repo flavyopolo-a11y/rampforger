@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core.blocks import is_block_root
+from ..core.lights import LIGHT_CLASSES, parse_color
 from ..core.model import (
     ChangeSet,
     Entity,
@@ -68,13 +69,19 @@ def material_color(material: str) -> tuple[float, float, float]:
     return colorsys.hls_to_rgb(h, 0.62, 0.35)
 
 
-def entity_color(classname: str) -> tuple[float, float, float]:
+def entity_color(classname: str, ent: Entity | None = None) -> tuple[float, float, float]:
+    """Lichter zeigen ihre eigene Lichtfarbe, damit man sie in der Map wiederfindet."""
+    if ent is not None and classname.lower() in LIGHT_CLASSES:
+        rgb, _ = parse_color(next((v for k, v in ent.keyvalues if k.lower() == "_light"), ""))
+        # Sehr dunkle Farben aufhellen, sonst verschwindet das Kästchen
+        peak = max(rgb) or 1.0
+        return (rgb[0] / peak, rgb[1] / peak, rgb[2] / peak) if peak < 1.0 else rgb
     return ENTITY_COLORS.get(classname, (0.85, 0.25, 0.85))
 
 
 @dataclass
 class ObjectMesh:
-    tris: np.ndarray   # (n, 12): Position, Normale, Farbe, UV, Textur-Ebene (0 = keine)
+    tris: np.ndarray   # (n, 12): Position, Normale, Farbe, UV, Textur-Ebene (0 = keine, ≤ -1 = Skybox, -0,25 = Entity)
     lines: np.ndarray  # (m, 3): Kanten als Linienpaare
     color2d: tuple[float, float, float]
     #: Kanten für die 3D-Ansicht (ohne Knicke in fast ebenen Flächen), (k, 3); None = wie `lines`
@@ -139,8 +146,10 @@ def _uv(face: Face, p, size: tuple[int, int]) -> tuple[float, float]:
 
 
 def _polygons_to_arrays(polys: list[tuple[tuple[float, float, float], list]], colors: list,
-                        textures: list | None = None) -> tuple[np.ndarray, np.ndarray]:
-    """textures: je Polygon (Face, Ebene, (Breite, Höhe)) oder None."""
+                        textures: list | None = None, sky: list[bool] | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """textures: je Polygon (Face, Ebene, (Breite, Höhe)) oder None. sky: je Polygon, ob es eine
+    Skybox-Fläche ist; deren Textur-Ebene wird als -Ebene - 1 gespeichert (der Shader zeigt dort den Himmel)."""
+    sky = sky or [False] * len(polys)
     tris: list[list[float]] = []
     lines: list[tuple[float, float, float]] = []
     for k, ((normal, poly), color) in enumerate(zip(polys, colors)):
@@ -152,6 +161,8 @@ def _polygons_to_arrays(polys: list[tuple[tuple[float, float, float], list]], co
                 else:
                     face, layer, size = tex
                     tris.append([*p, *normal, *color, *_uv(face, p, size), float(layer)])
+                if sky[k]:
+                    tris[-1][11] = -tris[-1][11] - 1.0
         for i in range(len(poly)):
             lines.append(poly[i])
             lines.append(poly[(i + 1) % len(poly)])
@@ -165,6 +176,9 @@ def _polygons_to_arrays(polys: list[tuple[tuple[float, float, float], list]], co
 SOFT_EDGE_DEG = 12.0
 _SOFT_COS = math.cos(math.radians(SOFT_EDGE_DEG))
 NODRAW = "TOOLS/TOOLSNODRAW"
+SKYBOX = "TOOLS/TOOLSSKYBOX"
+#: Textur-Ebene der Entity-Kästchen: der Shader beleuchtet sie in der Licht-Vorschau nicht
+MARKER_LAYER = -0.25
 
 
 def feature_edges(faces: list[Face], polys: list, hide_nodraw: bool = False) -> np.ndarray:
@@ -209,7 +223,7 @@ def feature_edges(faces: list[Face], polys: list, hide_nodraw: bool = False) -> 
 
 def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_part: bool = False) -> ObjectMesh | None:
     if isinstance(obj, Solid):
-        polys, colors, textures = [], [], []
+        polys, colors, textures, sky = [], [], [], []
         all_polys = obj.polygons()
         for face, poly in zip(obj.faces, all_polys):
             # Unsichtbare Seiten von Rampen liegen fast alle innen (Nähte zwischen Segmenten) und
@@ -219,19 +233,21 @@ def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_p
                 colors.append(material_color(face.material))
                 slot = atlas.slot(face.material) if atlas is not None else None
                 textures.append((face, slot.layer, (slot.width, slot.height)) if slot else None)
-        tris, lines = _polygons_to_arrays(polys, colors, textures)
+                sky.append(face.material.upper() == SKYBOX)
+        tris, lines = _polygons_to_arrays(polys, colors, textures, sky)
         c = obj.editor.color
         edges = feature_edges(list(obj.faces), all_polys, hide_nodraw=block_part)
         return ObjectMesh(tris, lines, (c[0] / 255, c[1] / 255, c[2] / 255), edges)
     bbox = object_bbox(obj)
     if bbox is None:
         return None
-    color = entity_color(obj.classname)
+    color = entity_color(obj.classname, obj)
     lo, hi = bbox.mins, bbox.maxs
     polys = []
     for normal, corners in _BOX_FACES:
         polys.append((normal, [tuple(lo[i] if c[i] == 0 else hi[i] for i in range(3)) for c in corners]))
     tris, lines = _polygons_to_arrays(polys, [color] * len(polys))
+    tris[:, 11] = MARKER_LAYER
     return ObjectMesh(tris, lines, color)
 
 

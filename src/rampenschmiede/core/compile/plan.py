@@ -96,6 +96,9 @@ def split_args(text: str) -> list[str]:
         return text.split()
 
 
+#: Startparameter zum Bauen der Cubemaps
+CUBEMAP_ARGS = ["-buildcubemaps", "+mat_specular", "0"]
+
 _NAME_RE = re.compile(r"[^A-Za-z0-9_\-]+")
 
 
@@ -157,8 +160,12 @@ def build_plan(profile: GameProfile, vmf_path: str | Path, settings: CompileSett
             targets.append(str(profile.maps_dir / "zones" / "local" / f"{plan.map_name}.json"))
         plan.steps.append(WriteStep("Momentum-Zonen", targets, momentum_zones))
     if settings.launch_game:
-        launch_args = [*split_args(profile.launch_args), *split_args(settings.extra_launch_args),
-                       "+map", plan.map_name]
+        launch_args = [*split_args(profile.launch_args), *split_args(settings.extra_launch_args)]
+        if settings.build_cubemaps:
+            # Spiegelungen ohne Glanz bauen (sonst spiegelt sich der Glanz mit), danach schließt das Spiel
+            launch_args += CUBEMAP_ARGS
+            plan.notes.append("Das Spiel baut die Cubemaps und schließt sich danach. Danach normal starten.")
+        launch_args += ["+map", plan.map_name]
         if profile.launch_via_steam and profile.steam_exe and profile.app_id:
             plan.steps.append(LaunchStep("Spiel starten", profile.steam_exe,
                                          ["-applaunch", str(profile.app_id), *launch_args]))

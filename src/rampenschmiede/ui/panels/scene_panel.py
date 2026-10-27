@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
@@ -15,6 +16,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...core.lights import LIGHT_CLASSES, parse_color
+from ...core.model import Entity
 from ...core.scene import FOLDERS, SceneIndex, label, members
 from .. import icons
 from ..editor import EditorContext
@@ -33,6 +36,7 @@ class ScenePanel(QWidget):
         self._center = center
         self._index = SceneIndex()
         self._folders: dict[str, list[int]] = {}
+        self._folder_of: dict[int, str] = {}
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
         self.tree = QTreeWidget()
@@ -74,6 +78,7 @@ class ScenePanel(QWidget):
     def refresh(self) -> None:
         doc = self.editor.doc
         self._folders = self._index.folders(doc)
+        self._folder_of = {oid: key for key, ids in self._folders.items() for oid in ids}
         for f in FOLDERS:
             item = self._items[f.key]
             ids = self._folders[f.key]
@@ -99,6 +104,8 @@ class ScenePanel(QWidget):
                 continue
             child = QTreeWidgetItem([label(obj), ""])
             child.setData(0, ID_ROLE, oid)
+            if isinstance(obj, Entity) and obj.classname.lower() in LIGHT_CLASSES:
+                child.setIcon(0, _swatch(obj))
             self._set_eye(child, obj.editor.hidden)
             item.addChild(child)
         if len(ids) > MAX_CHILDREN:
@@ -157,13 +164,36 @@ class ScenePanel(QWidget):
             self.editor.set_selection(ids)
 
     def _sync_selection(self) -> None:
+        """Auswahl in der Liste zeigen: Ordner der gewählten Objekte aufklappen, Einträge
+        markieren und zum ersten hinscrollen."""
+        if self._syncing:
+            return
         sel = self.editor.selection
         self._syncing = True
         try:
+            for key in {self._folder_of[i] for i in sel if i in self._folder_of}:
+                folder = self._items[key]
+                if not folder.isExpanded():
+                    folder.setExpanded(True)
+                    self._fill(folder)
+            first = None
             for item in self._items.values():
                 for k in range(item.childCount()):
                     child = item.child(k)
                     oid = child.data(0, ID_ROLE)
-                    child.setSelected(oid is not None and oid in sel)
+                    on = oid is not None and oid in sel
+                    child.setSelected(on)
+                    if on and first is None:
+                        first = child
+            if first is not None:
+                self.tree.scrollToItem(first)
         finally:
             self._syncing = False
+
+
+def _swatch(ent: Entity) -> QIcon:
+    """Kleines Farbfeld in der Lichtfarbe."""
+    rgb, _ = parse_color(ent.get("_light"))
+    pix = QPixmap(12, 12)
+    pix.fill(QColor(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)))
+    return QIcon(pix)
