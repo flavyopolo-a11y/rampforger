@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QObject, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QKeyEvent, QMouseEvent, QPainter, QPen
 
 from ...core.commands import AddObjects, solids_from_faces
@@ -31,6 +31,17 @@ SHAPES = {
 }
 
 DRAFT_COLOR = (1.0, 1.0, 1.0)
+SHAPE_HINTS = {
+    "block": "Quader. Der Grundbaustein für Böden, Wände und Plattformen.",
+    "wedge": "Keil mit schräger Oberseite, z. B. für Rampen zum Hochlaufen.",
+    "cylinder": "Säule mit einstellbarer Seitenzahl.",
+    "arch": "Bogen oder Ring aus Segmenten, mit Wandstärke.",
+    "stairs": "Treppe mit einstellbarer Stufenzahl.",
+}
+
+
+class _ShapeSignals(QObject):
+    shape_changed = Signal(str)
 
 
 @dataclass
@@ -55,10 +66,25 @@ class ShapeTool(Tool):
     def __init__(self, editor) -> None:
         super().__init__(editor)
         self.options = ShapeOptions()
+        self.signals = _ShapeSignals()
         self.draft: BBox | None = None
         self.last_box = BBox((0, 0, 0), (64, 64, 64))
         self._drag_start: tuple[float, float] | None = None
         self._drag_mode: str | None = None  # new | move
+
+    def set_shape(self, shape: str) -> None:
+        if shape in SHAPES and shape != self.options.shape:
+            self.options.shape = shape
+            self.signals.shape_changed.emit(shape)
+            self.editor.redraw_requested.emit()
+
+    def create_at(self, point: tuple[float, float, float]) -> bool:
+        """Form mit der zuletzt benutzten Größe an einem Punkt erstellen (Bibliothek, Ziehen)."""
+        size = self.last_box.size
+        snap = self.editor.snap
+        mins = (snap(point[0] - size[0] / 2), snap(point[1] - size[1] / 2), snap(point[2]))
+        self.draft = BBox(mins, tuple(m + d for m, d in zip(mins, size)))  # type: ignore[arg-type]
+        return self.create()
 
     # ---- 2D ---------------------------------------------------------------------
     def press_2d(self, vp: "Viewport", e: QMouseEvent) -> None:
