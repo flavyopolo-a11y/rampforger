@@ -25,6 +25,7 @@ from ..core.model import Entity, MapDocument, MapObject
 from ..core.profiles import ProfileStore, detect_profiles
 from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
 from ..core.validation.seal import describe as describe_seal
+from ..core.zones import collect_zones, momentum_zones, zone_problems
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
 from .dialogs.profiles_dialog import ProfilesDialog
@@ -675,6 +676,13 @@ class MainWindow(QMainWindow):
                 self.tr("Vorab-Prüfung: {0}. vbsp wird vermutlich ein Leck melden. "
                         "Tipp: Testen → Map mit Skybox umhüllen.").format(describe_seal(self.editor.doc, seal)),
                 Level.WARNING, position=seal.path[0] if seal.path else None))
+        zones = collect_zones(self.editor.doc)
+        for problem in zone_problems(zones):
+            warnings.append(LogLine(self.tr("Zonen: {0}").format(problem), Level.WARNING))
+        if zones and profile.key == "momentum" and momentum_zones(zones) is None:
+            warnings.append(LogLine(self.tr(
+                "Zonen: Ohne Start- und Zielzone der Hauptstrecke wird keine Momentum-Zonendatei geschrieben."),
+                Level.WARNING))
         started = self.compiler.start(profile, self.compile_settings, warnings)
         if started and not seal.sealed:
             self.editor.set_leak_path(seal.path)

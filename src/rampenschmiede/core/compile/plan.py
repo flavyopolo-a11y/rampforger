@@ -35,6 +35,14 @@ class CopyStep:
 
 
 @dataclass
+class WriteStep:
+    """Textdatei schreiben (z. B. Momentum-Zonen), an jedes Ziel dieselbe."""
+    label: str
+    targets: list[str]
+    text: str
+
+
+@dataclass
 class LaunchStep:
     label: str
     program: str
@@ -44,7 +52,7 @@ class LaunchStep:
         return " ".join(_quote(a) for a in [self.program, *self.args])
 
 
-Step = ToolStep | CopyStep | LaunchStep
+Step = ToolStep | CopyStep | WriteStep | LaunchStep
 
 
 @dataclass
@@ -86,7 +94,10 @@ def map_name_for(title: str) -> str:
     return name or "unbenannt"
 
 
-def build_plan(profile: GameProfile, vmf_path: str | Path, settings: CompileSettings) -> CompilePlan:
+def build_plan(profile: GameProfile, vmf_path: str | Path, settings: CompileSettings,
+               momentum_zones: str | None = None) -> CompilePlan:
+    """`momentum_zones`: Inhalt der Zonendatei. Nur bei Momentum-Profilen wird sie neben die
+    BSP und (beim Kopieren ins Spiel) nach maps/zones/local geschrieben."""
     vmf = Path(vmf_path).absolute()  # die Compiler laufen im VMF-Ordner, relative Pfade gingen ins Leere
     base = str(vmf.with_suffix(""))
     plan = CompilePlan(str(vmf), vmf.stem)
@@ -110,6 +121,11 @@ def build_plan(profile: GameProfile, vmf_path: str | Path, settings: CompileSett
     if settings.copy_to_game:
         target = profile.maps_dir / f"{plan.map_name}.bsp"
         plan.steps.append(CopyStep("Kopieren", plan.bsp_path, str(target)))
+    if momentum_zones and profile.key == "momentum":
+        targets = [str(vmf.with_suffix(".json"))]
+        if settings.copy_to_game:
+            targets.append(str(profile.maps_dir / "zones" / "local" / f"{plan.map_name}.json"))
+        plan.steps.append(WriteStep("Momentum-Zonen", targets, momentum_zones))
     if settings.launch_game:
         launch_args = [*split_args(profile.launch_args), *split_args(settings.extra_launch_args),
                        "+map", plan.map_name]

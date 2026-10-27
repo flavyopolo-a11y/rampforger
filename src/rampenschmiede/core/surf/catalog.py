@@ -495,6 +495,47 @@ _add(Template("teleporter", "Teleporter", "Bhop", "Trigger, der zum Ziel telepor
               build_trigger_box, check_angles=False, entity=teleport_entity))
 
 
+# ---- Zeitnahme-Zonen ------------------------------------------------------------------
+#
+# Zonen sind trigger_multiple mit Namen nach dem „mod_zone“-Standard, den bhoptimer und
+# andere CS:S-Timer automatisch erkennen. Für Momentum wird daraus beim Kompilieren eine
+# Zonendatei erzeugt (siehe core/zones.py).
+
+ZONE_PARAMS = (
+    Param("laenge", "Länge", 384, 32, 16384, 16, "u"),
+    Param("breite", "Breite", 384, 32, 16384, 16, "u"),
+    Param("hoehe", "Höhe", 128, 16, 4096, 16, "u"),
+)
+BONUS = Param("bonus", "Bonus-Nummer", 0, 0, 9, hint="0 = Hauptstrecke, 1–9 = Bonus")
+
+
+def zone_name(kind: str, bonus: int = 0, number: int = 0) -> str:
+    """targetname nach dem mod_zone-Standard (bhoptimer, Fly)."""
+    track = f"bonus_{bonus}_" if bonus else ""
+    if kind == "stage":
+        return f"mod_zone_{track}checkpoint_{number}"
+    return f"mod_zone_{track}{kind}"
+
+
+def _zone_entity(kind: str) -> Callable[[dict, Placement], tuple[str, tuple[tuple[str, str], ...]]]:
+    def entity(v: dict, at: Placement) -> tuple[str, tuple[tuple[str, str], ...]]:
+        name = zone_name(kind, v.get("bonus", 0), v.get("nummer", 0))
+        return "trigger_multiple", (("targetname", name), ("spawnflags", "1"), ("wait", "0"),
+                                    ("StartDisabled", "0"))
+    return entity
+
+
+_add(Template("zone_start", "Startzone", "Zonen", "Hier startet die Zeit, sobald man die Zone verlässt. "
+              "CS:S-Timer erkennen sie am Namen, für Momentum wird eine Zonendatei erzeugt.",
+              (*ZONE_PARAMS, BONUS), build_trigger_box, check_angles=False, entity=_zone_entity("start")))
+_add(Template("zone_ende", "Zielzone", "Zonen", "Hier stoppt die Zeit.",
+              (*ZONE_PARAMS, BONUS), build_trigger_box, check_angles=False, entity=_zone_entity("end")))
+_add(Template("zone_stage", "Stage-Zone", "Zonen", "Beginn einer Stage auf der Hauptstrecke. "
+              "Stage 1 ist die Startzone, die erste Stage-Zone ist also Stage 2.",
+              (*ZONE_PARAMS, Param("nummer", "Stage", 2, 2, 99)),
+              build_trigger_box, check_angles=False, entity=_zone_entity("stage")))
+
+
 # ---- Erzeugen ------------------------------------------------------------------------
 
 @dataclass

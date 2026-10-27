@@ -28,6 +28,7 @@ from ...core.compile import (
     CopyStep,
     LaunchStep,
     ToolStep,
+    WriteStep,
     preset,
 )
 from ...core.profiles import ProfileStore
@@ -214,6 +215,8 @@ class CompileDialog(QDialog):
                 lines.append(step.command_line())
             elif isinstance(step, CopyStep):
                 lines.append(f"copy {step.source} -> {step.target}")
+            elif isinstance(step, WriteStep):
+                lines += [f"{step.label} -> {t}" for t in step.targets]
         self.preview.setPlainText("\n".join(lines))
         if plan.problems:
             items = "".join(f"<li>{p}</li>" for p in plan.problems)
