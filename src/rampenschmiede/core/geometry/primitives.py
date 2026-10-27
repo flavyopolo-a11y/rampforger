@@ -91,11 +91,19 @@ def block(mins: Point, maxs: Point, material: str = DEFAULT_MATERIAL) -> list[tu
     return [faces] if faces else []
 
 
-def wedge(mins: Point, maxs: Point, material: str = DEFAULT_MATERIAL) -> list[tuple[Face, ...]]:
-    """Keil: volle Grundfläche, Schräge fällt von der -Y-Seite zur +Y-Seite ab."""
-    y0, y1, z0, z1 = _int(mins[1]), _int(maxs[1]), _int(mins[2]), _int(maxs[2])
-    outline = [(y0, z0), (y1, z0), (y0, z1)]  # in (y, z), extrudiert entlang x
-    faces = prism(outline, 0, _int(mins[0]), _int(maxs[0]), material)
+def wedge(mins: Point, maxs: Point, material: str = DEFAULT_MATERIAL,
+          high_side: Literal["-y", "+y", "-x", "+x"] = "-y") -> list[tuple[Face, ...]]:
+    """Keil: volle Grundfläche, die Schräge steigt zur Seite `high_side` hin an."""
+    x0, y0, z0 = (_int(c) for c in mins)
+    x1, y1, z1 = (_int(c) for c in maxs)
+    if high_side in ("-y", "+y"):
+        top_y = y0 if high_side == "-y" else y1
+        outline = [(y0, z0), (y1, z0), (top_y, z1)]  # in (y, z), extrudiert entlang x
+        faces = prism(outline, 0, x0, x1, material)
+    else:
+        top_x = x0 if high_side == "-x" else x1
+        outline = [(z0, x0), (z0, x1), (z1, top_x)]  # in (z, x), extrudiert entlang y
+        faces = prism(outline, 1, y0, y1, material)
     return [faces] if faces else []
 
 

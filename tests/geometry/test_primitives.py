@@ -50,11 +50,17 @@ def test_known_vmf_top_face_orientation():
     assert p.dist == pytest.approx(64)
 
 
-def test_wedge():
-    (faces,) = primitives.wedge((0, 0, 0), (64, 128, 64))
+@pytest.mark.parametrize("side", ["-y", "+y", "-x", "+x"])
+def test_wedge(side):
+    (faces,) = primitives.wedge((0, 0, 0), (64, 128, 32), high_side=side)
     s = check_solid(faces)
     assert len(s.faces) == 5
     assert len(s.vertices()) == 6
+    assert s.bbox().mins == (0, 0, 0) and s.bbox().maxs == (64, 128, 32)
+    top = [v for v in s.vertices() if v[2] == 32]
+    axis = 1 if side[1] == "y" else 0
+    edge = 0 if side[0] == "-" else (128 if axis == 1 else 64)
+    assert all(v[axis] == edge for v in top)
 
 
 @pytest.mark.parametrize("sides", [3, 4, 6, 8, 12, 16, 32])

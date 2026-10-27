@@ -11,7 +11,17 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ..model import EditorInfo, EditorState, Entity, Face, MapDocument, MapObject, Output, Solid, TexAxis
+from ..model import (
+    EditorInfo,
+    EditorState,
+    Entity,
+    Face,
+    MapDocument,
+    MapObject,
+    Output,
+    Solid,
+    TexAxis,
+)
 
 FORMAT_NAME = "rampenschmiede-map"
 SCHEMA_VERSION = 1

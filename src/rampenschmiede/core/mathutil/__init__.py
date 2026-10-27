@@ -1,4 +1,6 @@
 """Kleine Vektor- und Ebenenhilfen. Punkte sind Tupel (x, y, z), Berechnungen laufen mit numpy."""
+from .bbox import BBox
+from .plane import Plane
 from .vec import (
     EPSILON,
     Point,
@@ -12,8 +14,6 @@ from .vec import (
     scale,
     sub,
 )
-from .plane import Plane
-from .bbox import BBox
 
 __all__ = [
     "EPSILON",
