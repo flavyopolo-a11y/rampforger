@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
-from ..core.blocks import clone_objects
+from ..core.blocks import clone_objects, upgrade_roots
 from ..core.commands import AddObjects, Command, MacroCommand
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.cutting import carve_with
@@ -576,6 +576,7 @@ class MainWindow(QMainWindow):
             return self._import_vmf(path)
         try:
             doc = rsmap.load(path)
+            upgrade_roots(doc)
         except (OSError, rsmap.ProjectFormatError, KeyError, ValueError, TypeError) as exc:
             QMessageBox.critical(self, APP_NAME, self.tr("Datei konnte nicht geöffnet werden:\n{0}").format(exc))
             return False
