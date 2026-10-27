@@ -153,6 +153,9 @@ class FaceTool(Tool):
         else:
             self.set_faces([ref])
 
+    def cursor_3d(self, vp: "Viewport", pos) -> Qt.CursorShape:
+        return Qt.PointingHandCursor
+
     def key_press(self, vp: "Viewport", e: QKeyEvent) -> bool:
         if e.key() == Qt.Key_Escape and self.faces:
             self.clear()

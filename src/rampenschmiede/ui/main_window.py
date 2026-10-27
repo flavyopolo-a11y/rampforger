@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt, QTimer
+from PySide6.QtCore import QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QDialog,
@@ -13,8 +13,10 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QSizePolicy,
     QToolBar,
     QToolButton,
+    QWidget,
 )
 
 from .. import __version__
@@ -45,6 +47,7 @@ from .dialogs.surf_wizard import SurfWizard
 from .dialogs.texture_packs import TexturePacksDialog
 from .dialogs.transform_dialog import TransformDialog
 from .editor import EditorContext
+from .icons import ACTIVE, icon, pixmap
 from .panels.compile_log import CompileLogPanel
 from .panels.library_panel import LibraryPanel
 from .panels.material_browser import MaterialBrowser
@@ -59,6 +62,12 @@ from .tools.shape_tool import ShapeTool
 from .viewports.layout import ViewportGrid
 
 APP_NAME = "Rampenschmiede"
+#: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
+TOOLBAR_STYLE = """
+QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
+QToolButton:hover { background: rgba(255, 255, 255, 0.08); }
+QToolButton:checked { background: rgba(255, 140, 40, 0.25); border: 1px solid #ff8c28; color: #ffb070; }
+"""
 FILE_FILTER = "Rampenschmiede-Projekt (*.rsmap)"
 OPEN_FILTER = "Maps (*.rsmap *.vmf);;Rampenschmiede-Projekt (*.rsmap);;Hammer-Map (*.vmf)"
 VMF_FILTER = "Hammer-Map (*.vmf)"
@@ -120,6 +129,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.grid_view)
         self._build_docks()
         self._build_actions()
+        self._set_icons()
         self.material_browser.add_actions([self.act_ramp_assistant, None, self.act_import_texture,
                                            self.act_texture_packs])
         self._build_menus()
@@ -325,16 +335,42 @@ class MainWindow(QMainWindow):
         m.addAction(self.act_controls)
         m.addAction(self.act_about)
 
+    def _set_icons(self) -> None:
+        for action, name in ((self.act_new, "new"), (self.act_open, "open"), (self.act_save, "save"),
+                             (self.act_undo, "undo"), (self.act_redo, "redo"),
+                             (self.act_grid_finer, "grid_finer"), (self.act_grid_coarser, "grid_coarser"),
+                             (self.act_compile, "compile"), (self.act_expert, "expert"),
+                             (self.act_ramp_assistant, "palette")):
+            action.setIcon(icon(name))
+        for name, action in self.tool_actions.items():
+            action.setIcon(icon(name))
+
     def _build_toolbars(self) -> None:
         tb = QToolBar(self.tr("Datei"))
         tb.setObjectName("tb_file")
+        tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        tb.setIconSize(QSize(20, 20))
         for a in (self.act_new, self.act_open, self.act_save, None, self.act_undo, self.act_redo, None,
                   self.act_grid_finer, self.act_grid_coarser, None, self.act_compile, None, self.act_expert):
             tb.addSeparator() if a is None else tb.addAction(a)
+        for a in (self.act_grid_finer, self.act_grid_coarser):
+            tb.widgetForAction(a).setToolButtonStyle(Qt.ToolButtonIconOnly)
+        # Rechts oben: welches Werkzeug gerade aktiv ist
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        tb.addWidget(spacer)
+        self.mode_icon = QLabel()
+        self.mode_label = QLabel()
+        self.mode_label.setObjectName("modeLabel")
+        self.mode_label.setStyleSheet("#modeLabel { color: #ff8c28; font-weight: bold; padding-right: 8px; }")
+        tb.addWidget(self.mode_icon)
+        tb.addWidget(self.mode_label)
         self.addToolBar(Qt.TopToolBarArea, tb)
         tools = QToolBar(self.tr("Werkzeuge"))
         tools.setObjectName("tb_tools")
-        tools.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        tools.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        tools.setIconSize(QSize(28, 28))
+        tools.setStyleSheet(TOOLBAR_STYLE)
         for a in self.tool_actions.values():
             tools.addAction(a)
         self.addToolBar(Qt.LeftToolBarArea, tools)
@@ -384,6 +420,13 @@ class MainWindow(QMainWindow):
     def _on_tool_changed(self, name: str) -> None:
         if name in self.tool_actions:
             self.tool_actions[name].setChecked(True)
+        tool = self.editor.tools.get(name)
+        if tool is None:
+            return
+        self.mode_icon.setPixmap(pixmap(name, 20, ACTIVE))
+        self.mode_label.setText(self.tr("Werkzeug: {0}").format(self.tr(tool.label)))
+        self.mode_label.setToolTip(self.tr(tool.hint))
+        self.statusBar().showMessage(self.tr(tool.hint), 6000)
 
     def active_viewport(self):
         for vp in self.grid_view.viewports():
