@@ -25,6 +25,7 @@ from ...core.compile import (
     PRESETS,
     CompilePlan,
     CompileSettings,
+    CopyFilesStep,
     CopyStep,
     LaunchStep,
     ToolStep,
@@ -215,6 +216,8 @@ class CompileDialog(QDialog):
                 lines.append(step.command_line())
             elif isinstance(step, CopyStep):
                 lines.append(f"copy {step.source} -> {step.target}")
+            elif isinstance(step, CopyFilesStep):
+                lines.append(f"{step.label}: {len(step.files)} Dateien")
             elif isinstance(step, WriteStep):
                 lines += [f"{step.label} -> {t}" for t in step.targets]
         self.preview.setPlainText("\n".join(lines))

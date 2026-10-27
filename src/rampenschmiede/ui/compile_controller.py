@@ -20,6 +20,7 @@ from ..core.compile import (
     resolve,
 )
 from ..core.io.vmf import ExportResult, save_vmf
+from ..core.materials.authoring import pack_list
 from ..core.profiles import GameProfile
 from ..core.zones import collect_zones, momentum_zones
 from .editor import EditorContext
@@ -58,7 +59,10 @@ class CompileController(QObject):
         vmf = folder / f"{self.map_name()}.vmf"
         zones = momentum_zones(collect_zones(self.editor.doc))
         text = json.dumps(zones, indent=2) if zones else None
-        return build_plan(profile, vmf, settings, momentum_zones=text)
+        lib = self.editor.materials
+        used = {f.material for s in self.editor.doc.solids() for f in s.faces}
+        pack = pack_list(lib, used) if lib is not None else []
+        return build_plan(profile, vmf, settings, momentum_zones=text, pack_files=pack)
 
     def start(self, profile: GameProfile, settings: CompileSettings, notes: list[LogLine] | None = None) -> bool:
         """`notes` erscheinen nach dem Start oben im Log (z. B. Ergebnis der Vorab-Prüfung)."""
