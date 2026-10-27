@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
+    QDialog,
     QDockWidget,
     QFileDialog,
     QLabel,
@@ -18,10 +19,12 @@ from PySide6.QtWidgets import (
 
 from .. import __version__
 from ..core.blocks import clone_objects
-from ..core.commands import AddObjects
+from ..core.commands import AddObjects, Command, MacroCommand
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.io import rsmap, vmf
 from ..core.materials import MaterialLibrary
+from ..core.materials.authoring import import_image, ramp_material, wall_material
+from ..core.materials.theme import SetTheme, Theme, apply_collision, apply_theme, get_theme
 from ..core.model import Entity, MapDocument, MapObject
 from ..core.profiles import ProfileStore, detect_profiles
 from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
@@ -30,7 +33,16 @@ from ..core.zones import collect_zones, momentum_zones, zone_problems
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
 from .dialogs.profiles_dialog import ProfilesDialog
+from .dialogs.ramp_assistant import (
+    PRESETS,
+    AssistantChoice,
+    RampAssistant,
+    from_hex,
+    side_color,
+    to_hex,
+)
 from .dialogs.surf_wizard import SurfWizard
+from .dialogs.texture_packs import TexturePacksDialog
 from .dialogs.transform_dialog import TransformDialog
 from .editor import EditorContext
 from .panels.compile_log import CompileLogPanel
@@ -108,6 +120,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.grid_view)
         self._build_docks()
         self._build_actions()
+        self.material_browser.add_actions([self.act_ramp_assistant, None, self.act_import_texture,
+                                           self.act_texture_packs])
         self._build_menus()
         self._build_toolbars()
         self._build_statusbar()
@@ -120,6 +134,8 @@ class MainWindow(QMainWindow):
         ed.grid_changed.connect(lambda g: self.grid_label.setText(self.tr("Raster {0}").format(g)))
         ed.selection_changed.connect(self._update_selection_label)
         ed.tool_changed.connect(self._on_tool_changed)
+        ed.document_changed.connect(self._sync_ramp_clip)
+        ed.document_replaced.connect(self._sync_ramp_clip)
         self.compiler.started.connect(self._on_compile_started)
         self.compiler.finished.connect(self._on_compile_finished)
 
@@ -247,6 +263,17 @@ class MainWindow(QMainWindow):
         self.act_enclose = self._action("Map mit Skybox &umhüllen", self.enclose_with_skybox, None,
                                         "Legt eine dichte Skybox-Hülle um alles, was in der Map ist")
 
+        self.act_ramp_assistant = self._action("&Rampen-Assistent …", self.ramp_assistant, "Ctrl+Shift+R",
+                                               "Farben für Rampen, Linien und Wände wählen, den Rest macht die "
+                                               "Rampenschmiede")
+        self.act_ramp_clip = self._action("&Playerclip auf Rampen", self.set_ramp_clip, None,
+                                          "Glatte Playerclip-Hülle auf allen Rampen (empfohlen). Aus: Die Rampe "
+                                          "selbst ist die Kollision.", checkable=True)
+        self.act_import_texture = self._action("Bild als Textur &importieren …", self.import_texture, None,
+                                               "PNG, JPG, TGA oder BMP als eigenes Material übernehmen")
+        self.act_texture_packs = self._action("Textur&pakete …", self.edit_texture_packs, None,
+                                              "Eigene Ordner mit Materialien einbinden")
+
         self.act_controls = self._action("&Steuerung", self.show_controls, "F1")
         self.act_about = self._action("Ü&ber Rampenschmiede", self.show_about)
 
@@ -281,6 +308,11 @@ class MainWindow(QMainWindow):
         m = mb.addMenu(self.tr("&Werkzeuge"))
         for a in self.tool_actions.values():
             m.addAction(a)
+
+        m = mb.addMenu(self.tr("Te&xturen"))
+        for a in (self.act_ramp_assistant, self.act_ramp_clip, None, self.act_import_texture,
+                  self.act_texture_packs):
+            m.addSeparator() if a is None else m.addAction(a)
 
         m = mb.addMenu(self.tr("&Testen"))
         for a in (self.act_compile, self.act_compile_again, self.act_compile_cancel, None,
@@ -649,6 +681,83 @@ class MainWindow(QMainWindow):
         profile = self.profiles.active_profile()
         folders = [textures_dir(), *self.texture_packs()]
         self.editor.set_material_library(MaterialLibrary.for_game(profile.game_dir if profile else None, folders))
+
+    # ---- Texturen ---------------------------------------------------------------
+    def ramp_assistant(self) -> bool:
+        theme = get_theme(self.editor.doc)
+        c = theme.colors or {}
+        _, ramp, lines, wall = PRESETS[0]
+        start = AssistantChoice(from_hex(c.get("ramp", ""), ramp), from_hex(c.get("lines", ""), lines),
+                                from_hex(c.get("wall", ""), wall), clip=theme.collision == "clip")
+        dlg = RampAssistant(start, bool(self.editor.selection), self)
+        if dlg.exec() != QDialog.Accepted:
+            return False
+        return self.apply_ramp_colors(dlg.choice())
+
+    def apply_ramp_colors(self, choice: AssistantChoice) -> bool:
+        """Texturen aus den Farben erzeugen und die Map (oder die Auswahl) umfärben."""
+        root = textures_dir()
+        try:
+            ramp = ramp_material(root, choice.ramp, choice.lines).upper()
+            side = wall_material(root, side_color(choice.ramp)).upper()
+            wall = wall_material(root, choice.wall).upper() if choice.walls else ""
+        except OSError as exc:
+            QMessageBox.critical(self, APP_NAME, self.tr("Texturen konnten nicht gespeichert werden:\n{0}").format(exc))
+            return False
+        old = get_theme(self.editor.doc)
+        colors = {"ramp": to_hex(choice.ramp), "lines": to_hex(choice.lines), "wall": to_hex(choice.wall)}
+        applied = Theme(ramp, side, wall, "clip" if choice.clip else "detail", colors)
+        ids = sorted(self.editor.selection) if choice.only_selection else None
+        cmds: list[Command] = []
+        if choice.remember:
+            cmds.append(SetTheme(Theme(ramp, side, wall or old.wall, applied.collision, colors), "Rampenfarben"))
+        cmd = apply_theme(self.editor.doc, applied, ids)
+        if cmd is not None:
+            cmds.append(cmd)
+        self.editor.refresh_materials()
+        if cmds:
+            self.editor.run(MacroCommand(cmds, self.tr("Rampenfarben")))
+        self.library.refresh()
+        self.editor.set_current_material(ramp)
+        self.editor.status_message.emit(self.tr("Rampenfarben angewendet"))
+        return True
+
+    def set_ramp_clip(self, on: bool) -> None:
+        if (get_theme(self.editor.doc).collision == "clip") == on:
+            return
+        self.editor.run(apply_collision(self.editor.doc, "clip" if on else "detail"))
+        self.library.refresh()
+        self.editor.status_message.emit(
+            self.tr("Playerclip auf Rampen an") if on else self.tr("Playerclip auf Rampen aus"))
+
+    def _sync_ramp_clip(self) -> None:
+        on = get_theme(self.editor.doc).collision == "clip"
+        if self.act_ramp_clip.isChecked() != on:
+            self.act_ramp_clip.setChecked(on)
+
+    def import_texture(self, paths: list[str] | None = None) -> list[str]:
+        if not paths:
+            paths, _ = QFileDialog.getOpenFileNames(
+                self, self.tr("Bild als Textur importieren"), "",
+                self.tr("Bilder (*.png *.jpg *.jpeg *.tga *.bmp);;Alle Dateien (*)"))
+        names: list[str] = []
+        for path in paths:
+            try:
+                names.append(import_image(textures_dir(), path))
+            except (OSError, ValueError) as exc:
+                QMessageBox.warning(self, APP_NAME, self.tr("„{0}“ ließ sich nicht importieren:\n{1}").format(path, exc))
+        if names:
+            self.editor.refresh_materials()
+            self.editor.set_current_material(names[-1])
+            self.editor.status_message.emit(self.tr("{0} Textur(en) importiert, sie stehen unter „Eigene“").format(len(names)))
+        return names
+
+    def edit_texture_packs(self) -> bool:
+        dlg = TexturePacksDialog(self.texture_packs(), self)
+        if dlg.exec() != QDialog.Accepted:
+            return False
+        self.set_texture_packs(dlg.packs())
+        return True
 
     def _update_profile_label(self) -> None:
         p = self.profiles.active_profile()
