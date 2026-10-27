@@ -61,11 +61,14 @@ from .seal_watcher import SealWatcher
 from .tools.clip_tool import ClipTool, HoleTool
 from .tools.entity_tool import EntityTool
 from .tools.face_tool import FaceTool
+from .tools.paint_tool import PaintTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
 from .viewports.layout import ViewportGrid
 
 APP_NAME = "Rampenschmiede"
+#: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
+TOOL_ORDER = ("select", "paint", "shape", "entity", "face", "clip", "hole")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -175,6 +178,7 @@ class MainWindow(QMainWindow):
         self.lib_dock.setObjectName("dock_library")
         self.library = LibraryPanel(self.editor, self._insert_point)
         self.lib_dock.setWidget(self.library)
+        self.editor.register_tool(PaintTool(self.editor, self.library))
         self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
         # Ohne Mindestbreite drücken die Ansichten die Panels auf wenige Pixel zusammen.
         for dock in (self.tool_dock, self.sel_dock, self.lib_dock):
@@ -260,7 +264,8 @@ class MainWindow(QMainWindow):
 
         self.tool_group = QActionGroup(self)
         self.tool_actions: dict[str, QAction] = {}
-        for name, tool in ed.tools.items():
+        order = [n for n in TOOL_ORDER if n in ed.tools] + [n for n in ed.tools if n not in TOOL_ORDER]
+        for name, tool in ((n, ed.tools[n]) for n in order):
             a = self._action(tool.label, lambda _=False, n=name: ed.set_tool(n), tool.shortcut, tool.hint, True)
             self.tool_group.addAction(a)
             self.tool_actions[name] = a

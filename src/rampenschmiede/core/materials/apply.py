@@ -12,6 +12,7 @@ from ..blocks import MEMBER_KEY, block_info, change_block
 from ..commands import Command, MacroCommand, ReplaceObjects
 from ..model import Entity, Face, MapDocument, MapObject, Solid
 from ..surf.catalog import CATALOG
+from .theme import SetTheme, get_theme
 
 #: Seite eines Brushes: (Brush-ID, Index der Face)
 FaceRef = tuple[int, int]
@@ -74,6 +75,86 @@ def apply_to_objects(doc: MapDocument, ids: Iterable[int], material: str) -> Com
     return _combine(cmds, "Material anwenden")
 
 
+#: Wofür eine Material-Änderung an einem Baustein gilt
+SCOPE_ALL = "alle"     # alle Bausteine derselben Art (Rampen oder Bhop) und neue
+SCOPE_ONE = "einer"    # nur dieser Baustein
+
+
+def _family(template_key: str) -> str:
+    return "bhop" if CATALOG[template_key].category == "Bhop" else "rampe"
+
+
+def _same_family(doc: MapDocument, root: Entity) -> list[Entity]:
+    info = block_info(root)
+    assert info is not None
+    fam = _family(info["template"])
+    out = []
+    for obj in doc.objects():
+        if isinstance(obj, Entity) and (i := block_info(obj)) is not None and _family(i["template"]) == fam:
+            out.append(obj)
+    return out
+
+
+def face_role(doc: MapDocument, ref: FaceRef) -> tuple[Entity, str] | None:
+    """Baustein und Material-Regler, zu dem eine Seite gehört. Schräge Seiten sind die
+    Surf-Fläche, senkrechte und waagerechte die Seiten (Lippe, Enden, Boden)."""
+    solid = doc.get(ref[0])
+    if not isinstance(solid, Solid) or ref[1] >= len(solid.faces):
+        return None
+    root = _owner_block(doc, solid)
+    if root is None:
+        return None
+    info = block_info(root)
+    assert info is not None
+    keys = {p.key for p in CATALOG[info["template"]].params}
+    nz = abs(solid.faces[ref[1]].plane.normal[2])
+    slanted = 0.05 < nz < 0.95
+    if "mat_surf" in keys and (slanted or "mat_seite" not in keys):
+        return root, "mat_surf"
+    if "mat_seite" in keys:
+        return root, "mat_seite"
+    return None
+
+
+def apply_dropped(doc: MapDocument, ref: FaceRef, material: str, scope: str = SCOPE_ALL) -> Command | None:
+    """Material auf eine Seite fallen lassen. Bei Bausteinen gilt es für die Surf-Fläche oder
+    die Seiten, je nachdem, wo es landet: bei SCOPE_ALL für alle Rampen (bzw. alle Bhop-Blöcke)
+    und als Vorgabe für neue. Normale Brushes bekommen es auf alle Seiten außer Werkzeug-Texturen."""
+    material = material.upper()
+    role = face_role(doc, ref)
+    if role is None:
+        solid = doc.get(ref[0])
+        if not isinstance(solid, Solid) or MEMBER_KEY in solid.extra:
+            return None
+        new = _retexture(solid, lambda f: f if f.material.upper().startswith("TOOLS/")
+                         else dataclasses.replace(f, material=material))
+        return ReplaceObjects([new], "Material anwenden") if new.faces != solid.faces else None
+    root, key = role
+    roots = [root] if scope == SCOPE_ONE else _same_family(doc, root)
+    cmds: list[Command] = []
+    for r in roots:
+        keys = {p.key for p in CATALOG[block_info(r)["template"]].params}  # type: ignore[index]
+        if key in keys and (cmd := _block_command(doc, r, {key: material})) is not None:
+            cmds.append(cmd)
+    if scope != SCOPE_ONE:
+        theme = get_theme(doc)
+        fam = _family(block_info(root)["template"])  # type: ignore[index]
+        field = "wall" if fam == "bhop" else ("ramp" if key == "mat_surf" else "ramp_side")
+        cmds.insert(0, SetTheme(dataclasses.replace(theme, **{field: material}), "Material anwenden"))
+    return _combine(cmds, "Material anwenden")
+
+
+def expand_scope(doc: MapDocument, ids: Iterable[int], scope: str) -> list[int]:
+    """Bei SCOPE_ALL kommen zu ausgewählten Bausteinen alle derselben Art dazu."""
+    out = list(dict.fromkeys(ids))
+    if scope == SCOPE_ALL:
+        for oid in list(out):
+            obj = doc.get(oid)
+            if isinstance(obj, Entity) and block_info(obj) is not None:
+                out += [r.id for r in _same_family(doc, obj) if r.id not in out]
+    return out
+
+
 def edit_faces(doc: MapDocument, refs: Iterable[FaceRef], fn: Callable[[Face], Face],
                description: str = "Seiten bearbeiten", merge_key: object | None = None) -> Command | None:
     """`fn` auf einzelne Seiten anwenden. Seiten von Bausteinen können nur ihr Material
@@ -129,4 +210,5 @@ def replace_material(doc: MapDocument, old: str, new: str) -> Command | None:
     return edit_faces(doc, refs, lambda f: dataclasses.replace(f, material=new_u), "Material ersetzen")
 
 
-__all__ = ["FaceRef", "apply_to_objects", "edit_faces", "replace_material"]
+__all__ = ["SCOPE_ALL", "SCOPE_ONE", "FaceRef", "apply_dropped", "apply_to_objects", "edit_faces", "expand_scope",
+           "face_role", "replace_material"]
