@@ -55,3 +55,39 @@ def test_enclose_map_seals_open_map():
     assert check_seal(doc).sealed
     inner_lo = min(w.bbox().maxs[0] for w in hull)
     assert inner_lo <= 100 - 256
+
+
+def test_hull_grows_when_content_sticks_out_and_undo_restores():
+    from rampenschmiede.core.commands import AddObjects, CommandStack
+    from rampenschmiede.core.geometry import primitives
+    from rampenschmiede.core.model import MapDocument, Solid
+    from rampenschmiede.core.templates.starter import grow_hull, hull_parts, starter_room
+
+    doc = MapDocument()
+    doc._insert(starter_room(doc, "css"))
+    assert grow_hull(doc) is None  # leerer Startraum passt
+    stack = CommandStack(doc)
+    before = {k: s.bbox() for k, s in hull_parts(doc).items()}
+    block = Solid(id=doc.new_id(), faces=primitives.block((4000, 0, 0), (4600, 256, 4000))[0])
+    stack.push(AddObjects([block]))
+    stack.attach(grow_hull(doc))
+    parts = hull_parts(doc)
+    assert parts["+x"].bbox().mins[0] >= 4600 + 512
+    assert parts["decke"].bbox().mins[2] >= 4000 + 512
+    assert parts["-x"].bbox().maxs[0] == before["-x"].maxs[0]  # andere Seiten bleiben
+    assert parts["boden"].bbox().maxs[2] == 0  # Boden bleibt, wo er ist
+    assert grow_hull(doc) is None
+    stack.undo()
+    assert doc.get(block.id) is None
+    assert {k: s.bbox() for k, s in hull_parts(doc).items()} == before
+
+
+def test_hull_never_shrinks_and_ignores_missing_parts():
+    from rampenschmiede.core.model import MapDocument
+    from rampenschmiede.core.templates.starter import grow_hull, hull_parts, starter_room
+
+    doc = MapDocument()
+    doc._insert(starter_room(doc, "css"))
+    floor = hull_parts(doc)["boden"]
+    doc._remove([floor.id])
+    assert hull_parts(doc) is None and grow_hull(doc) is None

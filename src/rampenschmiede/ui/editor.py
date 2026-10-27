@@ -15,6 +15,7 @@ from ..core.materials import MaterialLibrary
 from ..core.materials.sizes import set_size_lookup
 from ..core.mathutil import BBox, Point
 from ..core.model import DEFAULT_MATERIAL, ChangeSet, MapDocument, MapObject, owner_id
+from ..core.templates.starter import grow_hull
 from ..render.scene_mesh import SceneMesh
 from ..render.textures import TextureAtlas
 
@@ -128,6 +129,11 @@ class EditorContext(QObject):
         except TransformError as exc:
             self.status_message.emit(str(exc))
             return False
+        # Die Hülle des Startraums wächst mit, im selben Undo-Schritt
+        grow = grow_hull(self.doc)
+        if grow is not None:
+            self.stack.attach(grow)
+            self.status_message.emit("Hülle vergrößert, damit alles hineinpasst")
         return True
 
     def undo(self) -> None:

@@ -79,6 +79,8 @@ kopiert. Die weißen Griffe skalieren; ein zweiter Klick auf die Auswahl schalte
 (15°-Schritte, mit Shift frei). Pfeiltasten verschieben um eine Rasterweite.
 In der 3D-Ansicht hat die Auswahl drei Pfeile (X rot, Y grün, Z blau): einen Pfeil greifen und
 ziehen verschiebt nur entlang dieser Achse, am Raster. Shift beim Greifen verschiebt eine Kopie.
+Am orangen Ring um die Auswahl dreht man sie um die Hochachse (15°-Schritte, mit Shift frei);
+Rampen bleiben dabei Bausteine mit Reglern.
 Exakte Zahlen: Panel „Auswahl“ oder **Strg+M** (Transformieren).
 
 **Entities (Shift+E).** Spawns (CT, T, Momentum), Punkt-, Spot- und Sonnenlicht sowie Cubemaps
@@ -95,7 +97,8 @@ setzen. Eigenschaften im Panel „Auswahl“ bearbeiten.
 | Strg+Shift+E | Als `.vmf` exportieren |
 
 **Startraum.** Jede neue Map beginnt mit einem Spawn (für CS:S CT und T, für Momentum
-`info_player_start`), einer Sonne und einer dichten Skybox-Hülle von 4096 × 4096 × 1024 Units.
+`info_player_start`), einer Sonne und einer dichten Skybox-Hülle von 8192 × 8192 × 3072 Units. Die Hülle wächst mit:
+Ragt etwas aus ihr heraus oder kommt ihr näher als 512 Units, wird sie im selben Undo-Schritt größer.
 F9 kompiliert also sofort ohne Leck. Die sechs Hüllen-Brushes sind normale Brushes: verschieben,
 vergrößern oder löschen. *Datei → Neu (leer)* startet ohne Inhalt, *Datei → Neue Maps mit
 Startraum* schaltet den Startraum ab.
