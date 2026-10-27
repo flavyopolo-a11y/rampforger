@@ -201,6 +201,18 @@ mit bspzip in die Map gepackt, sie läuft also auch bei anderen Spielern ohne Zu
 was Rampenschmiede noch nicht bearbeiten kann (Displacements, Gruppen, Visgroups, Kameras):
 Ein Export ergibt wieder dieselbe Map.
 
+**Fertige Maps (BSP) öffnen.** Eine `.bsp` einfach ins Fenster ziehen oder *Datei → BSP öffnen*.
+Die Brushes werden aus der kompilierten Map zurückgerechnet, mit Texturen, Entities, I/O,
+Triggern und statischen Props. Detail-Brushes landen gesammelt in einem `func_detail`.
+Displacements kommen als flache Brushes, Overlays und Detail-Sprites fehlen (das Kompilieren
+löscht sie). Kompilieren schreibt nie über die Original-BSP, sondern unter `…_bearbeitet`.
+Fremde Maps nur zum Ansehen und Lernen nutzen, nicht als eigene veröffentlichen.
+
+**Szene (Panel links, neben der Bibliothek).** Alle Objekte nach Ordnern: Rampen, Welt,
+Trigger, Spawns, Teleport-Ziele, Lichter, Props, Brush-Entities, Sonstiges. Das Auge blendet
+einen ganzen Ordner oder ein einzelnes Objekt aus und wieder ein (rückgängig machbar). Klick
+wählt aus, Doppelklick springt hin. Als Rampe zählt jeder Brush mit einer Fläche steiler als 44°.
+
 **Kompilieren und testen (F9).** Beim ersten Start sucht Rampenschmiede CS:S und Momentum Mod
 in allen Steam-Bibliotheken und legt dafür Spielprofile an (Menü *Testen → Spielprofile*, dort
 lässt sich alles von Hand anpassen). F9 öffnet den Dialog: Spiel und Qualität wählen, fertig.

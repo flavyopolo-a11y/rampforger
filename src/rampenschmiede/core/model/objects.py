@@ -119,7 +119,14 @@ class Solid:
         return is_valid_solid(self)
 
     def replace(self, **changes: Any) -> "Solid":
-        return dataclasses.replace(self, **changes)
+        new = dataclasses.replace(self, **changes)
+        if "faces" not in changes:
+            # Gleiche Seiten, gleiche Geometrie: Zwischenspeicher mitnehmen (z. B. beim Ausblenden
+            # tausender Brushes einer geöffneten BSP)
+            for key in ("_polys", "_bbox"):
+                if key in self.__dict__:
+                    object.__setattr__(new, key, self.__dict__[key])
+        return new
 
 
 @dataclass(frozen=True)
