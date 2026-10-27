@@ -1,26 +1,31 @@
 """Werkzeug-Optionen: zeigt passende Einstellungen für das aktive Werkzeug."""
 from __future__ import annotations
 
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
     QSpinBox,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from ...core.materials import texturing
 from ..editor import EditorContext
+from ..icons import icon
 from ..tools.entity_tool import POINT_ENTITIES, EntityTool
 from ..tools.face_tool import FaceTool
-from ..tools.shape_tool import SHAPES, ShapeTool
+from ..tools.shape_tool import SHAPE_HINTS, SHAPES, ShapeTool
 
 
 def _hint(text: str) -> QLabel:
@@ -183,10 +188,26 @@ class ToolOptionsPanel(QStackedWidget):
         w = QWidget()
         lay = QVBoxLayout(w)
         form = QFormLayout()
-        shape = QComboBox()
-        for key, label in SHAPES.items():
-            shape.addItem(self.tr(label), key)
-        form.addRow(self.tr("Form"), shape)
+        # Formen als Bilder zum Anklicken, wie die Rampen in der Bibliothek
+        gallery = QGridLayout()
+        gallery.setSpacing(4)
+        buttons = QButtonGroup(w)
+        buttons.setExclusive(True)
+        shape_buttons: dict[str, QToolButton] = {}
+        for i, (key, label) in enumerate(SHAPES.items()):
+            b = QToolButton()
+            b.setIcon(icon(f"shape_{key}"))
+            b.setIconSize(QSize(36, 36))
+            b.setText(self.tr(label))
+            b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            b.setCheckable(True)
+            b.setMinimumWidth(64)
+            b.setToolTip(self.tr(SHAPE_HINTS[key]))
+            b.clicked.connect(lambda _=False, k=key: tool.set_shape(k))
+            buttons.addButton(b)
+            gallery.addWidget(b, i // 3, i % 3)
+            shape_buttons[key] = b
+        lay.addLayout(gallery)
         material = QLineEdit(self.editor.current_material)
         material.setToolTip(self.tr("Material für alle Seiten. Im Material-Browser per Doppelklick wählen."))
         material.editingFinished.connect(lambda: self.editor.set_current_material(material.text()))
@@ -244,14 +265,13 @@ class ToolOptionsPanel(QStackedWidget):
             "stairs": {"steps", "stairs_dir"},
         }
 
-        def on_shape(_: int) -> None:
-            key = shape.currentData()
-            opts.shape = key
+        def on_shape(key: str) -> None:
+            shape_buttons[key].setChecked(True)
             for name, (_, widget) in rows.items():
                 form.setRowVisible(widget, name in visible[key])
 
-        shape.currentIndexChanged.connect(on_shape)
-        on_shape(0)
+        tool.signals.shape_changed.connect(on_shape)
+        on_shape(opts.shape)
         lay.addLayout(form)
         create = QPushButton(self.tr("Erstellen (Enter)"))
         create.clicked.connect(tool.create)
