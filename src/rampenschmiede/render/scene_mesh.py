@@ -15,7 +15,17 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..core.model import ChangeSet, Entity, MapDocument, MapObject, Solid, object_bbox, owner_id
+from ..core.model import (
+    ChangeSet,
+    Entity,
+    Face,
+    MapDocument,
+    MapObject,
+    Solid,
+    object_bbox,
+    owner_id,
+)
+from .textures import TextureAtlas
 
 # Werkzeug-Texturen bekommen feste, aus Hammer bekannte Farben.
 TOOL_COLORS = {
@@ -62,7 +72,7 @@ def entity_color(classname: str) -> tuple[float, float, float]:
 
 @dataclass
 class ObjectMesh:
-    tris: np.ndarray   # (n, 9): Position, Normale, Farbe
+    tris: np.ndarray   # (n, 12): Position, Normale, Farbe, UV, Textur-Ebene (0 = keine)
     lines: np.ndarray  # (m, 3): Kanten als Linienpaare
     color2d: tuple[float, float, float]
     _variants: dict | None = None
@@ -103,30 +113,49 @@ _BOX_FACES = [
 ]
 
 
-def _polygons_to_arrays(polys: list[tuple[tuple[float, float, float], list]], colors: list) -> tuple[np.ndarray, np.ndarray]:
+def _uv(face: Face, p, size: tuple[int, int]) -> tuple[float, float]:
+    """Texturkoordinate wie in Source: (Punkt · Achse / Skalierung + Verschiebung) / Texturgröße."""
+    u, v = face.uaxis, face.vaxis
+    su = u.scale or 1.0
+    sv = v.scale or 1.0
+    tu = (p[0] * u.x + p[1] * u.y + p[2] * u.z) / su + u.offset
+    tv = (p[0] * v.x + p[1] * v.y + p[2] * v.z) / sv + v.offset
+    return tu / size[0], tv / size[1]
+
+
+def _polygons_to_arrays(polys: list[tuple[tuple[float, float, float], list]], colors: list,
+                        textures: list | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """textures: je Polygon (Face, Ebene, (Breite, Höhe)) oder None."""
     tris: list[list[float]] = []
     lines: list[tuple[float, float, float]] = []
-    for (normal, poly), color in zip(polys, colors):
+    for k, ((normal, poly), color) in enumerate(zip(polys, colors)):
+        tex = textures[k] if textures else None
         for i in range(1, len(poly) - 1):
             for p in (poly[0], poly[i], poly[i + 1]):
-                tris.append([*p, *normal, *color])
+                if tex is None:
+                    tris.append([*p, *normal, *color, 0.0, 0.0, 0.0])
+                else:
+                    face, layer, size = tex
+                    tris.append([*p, *normal, *color, *_uv(face, p, size), float(layer)])
         for i in range(len(poly)):
             lines.append(poly[i])
             lines.append(poly[(i + 1) % len(poly)])
     return (
-        np.asarray(tris, dtype=np.float32).reshape(-1, 9),
+        np.asarray(tris, dtype=np.float32).reshape(-1, 12),
         np.asarray(lines, dtype=np.float32).reshape(-1, 3),
     )
 
 
-def build_object_mesh(obj: MapObject) -> ObjectMesh | None:
+def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None) -> ObjectMesh | None:
     if isinstance(obj, Solid):
-        polys, colors = [], []
+        polys, colors, textures = [], [], []
         for face, poly in zip(obj.faces, obj.polygons()):
             if poly:
                 polys.append((face.plane.normal, poly))
                 colors.append(material_color(face.material))
-        tris, lines = _polygons_to_arrays(polys, colors)
+                slot = atlas.slot(face.material) if atlas is not None else None
+                textures.append((face, slot.layer, (slot.width, slot.height)) if slot else None)
+        tris, lines = _polygons_to_arrays(polys, colors, textures)
         c = obj.editor.color
         return ObjectMesh(tris, lines, (c[0] / 255, c[1] / 255, c[2] / 255))
     bbox = object_bbox(obj)
@@ -145,15 +174,17 @@ def build_object_mesh(obj: MapObject) -> ObjectMesh | None:
 class SceneArrays:
     """Zusammengefügte Arrays für die GPU."""
 
-    faces: np.ndarray       # (n, 10): Position, Normale, Farbe, ausgewählt (0/1)
+    faces: np.ndarray       # (n, 13): Position, Normale, Farbe, UV, Textur-Ebene, ausgewählt (0/1)
     lines2d: np.ndarray     # (m, 6): Position, Farbe
     lines_sel: np.ndarray   # (k, 6): Kanten der Auswahl für die 3D-Ansicht
     version: int
 
 
 class SceneMesh:
-    def __init__(self, doc: MapDocument) -> None:
+    def __init__(self, doc: MapDocument, atlas: TextureAtlas | None = None) -> None:
         self.doc = doc
+        self.atlas = atlas
+        self._atlas_generation = atlas.generation if atlas else 0
         self._cache: dict[int, tuple[MapObject, ObjectMesh | None]] = {}
         self._selection: frozenset[int] = frozenset()
         self.version = next(_versions)
@@ -173,15 +204,23 @@ class SceneMesh:
             self._selection = ids
             self.version = next(_versions)
 
+    def textures_changed(self) -> None:
+        """Nach einem Wechsel der Material-Bibliothek alle Meshes neu bauen."""
+        self._cache.clear()
+        self.version = next(_versions)
+
     def _mesh(self, obj: MapObject) -> ObjectMesh | None:
         hit = self._cache.get(obj.id)
         if hit is not None and hit[0] is obj:
             return hit[1]
-        mesh = build_object_mesh(obj)
+        mesh = build_object_mesh(obj, self.atlas)
         self._cache[obj.id] = (obj, mesh)
         return mesh
 
     def arrays(self) -> SceneArrays:
+        if self.atlas is not None and self.atlas.generation != self._atlas_generation:
+            self._atlas_generation = self.atlas.generation
+            self.textures_changed()
         if self._arrays is not None and self._arrays.version == self.version:
             return self._arrays
         faces_unsel, faces_sel, lines_unsel, lines_sel2d, lines_sel3d = [], [], [], [], []
@@ -209,7 +248,7 @@ class SceneMesh:
             return np.concatenate(parts).astype(np.float32) if parts else np.zeros((0, width), dtype=np.float32)
 
         self._arrays = SceneArrays(
-            faces=cat(faces_unsel + faces_sel, 10),
+            faces=cat(faces_unsel + faces_sel, 13),
             lines2d=cat(lines_unsel + lines_sel2d, 6),
             lines_sel=cat(lines_sel3d, 6),
             version=self.version,

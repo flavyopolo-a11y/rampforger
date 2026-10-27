@@ -28,7 +28,7 @@ VIEW_TITLES = {
     "side": "Seite (X/Z)",
 }
 
-RENDER_MODES = {"shaded": "Schattiert", "flat": "Flach", "wireframe": "Drahtgitter"}
+RENDER_MODES = {"textured": "Texturiert", "shaded": "Schattiert", "flat": "Flach", "wireframe": "Drahtgitter"}
 
 FLY_KEYS = {Qt.Key_W, Qt.Key_A, Qt.Key_S, Qt.Key_D, Qt.Key_Q, Qt.Key_E}
 
@@ -38,7 +38,7 @@ class Viewport(QOpenGLWidget):
         super().__init__(parent)
         self.editor = editor
         self.view = view
-        self.render_mode = "shaded"
+        self.render_mode = "textured"
         self.cam3d = Camera3D.default()
         self.cam2d = Camera2D(view if view != "3d" else "top")
         self.ctx: moderngl.Context | None = None
@@ -113,7 +113,7 @@ class Viewport(QOpenGLWidget):
         painter.beginNativePainting()
         try:
             fbo = self.ctx.detect_framebuffer(self.defaultFramebufferObject())
-            self.renderer.sync(self.editor.scene.arrays())
+            self.renderer.sync(self.editor.scene.arrays(), self.editor.scene.atlas if self.is_3d else None)
             tool = self.editor.tool
             if self.is_3d:
                 extra = _join_lines(tool.lines_3d(self) if tool else None, self.editor.leak_lines)

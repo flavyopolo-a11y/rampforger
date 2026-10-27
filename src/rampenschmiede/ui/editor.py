@@ -11,9 +11,11 @@ from ..core.blocks import clone_objects, transform_command
 from ..core.commands import AddObjects, Command, CommandStack, RemoveObjects, ReplaceObjects
 from ..core.geometry import transform
 from ..core.geometry.transform import TransformError
+from ..core.materials import MaterialLibrary
 from ..core.mathutil import BBox, Point
-from ..core.model import ChangeSet, MapDocument, MapObject, owner_id
+from ..core.model import DEFAULT_MATERIAL, ChangeSet, MapDocument, MapObject, owner_id
 from ..render.scene_mesh import SceneMesh
+from ..render.textures import TextureAtlas
 
 if TYPE_CHECKING:
     from .tools.base import Tool
@@ -33,12 +35,19 @@ class EditorContext(QObject):
     redraw_requested = Signal()
     #: Eine Vorlage aus der Bibliothek wurde in eine Ansicht gezogen: (Schlüssel, Weltpunkt)
     template_dropped = Signal(str, object)
+    #: Neue Material-Bibliothek (anderes Spielprofil, neue eigene Texturen)
+    materials_changed = Signal()
+    #: Aktuelles Material für neue Brushes und „Material anwenden“
+    current_material_changed = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
         self.doc = MapDocument()
         self.stack = CommandStack(self.doc)
-        self.scene = SceneMesh(self.doc)
+        self.materials: MaterialLibrary | None = None
+        self.atlas = TextureAtlas()
+        self.current_material = DEFAULT_MATERIAL
+        self.scene = SceneMesh(self.doc, self.atlas)
         self.selection: frozenset[int] = frozenset()
         self.file_path: Path | None = None
         #: Woher eine importierte Map stammt (VMF), solange sie nicht als Projekt gespeichert ist
@@ -61,7 +70,7 @@ class EditorContext(QObject):
         self.scene.detach()
         self.doc = doc
         self.stack = CommandStack(doc)
-        self.scene = SceneMesh(doc)
+        self.scene = SceneMesh(doc, self.atlas)
         self.file_path = path
         self.import_path = import_path
         self.selection = frozenset()
@@ -72,6 +81,18 @@ class EditorContext(QObject):
         self.history_changed.emit()
         self.grid_changed.emit(self.doc.editor.grid_size)
         self.redraw_requested.emit()
+
+    def set_material_library(self, library: MaterialLibrary | None) -> None:
+        self.materials = library
+        self.atlas.set_library(library)
+        self.materials_changed.emit()
+        self.redraw_requested.emit()
+
+    def set_current_material(self, name: str) -> None:
+        name = name.strip().upper()
+        if name and name != self.current_material:
+            self.current_material = name
+            self.current_material_changed.emit(name)
 
     def _on_doc_change(self, cs: ChangeSet) -> None:
         if cs.removed & self.selection:

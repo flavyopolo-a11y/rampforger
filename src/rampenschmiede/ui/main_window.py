@@ -22,6 +22,7 @@ from ..core.commands import AddObjects
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.io import rsmap, vmf
 from ..core.model import Entity, MapDocument, MapObject
+from ..core.materials import MaterialLibrary
 from ..core.profiles import ProfileStore, detect_profiles
 from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
 from ..core.validation.seal import describe as describe_seal
@@ -36,7 +37,7 @@ from .panels.compile_log import CompileLogPanel
 from .panels.library_panel import LibraryPanel
 from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
-from .paths import profiles_file
+from .paths import profiles_file, textures_dir
 from .seal_watcher import SealWatcher
 from .tools.entity_tool import EntityTool
 from .tools.select_tool import SelectTool
@@ -97,6 +98,7 @@ class MainWindow(QMainWindow):
         self.compile_settings = self._load_compile_settings()
         self.compiler = CompileController(self.editor, self)
         self.seal = SealWatcher(self.editor, self)
+        self._reload_materials()
 
         self.grid_view = ViewportGrid(self.editor)
         self.setCentralWidget(self.grid_view)
@@ -617,6 +619,24 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             QMessageBox.critical(self, APP_NAME, self.tr("Spielprofile konnten nicht gespeichert werden:\n{0}").format(exc))
         self._update_profile_label()
+        self._reload_materials()
+
+    def texture_packs(self) -> list[str]:
+        """Eigene Texturpakete: Ordner mit materials/ darin, wie ein Spielordner."""
+        try:
+            packs = json.loads(self.settings.value("texture_packs", "[]"))
+        except (TypeError, ValueError):
+            packs = []
+        return [str(p) for p in packs if isinstance(p, str)]
+
+    def set_texture_packs(self, packs: list[str]) -> None:
+        self.settings.setValue("texture_packs", json.dumps(packs))
+        self._reload_materials()
+
+    def _reload_materials(self) -> None:
+        profile = self.profiles.active_profile()
+        folders = [textures_dir(), *self.texture_packs()]
+        self.editor.set_material_library(MaterialLibrary.for_game(profile.game_dir if profile else None, folders))
 
     def _update_profile_label(self) -> None:
         p = self.profiles.active_profile()
