@@ -77,6 +77,8 @@ geschnitten; dafür vorher *Baustein lösen*.
 leerer Fläche zieht einen Auswahlrahmen auf. Auswahl ziehen verschiebt am Raster, Shift+Ziehen
 kopiert. Die weißen Griffe skalieren; ein zweiter Klick auf die Auswahl schaltet auf Drehgriffe
 (15°-Schritte, mit Shift frei). Pfeiltasten verschieben um eine Rasterweite.
+In der 3D-Ansicht hat die Auswahl drei Pfeile (X rot, Y grün, Z blau): einen Pfeil greifen und
+ziehen verschiebt nur entlang dieser Achse, am Raster. Shift beim Greifen verschiebt eine Kopie.
 Exakte Zahlen: Panel „Auswahl“ oder **Strg+M** (Transformieren).
 
 **Entities (Shift+E).** Spawns (CT, T, Momentum), Punkt-, Spot- und Sonnenlicht sowie Cubemaps
