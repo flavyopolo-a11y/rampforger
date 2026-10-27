@@ -221,6 +221,11 @@ def from_dict(data: dict[str, Any]) -> MapDocument:
     return doc
 
 
+#: Einzelne Objekte (für Prefabs und die Zwischenablage)
+object_to_dict = _object
+object_from_dict = _read_object
+
+
 def load(path: str | os.PathLike[str]) -> MapDocument:
     try:
         with open(path, encoding="utf-8") as fh:

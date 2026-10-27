@@ -56,11 +56,12 @@ def starter_room(doc: MapDocument, game: str | None = None, half_size: int = 512
     return objs
 
 
-def enclose_map(doc: MapDocument, margin: int = 256, snap: int = 64) -> list[Solid]:
-    """Skybox-Hülle um alles, was in der Map ist, mit Abstand `margin`, auf `snap` gerundet."""
+def enclose_map(doc: MapDocument, margin: int = 256, snap: int = 64, bounds: BBox | None = None) -> list[Solid]:
+    """Skybox-Hülle um alles, was in der Map ist (oder um `bounds`), mit Abstand `margin`,
+    auf `snap` gerundet."""
     import math
 
-    bounds = doc.bbox()
+    bounds = bounds or doc.bbox()
     if bounds is None:
         bounds = BBox((0, 0, 0), (0, 0, 0))
     lo = tuple(int(math.floor((bounds.mins[i] - margin) / snap) * snap) for i in range(3))

@@ -42,3 +42,5 @@ werden vorher mit Flavio abgestimmt und hier mit „abgestimmt“ markiert.
 | E35 | 2026-10-27 | Verschieben behält den Baustein, Drehen um Z baut ihn aus den Reglern neu; Spiegeln, Skalieren und Kippen machen normale Brushes daraus | Freies Drehen Punkt für Punkt würde Nähte und ganze Zahlen zerstören |
 | E36 | 2026-10-27 | Surf-Winkel-Warnung unter 45° (begehbar) und über 65° (sehr steil), bei Halfpipe und Rohr aus | Unter 45° steht der Spieler; der flache Boden einer Rinne ist gewollt |
 | E37 | 2026-10-27 | Beim Drehen wird `angles` nur bei Punkt-Entities (mit `origin`) angepasst | Bei Brush-Entities würde `angles` das Modell im Spiel ein zweites Mal drehen |
+| E38 | 2026-10-27 | Assistent „Neue Surf-Map“ baut eine lineare Strecke entlang +X, um den Nullpunkt gelegt, mit Fall-Teleporter je Stage und dichter Hülle; zu große Maps werden vorher abgelehnt | Anfänger haben in einer Minute eine spielbare, kompilierbare Map; alles daran bleibt Baustein und damit änderbar |
+| E39 | 2026-10-27 | Eigene Prefabs als JSON im `.rsmap`-Objektformat im Datenordner (`prefabs/`), Anker = Mitte unten | Kein zweites Format; Bausteine bleiben in Prefabs parametrisch |

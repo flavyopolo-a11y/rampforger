@@ -8,7 +8,7 @@ spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 > Verschieben, Drehen, Skalieren, Undo/Redo, Speichern als `.rsmap`, VMF-Import und -Export
 > ohne Verluste, Kompilieren und Testen mit einem Tastendruck (F9) für CS:S und Momentum Mod,
 > Startraum mit Dicht-Prüfung, Rampen-Bibliothek mit 20 Vorlagen, deren Regler sich jederzeit
-> ändern lassen.
+> ändern lassen, eigene Prefabs und der Assistent „Neue Surf-Map“.
 
 ![Rampenschmiede, Etappe 3: Rampen-Bibliothek mit Reglern einer Kurve](docs/bilder/etappe3.png)
 
@@ -113,6 +113,17 @@ So baut die Bibliothek Rampen, damit es keine Rampbugs durch krumme Geometrie gi
   Alternativ im Regler *Kollision*: nur `func_detail`.
 - Unsichtbare Flächen (Nähte, Unterseite, aneinanderliegende Teile) bekommen Nodraw.
 
+**Eigene Prefabs.** Auswahl treffen, in der Bibliothek *Als Prefab speichern …*, Namen
+eingeben. Das Prefab erscheint unter *Eigene Prefabs* und lässt sich wie jede Vorlage einfügen
+oder hineinziehen; Bausteine darin behalten ihre Regler. Rechtsklick löscht ein Prefab.
+
+**Assistent „Neue Surf-Map“ (Strg+Shift+N).** Spiel, Zahl der Stages, Rampen pro Stage,
+Rampenart (Gerade, Ski, Banane, Welle, Trapez), Länge, Breite, Surf-Winkel, Lücke und
+Höhenstufe wählen. Heraus kommt eine lineare Surf-Map: Startplattform mit Spawn, Rampen, die
+nacheinander tiefer liegen, ein Fall-Teleporter unter jeder Stage zurück zu ihrem Anfang, eine
+Zielplattform, Sonne und eine dichte Skybox-Hülle. F9 testet sie sofort. Ist die Strecke zu lang
+für Source (über 32768 Units), sagt der Assistent das, bevor er etwas erzeugt.
+
 **Hammer-Maps.** „Öffnen“ liest `.rsmap` und `.vmf`. Beim Import bleibt alles erhalten, auch
 was Rampenschmiede noch nicht bearbeiten kann (Displacements, Gruppen, Visgroups, Kameras):
 Ein Export ergibt wieder dieselbe Map.
@@ -152,8 +163,11 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - Bei der Gabelung überlappen sich die beiden Äste am Anfang.
 - Die Playerclip-Brushes werden in den Ansichten nicht gezeichnet, weil sie genau auf den
   sichtbaren Teilen liegen.
-- Noch offen aus Etappe 3: Zonen je Spielprofil, Stage- und Spiel-Vorlagen, eigene Prefabs und
-  der Assistent „Neue Surf-Map“.
+- Noch offen aus Etappe 3: Zonen je Spielprofil (Start, Ende, Stages für den Timer). Dafür
+  muss erst geklärt werden, welches Zonenformat Momentum und die CS:S-Timer erwarten. Der
+  Assistent baut deshalb noch keine Zonen.
+- Der Assistent baut nur gerade Strecken; Kurven und Sprünge zwischen Stages kommen von Hand
+  aus der Bibliothek dazu.
 
 - Die Dicht-Prüfung arbeitet mit einem Raster (8 Units, bei großen Maps gröber). Spalte, die
   schmaler als eine Rasterzelle sind, findet nur vbsp.

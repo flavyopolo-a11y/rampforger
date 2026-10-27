@@ -21,13 +21,14 @@ from ..core.blocks import clone_objects
 from ..core.commands import AddObjects
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.io import rsmap, vmf
-from ..core.model import MapDocument, MapObject
+from ..core.model import Entity, MapDocument, MapObject
 from ..core.profiles import ProfileStore, detect_profiles
-from ..core.templates import enclose_map, starter_room
+from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
 from ..core.validation.seal import describe as describe_seal
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
 from .dialogs.profiles_dialog import ProfilesDialog
+from .dialogs.surf_wizard import SurfWizard
 from .dialogs.transform_dialog import TransformDialog
 from .editor import EditorContext
 from .panels.compile_log import CompileLogPanel
@@ -67,6 +68,12 @@ CONTROLS_HELP = """
 <tr><td>Strg+L / Strg+I</td><td>Spiegeln horizontal / vertikal (bezogen auf die aktive 2D-Ansicht)</td></tr>
 <tr><td>H / Strg+H / U</td><td>Auswahl ausblenden / Rest ausblenden / alles einblenden</td></tr>
 <tr><td>Enter / Esc</td><td>Form erstellen / Rahmen oder Auswahl verwerfen</td></tr>
+</table>
+<h3>Bibliothek</h3>
+<table>
+<tr><td>Doppelklick oder Ziehen in eine Ansicht</td><td>Vorlage oder Prefab einfügen</td></tr>
+<tr><td>Klick auf einen Baustein</td><td>Regler im Panel „Bibliothek“ ändern, sofort neu gebaut</td></tr>
+<tr><td>Strg+Shift+N</td><td>Assistent „Neue Surf-Map“</td></tr>
 </table>
 <h3>Testen</h3>
 <table>
@@ -160,6 +167,8 @@ class MainWindow(QMainWindow):
                                     "Neue Map, auf Wunsch mit Startraum (Spawn in dichter Skybox)")
         self.act_new_empty = self._action("Neu (&leer)", lambda: self.file_new(empty=True), "Ctrl+Alt+N",
                                           "Neue Map ganz ohne Inhalt")
+        self.act_surf_wizard = self._action("Neue S&urf-Map (Assistent) …", self.surf_wizard, "Ctrl+Shift+N",
+                                            "Spielbare Surf-Map aus Stages, Rampen und Teleportern erzeugen")
         self.act_starter = self._action("Neue Maps mit &Startraum", self._toggle_starter, None,
                                         "Neue Maps beginnen mit Spawn, Sonne und dichter Skybox-Hülle. "
                                         "So lässt sich sofort ohne Leck kompilieren.", checkable=True)
@@ -230,7 +239,7 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         mb = self.menuBar()
         m = mb.addMenu(self.tr("&Datei"))
-        for a in (self.act_new, self.act_new_empty, self.act_starter, self.act_open):
+        for a in (self.act_new, self.act_new_empty, self.act_surf_wizard, self.act_starter, self.act_open):
             m.addAction(a)
         self.recent_menu = m.addMenu(self.tr("&Zuletzt geöffnet"))
         self.recent_menu.aboutToShow.connect(self._fill_recent)
@@ -349,6 +358,32 @@ class MainWindow(QMainWindow):
     def file_new(self, empty: bool = False) -> None:
         if self._confirm_discard():
             self._new_document(empty)
+
+    def surf_wizard(self) -> None:
+        profile = self.profiles.active_profile()
+        dlg = SurfWizard(profile.key if profile else None, self)
+        if dlg.exec() and self._confirm_discard():
+            self.new_surf_map(dlg.settings())
+
+    def new_surf_map(self, settings: SurfMapSettings) -> bool:
+        doc = MapDocument()
+        try:
+            objs = new_surf_map(doc, settings)
+        except ValueError as exc:
+            QMessageBox.warning(self, self.tr("Neue Surf-Map"), str(exc))
+            return False
+        doc._insert(objs)
+        spawn = next((o.origin for o in objs if isinstance(o, Entity) and o.classname.startswith("info_player")
+                      and o.origin), None)
+        if spawn is not None:
+            # Hinter dem Spawn, Blick die Strecke entlang
+            doc.editor.camera_position = (spawn[0] - 256, spawn[1], spawn[2] + 160)
+            doc.editor.camera_angles = (0.0, -12.0)
+        self.editor.set_document(doc, None)
+        self._update_title()
+        QTimer.singleShot(0, self._center_2d_on_map)
+        self.statusBar().showMessage(self.tr("Surf-Map erzeugt: F9 zum Testen"), 5000)
+        return True
 
     def _starter_enabled(self) -> bool:
         return str(self.settings.value("new_map_starter", "true")).lower() in ("true", "1")

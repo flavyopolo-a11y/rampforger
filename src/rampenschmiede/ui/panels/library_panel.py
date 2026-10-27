@@ -7,6 +7,7 @@ ausgewählt ist, für diesen Baustein. Jede Änderung baut ihn sofort neu.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable
 
 from PySide6.QtCore import QMimeData, Qt, Signal
@@ -19,8 +20,11 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QMenu,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QTreeWidget,
@@ -38,7 +42,9 @@ from ...core.blocks import (
     placement_of,
 )
 from ...core.commands import AddObjects
+from ...core.io.rsmap import ProjectFormatError
 from ...core.model import Entity
+from ...core.prefabs import list_prefabs, load_prefab, make_prefab, place_prefab, save_prefab
 from ...core.surf.catalog import (
     CATALOG,
     Generated,
@@ -51,8 +57,10 @@ from ...core.surf.catalog import (
 )
 from ...core.surf.sweep import Materials
 from ..editor import EditorContext
+from ..paths import prefabs_dir
 
 MIME_TEMPLATE = "application/x-rampenschmiede-vorlage"
+PREFAB_PREFIX = "prefab:"
 OK_STYLE = "color: #3a3;"
 WARN_STYLE = "color: #d80; font-weight: bold;"
 
@@ -74,7 +82,7 @@ class _TemplateTree(QTreeWidget):
             return
         mime = QMimeData()
         mime.setData(MIME_TEMPLATE, key.encode("utf-8"))
-        mime.setText(CATALOG[key].name)
+        mime.setText(item.text(0))
         drag = QDrag(self)
         drag.setMimeData(mime)
         drag.exec(Qt.CopyAction)
@@ -144,6 +152,12 @@ class LibraryPanel(QWidget):
             item = QTreeWidgetItem(g, [self.tr(t.name)])
             item.setData(0, Qt.UserRole, t.key)
             item.setToolTip(0, self.tr(t.description))
+        self.prefab_group = QTreeWidgetItem(self.tree, [self.tr("Eigene Prefabs")])
+        self.prefab_group.setFlags(self.prefab_group.flags() & ~Qt.ItemIsDragEnabled)
+        self.prefab_group.setExpanded(True)
+        self.refresh_prefabs()
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._tree_menu)
         self.tree.currentItemChanged.connect(self._template_changed)
         self.tree.itemDoubleClicked.connect(lambda item, _col: self.insert_current() if item.data(0, Qt.UserRole) else None)
         lay.addWidget(self.tree, 2)
@@ -153,6 +167,10 @@ class LibraryPanel(QWidget):
         self.insert_btn.setToolTip(self.tr("In die Mitte der Ansicht von oben setzen. Oder die Vorlage in eine Ansicht ziehen."))
         self.insert_btn.clicked.connect(self.insert_current)
         row.addWidget(self.insert_btn)
+        self.save_btn = QPushButton(self.tr("Als Prefab speichern …"))
+        self.save_btn.setToolTip(self.tr("Die Auswahl als eigenes Prefab in der Bibliothek ablegen"))
+        self.save_btn.clicked.connect(lambda: self.save_selection_as_prefab())
+        row.addWidget(self.save_btn)
         lay.addLayout(row)
 
         self.box = QGroupBox()
@@ -180,9 +198,12 @@ class LibraryPanel(QWidget):
         self._sync_from_selection()
 
     # ---- Zustand ---------------------------------------------------------------------
-    def current_template(self) -> Template | None:
+    def current_key(self) -> str | None:
         item = self.tree.currentItem()
-        key = item.data(0, Qt.UserRole) if item else None
+        return item.data(0, Qt.UserRole) if item else None
+
+    def current_template(self) -> Template | None:
+        key = self.current_key()
         return CATALOG.get(key) if key else None
 
     def selected_block(self) -> Entity | None:
@@ -192,8 +213,7 @@ class LibraryPanel(QWidget):
         return obj if isinstance(obj, Entity) and is_block_root(obj) else None
 
     def _template_key(self) -> str | None:
-        t = self.current_template()
-        return t.key if t else None
+        return self.current_key()
 
     def _template_changed(self, *_args) -> None:
         if self.selected_block() is None:
@@ -228,7 +248,16 @@ class LibraryPanel(QWidget):
             at = None
             self.box.setTitle(self.tr("Vorlage: {0}").format(self.tr(template.name)) if template else "")
         self.dissolve_btn.setVisible(root is not None)
-        self.insert_btn.setEnabled(template is not None)
+        key = self.current_key()
+        self.insert_btn.setEnabled(template is not None or bool(key and key.startswith(PREFAB_PREFIX)))
+        if root is None and key and key.startswith(PREFAB_PREFIX):
+            self._clear_form()
+            item = self.tree.currentItem()
+            self.box.setTitle(self.tr("Prefab: {0}").format(item.text(0)))
+            self.description.setText(self.tr("Eigenes Prefab. Einfügen setzt es mit seiner Mitte unten an die Stelle. "
+                                             "Rechtsklick zum Löschen."))
+            self.angle_label.setText("")
+            return
         if template is None:
             self._clear_form()
             self.description.setText("")
@@ -341,11 +370,13 @@ class LibraryPanel(QWidget):
 
     # ---- Aktionen ----------------------------------------------------------------------
     def insert_current(self) -> None:
-        template = self.current_template()
-        if template is not None:
-            self.insert(template.key, self.view_center())
+        key = self.current_key()
+        if key:
+            self.insert(key, self.view_center())
 
     def insert(self, key: str, point: tuple[float, float, float], yaw: float = 0.0) -> int | None:
+        if key.startswith(PREFAB_PREFIX):
+            return self._insert_prefab(Path(key[len(PREFAB_PREFIX):]), point)
         template = CATALOG.get(key)
         if template is None:
             return None
@@ -359,6 +390,63 @@ class LibraryPanel(QWidget):
             self.editor.status_message.emit(" · ".join(self.tr(w) for w in gen.warnings))
         self.inserted.emit(objs[0].id)
         return objs[0].id
+
+    # ---- Eigene Prefabs ----------------------------------------------------------------
+    def refresh_prefabs(self) -> None:
+        self.prefab_group.takeChildren()
+        for name, path in list_prefabs(prefabs_dir()):
+            item = QTreeWidgetItem(self.prefab_group, [name])
+            item.setData(0, Qt.UserRole, PREFAB_PREFIX + str(path))
+            item.setToolTip(0, str(path))
+        if not self.prefab_group.childCount():
+            hint = QTreeWidgetItem(self.prefab_group, [self.tr("(Auswahl → „Als Prefab speichern“)")])
+            hint.setFlags(Qt.NoItemFlags)
+
+    def save_selection_as_prefab(self, name: str | None = None) -> Path | None:
+        ids = sorted(self.editor.selection)
+        if not ids:
+            self.editor.status_message.emit(self.tr("Erst etwas auswählen, dann als Prefab speichern"))
+            return None
+        if name is None:
+            name, ok = QInputDialog.getText(self, self.tr("Als Prefab speichern"), self.tr("Name:"))
+            if not ok or not name.strip():
+                return None
+        path = save_prefab(make_prefab(self.editor.doc, ids, name.strip()), prefabs_dir())
+        self.refresh_prefabs()
+        for i in range(self.prefab_group.childCount()):
+            child = self.prefab_group.child(i)
+            if child.data(0, Qt.UserRole) == PREFAB_PREFIX + str(path):
+                self.tree.setCurrentItem(child)
+        self.editor.status_message.emit(self.tr("Prefab „{0}“ gespeichert").format(name.strip()))
+        return path
+
+    def _insert_prefab(self, path: Path, point: tuple[float, float, float]) -> int | None:
+        try:
+            data = load_prefab(path)
+        except ProjectFormatError as exc:
+            self.editor.status_message.emit(str(exc))
+            return None
+        snap = self.editor.snap
+        objs, roots = place_prefab(self.editor.doc, data, (snap(point[0]), snap(point[1]), snap(point[2])))
+        if not objs or not self.editor.run(AddObjects(objs, self.tr("Prefab einfügen"))):
+            return None
+        self.editor.set_selection(roots)
+        return roots[0] if roots else None
+
+    def _tree_menu(self, pos) -> None:
+        item = self.tree.itemAt(pos)
+        key = item.data(0, Qt.UserRole) if item else None
+        if not key or not key.startswith(PREFAB_PREFIX):
+            return
+        menu = QMenu(self)
+        delete = menu.addAction(self.tr("Prefab löschen"))
+        if menu.exec(self.tree.viewport().mapToGlobal(pos)) is delete:
+            answer = QMessageBox.question(self, self.tr("Prefab löschen"),
+                                          self.tr("„{0}“ endgültig löschen?").format(item.text(0)),
+                                          QMessageBox.Yes | QMessageBox.No)
+            if answer == QMessageBox.Yes:
+                Path(key[len(PREFAB_PREFIX):]).unlink(missing_ok=True)
+                self.refresh_prefabs()
 
     def _dissolve(self) -> None:
         root = self.selected_block()

@@ -82,3 +82,38 @@ def test_duplicate_block_keeps_collision(window):
     assert len(roots) == 2
     for r in roots:
         assert len(ed.doc.attached([r.id])) == 2
+
+
+def test_surf_wizard_builds_sealed_map(window, qtbot):
+    from rampenschmiede.core.templates import SurfMapSettings
+    from rampenschmiede.ui.dialogs.surf_wizard import SurfWizard
+
+    dlg = SurfWizard("momentum")
+    dlg.stages.setValue(2)
+    settings = dlg.settings()
+    assert settings.game == "momentum" and settings.stages == 2
+    dlg.stages.setValue(12)
+    dlg.ramps.setValue(8)
+    assert not dlg.buttons.button(dlg.buttons.StandardButton.Ok).isEnabled()
+    dlg.close()
+
+    assert window.new_surf_map(SurfMapSettings(game="momentum", stages=2))
+    assert window.seal.check_now().sealed
+    assert window.editor.stack.is_clean()
+    assert any(o.classname == "info_player_start" for o in window.editor.doc.entities())
+
+
+def test_save_and_insert_own_prefab(window):
+    panel = window.library
+    panel.insert("gerade", (0, 0, 0))
+    path = panel.save_selection_as_prefab("Startrampe")
+    assert path is not None and path.exists()
+    assert panel.current_key() == "prefab:" + str(path)
+    window.editor.set_selection(())
+    assert panel.box.title() == "Prefab: Startrampe"
+    root = panel.insert(panel.current_key(), (0, 4096, 0))
+    ed = window.editor
+    assert ed.selection == {root}
+    roots = [o for o in ed.doc.objects() if isinstance(o, Entity)]
+    assert len(roots) == 2 and all(block_info(r) for r in roots)
+    assert ed.doc.bbox([root]).center[1] == 4096
