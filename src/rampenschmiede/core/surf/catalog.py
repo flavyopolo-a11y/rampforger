@@ -169,6 +169,15 @@ MATERIAL_PARAMS = (
     Param("unterseite_nodraw", "Unterseite unsichtbar (Nodraw)", True),
     Param("kollision", "Kollision", "clip", choices=(
         ("clip", "Playerclip + func_detail (empfohlen)"), ("detail", "Nur func_detail"))),
+    Param("textur", "Textur", "einpassen", choices=(
+        ("einpassen", "Quer über die Rampe einpassen"), ("raster", "Welt-Raster (wie Hammer)")),
+          hint="Einpassen: Die Textur geht quer genau einmal über die Surf-Fläche und läuft längs weiter"),
+    Param("textur_groesse", "Textur-Größe", 100, 10, 1000, 5, "%", only_if=("textur", "einpassen"),
+          hint="100 % = quer genau einmal. In der 3D-Ansicht: Seiten-Werkzeug, Alt+Ziehen"),
+    Param("textur_laengs", "Textur längs", 0, -8192, 8192, 8, "u", only_if=("textur", "einpassen"),
+          hint="Verschiebt die Textur entlang der Rampe. In der 3D-Ansicht: Seiten-Werkzeug, Ziehen"),
+    Param("textur_quer", "Textur quer", 0, -8192, 8192, 8, "u", only_if=("textur", "einpassen"),
+          hint="Verschiebt die Textur quer zur Rampe"),
 )
 
 
@@ -208,7 +217,10 @@ def profile_from(v: dict) -> Profile:
 def materials_from(v: dict) -> Materials:
     return Materials(surf=str(v.get("mat_surf", SURF_MATERIAL.default)).upper(),
                      side=str(v.get("mat_seite", SIDE_MATERIAL.default)).upper(),
-                     hide_bottom=bool(v.get("unterseite_nodraw", True)))
+                     hide_bottom=bool(v.get("unterseite_nodraw", True)),
+                     fit_surf=v.get("textur", "einpassen") == "einpassen",
+                     tex_size=float(v.get("textur_groesse", 100)) / 100,
+                     tex_shift=(float(v.get("textur_laengs", 0)), float(v.get("textur_quer", 0))))
 
 
 # ---- Wege ---------------------------------------------------------------------------

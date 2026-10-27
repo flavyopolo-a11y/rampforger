@@ -6,15 +6,22 @@ eine Folge von Gelenken: Position, Gierwinkel und optional ein eigener Querschni
 Querschnitt auf ganze Units gerundet; jedes Segment ist die konvexe Hülle aus zwei
 aufeinanderfolgenden Querschnitten. Weil beide Nachbarsegmente dieselben gerundeten
 Punkte benutzen, passen die Nähte exakt aufeinander.
+
+Surf-Flächen bekommen auf Wunsch eine eingepasste Textur: quer zur Rampe genau einmal
+(von der Oberkante bis zur Lippe), längs im gleichen Maßstab weiter, über alle Segmente
+einer Kurve ohne Sprung.
 """
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Sequence
 
-from ..model.objects import Face
+from ..geometry.brush import solid_polygons
+from ..materials.sizes import texture_size
+from ..model.objects import Face, TexAxis
 from .hull import IPoint, hull_faces
 
 Profile = list[list[tuple[float, float]]]  # konvexe Teile, je (quer, hoch)
@@ -40,6 +47,12 @@ class Materials:
     hidden: str = NODRAW
     #: Unterseite unsichtbar machen (bei Rampen, die auf dem Boden stehen oder nie von unten gesehen werden)
     hide_bottom: bool = True
+    #: Surf-Textur quer einpassen (sonst Welt-Raster wie bei normalen Brushes)
+    fit_surf: bool = False
+    #: Größe der eingepassten Textur, 1.0 = quer genau einmal
+    tex_size: float = 1.0
+    #: Verschiebung der eingepassten Textur in Units (längs, quer)
+    tex_shift: tuple[float, float] = (0.0, 0.0)
 
 
 @dataclass
@@ -118,6 +131,7 @@ class Sweep:
 
     def build(self) -> list[SweepPiece]:
         pieces: list[SweepPiece] = []
+        chains: dict = {}
         n = len(self.joints)
         rings = [self.joint_points(k) for k in range(n)]
         mats = self.materials
@@ -153,8 +167,83 @@ class Sweep:
 
                 faces = hull_faces([*start, *end], material_for)
                 if faces is not None:
+                    if mats.fit_surf:
+                        faces = self._fit_surf(faces, start_set, k, part, chains)
                     pieces.append(SweepPiece(faces, k, part))
         return pieces
+
+    def _fit_surf(self, faces: tuple[Face, ...], seam: set[IPoint], k: int, part: int,
+                  chains: dict) -> tuple[Face, ...]:
+        """Surf-Flächen eines Segments eingepasst texturieren: u längs der Rampe, v quer
+        hangabwärts. Ein Hang kann pro Segment aus mehreren Flächen bestehen, wenn das Runden
+        auf ganze Units ihn leicht knickt; sie bekommen dieselbe Abbildung und passen so
+        nahtlos. `chains` merkt sich je Hang (Profilteil und Seite) Maßstab und Abbildung des
+        vorigen Segments: An der Mitte der Naht läuft die Textur ohne Sprung weiter."""
+        mats = self.materials
+        polys = solid_polygons(faces)
+        a, b = self.joints[k], self.joints[k + 1]
+        travel = _unit((b.x - a.x, b.y - a.y, b.z - a.z))
+        left = (-math.sin(math.radians(a.yaw)), math.cos(math.radians(a.yaw)))
+        slopes: dict = {}
+        for i, (face, poly) in enumerate(zip(faces, polys)):
+            if face.material != mats.surf or not poly:
+                continue
+            n = _unit(face.plane.normal)
+            if abs(n[2]) > 0.999:
+                continue
+            key = (part, n[0] * left[0] + n[1] * left[1] > 0)
+            slopes.setdefault(key, []).append((i, n, poly))
+        out = list(faces)
+        for key, members in slopes.items():
+            n = _unit(tuple(sum(m[1][c] for m in members) for c in range(3)))
+            u = _unit(tuple(travel[c] - n[c] * _dot(travel, n) for c in range(3)))
+            v = _unit(_cross(n, u))
+            if v[2] > 0:
+                v = (-v[0], -v[1], -v[2])
+            points = [p for m in members for p in m[2]]
+            vs = [_dot(p, v) for p in points]
+            w, h = texture_size(mats.surf)
+            prev = chains.get(key)
+            # Maßstab einmal je Hang, damit alle Segmente gleich groß texturiert sind
+            scale = prev[4] if prev else round(max((max(vs) - min(vs)) / h * mats.tex_size, 0.01), 6)
+            seam_pts = [p for p in points if (round(p[0]), round(p[1]), round(p[2])) in seam] or points
+            mid = tuple(sum(p[c] for p in seam_pts) / len(seam_pts) for c in range(3))
+            if prev:
+                # Texturkoordinaten (in Units) an der Naht vom vorigen Segment übernehmen
+                at_u = _dot(mid, prev[0]) + prev[2]
+                at_v = _dot(mid, prev[1]) + prev[3]
+                off_u, off_v = at_u - _dot(mid, u), at_v - _dot(mid, v)
+            else:
+                off_u = mats.tex_shift[0] - _dot(mid, u)
+                off_v = mats.tex_shift[1] - min(vs)  # Oberkante = Texturrand
+            chains[key] = (u, v, off_u, off_v, scale)
+            uaxis = TexAxis(*_clean(u), _wrap(off_u / scale, w), scale)
+            vaxis = TexAxis(*_clean(v), _wrap(off_v / scale, h), scale)
+            for i, _n, _poly in members:
+                out[i] = dataclasses.replace(faces[i], uaxis=uaxis, vaxis=vaxis, rotation=0.0)
+        return tuple(out)
+
+
+def _dot(a, b) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _cross(a, b) -> tuple[float, float, float]:
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
+def _unit(v) -> tuple[float, float, float]:
+    n = math.sqrt(_dot(v, v))
+    return (v[0] / n, v[1] / n, v[2] / n) if n > 1e-12 else (0.0, 0.0, 0.0)
+
+
+def _clean(v) -> tuple[float, float, float]:
+    return tuple(0.0 if abs(c) < 1e-9 else round(c, 9) for c in v)  # type: ignore[return-value]
+
+
+def _wrap(offset: float, size: int) -> float:
+    r = round(offset % size, 4) if size else offset
+    return 0.0 if r == size else r
 
 
 def straight_joints(length: float, segments: int = 1, x: float = 0, y: float = 0, z: float = 0,
