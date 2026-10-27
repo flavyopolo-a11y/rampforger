@@ -83,8 +83,19 @@ Am orangen Ring um die Auswahl dreht man sie um die Hochachse (15°-Schritte, mi
 Rampen bleiben dabei Bausteine mit Reglern.
 Exakte Zahlen: Panel „Auswahl“ oder **Strg+M** (Transformieren).
 
-**Entities (Shift+E).** Spawns (CT, T, Momentum), Punkt-, Spot- und Sonnenlicht sowie Cubemaps
-setzen. Eigenschaften im Panel „Auswahl“ bearbeiten.
+**Entities (Shift+E).** Schnellauswahl für Spawns (CT, T, Momentum), Punkt-, Spot- und Sonnenlicht,
+Cubemap und Teleport-Ziel; über *Suche* jede andere Entity aus den FGD-Daten (eingebaut für CS:S
+und die anderen Source-Spiele, dazu die FGD-Dateien aus dem Spielprofil, z. B. von Momentum).
+Neue Entities bekommen die Standardwerte ihrer Klasse.
+
+**Entity-Eigenschaften (Panel „Auswahl“).** Klasse wählen oder tippen, darunter drei Reiter:
+*Eigenschaften* mit passenden Feldern (Auswahllisten, Häkchen, Farbwähler mit Helligkeit für
+Lichter, Namensliste für Ziele, Hilfetext beim Überfahren), Flags als Liste zum Abhaken und
+unbekannte Keys als Text. *Ausgänge* zeigt alle I/O-Verbindungen: Ausgang, Ziel, Eingang (die
+Liste passt sich der Zielklasse an), Parameter, Verzögerung und „nur einmal“; Ziele, die es in der
+Map nicht gibt, sind rot. *Eingänge* listet, wer diese Entity anspricht, Doppelklick springt hin.
+Bei gewählten Entities zeigen Linien in den Ansichten ihre Verbindungen: grün zu den Zielen,
+orange von den Auslösern.
 
 | Weitere Tasten | |
 | --- | --- |
@@ -268,7 +279,7 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - Momentum Mod: Kompilieren und Starten ist auf einem echten System getestet. Falls die
   Erkennung nichts findet, im Spielprofil die Pfade von Hand setzen.
 - Keine Texturen in der Ansicht: Flächen werden je Material einfarbig dargestellt (Etappe 4).
-- Entities nur aus einer festen Liste, Lichter ohne Vorschau (Etappe 5 und 6).
+- Lichter ohne Vorschau in den Ansichten (Etappe 6). Entity-Beschriftungen kommen englisch aus den FGD-Dateien.
 - Bei beliebigen Drehwinkeln liegen die Ebenenpunkte auf ganzen Units, einzelne Eckpunkte
   können aber krumm werden (siehe E11). Bei 90°-Schritten und allen Grundformen bleibt alles ganzzahlig.
 - Beim Laden sehr großer Maps (10'000 Brushes) dauert der erste Aufbau etwa 3 Sekunden;

@@ -2,24 +2,19 @@
 bei einer einzelnen Entity zusätzlich ihre Keyvalues."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
-    QPushButton,
     QSpinBox,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from ...core.commands import ReplaceObjects
 from ...core.model import Entity
 from ..editor import EditorContext
+from .entity_panel import EntityPanel
 
 LIMIT = 32768
 
@@ -60,24 +55,14 @@ class SelectionPanel(QWidget):
         lay.addWidget(box)
         self.geom_box = box
 
-        self.kv_box = QGroupBox(self.tr("Eigenschaften (Keyvalues)"))
+        self.kv_box = QGroupBox(self.tr("Entity"))
         kv_lay = QVBoxLayout(self.kv_box)
-        self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels([self.tr("Schlüssel"), self.tr("Wert")])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.verticalHeader().hide()
-        self.table.itemChanged.connect(self._kv_changed)
-        kv_lay.addWidget(self.table)
-        btns = QHBoxLayout()
-        add = QPushButton(self.tr("Hinzufügen"))
-        add.clicked.connect(self._kv_add)
-        rem = QPushButton(self.tr("Entfernen"))
-        rem.clicked.connect(self._kv_remove)
-        btns.addWidget(add)
-        btns.addWidget(rem)
-        kv_lay.addLayout(btns)
-        lay.addWidget(self.kv_box)
-        lay.addStretch(1)
+        kv_lay.setContentsMargins(4, 4, 4, 4)
+        self.entity_panel = EntityPanel(editor, lambda: editor.entity_catalog)
+        kv_lay.addWidget(self.entity_panel)
+        lay.addWidget(self.kv_box, 1)
+        self.stretch = QWidget()
+        lay.addWidget(self.stretch, 1)
 
         editor.selection_changed.connect(self.refresh)
         editor.document_changed.connect(self.refresh)
@@ -106,16 +91,8 @@ class SelectionPanel(QWidget):
                     self.size[i].setValue(max(1, round(bb.size[i])))
             ent = objs[0] if len(objs) == 1 and isinstance(objs[0], Entity) else None
             self.kv_box.setVisible(ent is not None)
-            self.table.setRowCount(0)
-            if ent is not None:
-                for k, v in ent.keyvalues:
-                    r = self.table.rowCount()
-                    self.table.insertRow(r)
-                    ki = QTableWidgetItem(k)
-                    if k in ("origin",):
-                        ki.setFlags(ki.flags() & ~Qt.ItemIsEditable)
-                    self.table.setItem(r, 0, ki)
-                    self.table.setItem(r, 1, QTableWidgetItem(v))
+            self.stretch.setVisible(ent is None)
+            self.entity_panel.show_entity(ent)
         finally:
             self._updating = False
 
@@ -140,42 +117,3 @@ class SelectionPanel(QWidget):
         if any(abs(f - 1.0) > 1e-9 for f in factors):
             self.editor.scale_selection(bb.mins, factors)  # type: ignore[arg-type]
             self.editor.stack.end_merge()
-
-    def _entity(self) -> Entity | None:
-        objs = self.editor.selected_objects()
-        return objs[0] if len(objs) == 1 and isinstance(objs[0], Entity) else None
-
-    def _kv_changed(self, _item: QTableWidgetItem) -> None:
-        if self._updating:
-            return
-        ent = self._entity()
-        if ent is None:
-            return
-        kvs = []
-        for r in range(self.table.rowCount()):
-            k = self.table.item(r, 0)
-            v = self.table.item(r, 1)
-            if k is not None and k.text().strip():
-                kvs.append((k.text().strip(), v.text() if v is not None else ""))
-        if tuple(kvs) != ent.keyvalues:
-            self.editor.run(ReplaceObjects([ent.replace(keyvalues=tuple(kvs))], self.tr("Eigenschaft ändern")))
-
-    def _kv_add(self) -> None:
-        ent = self._entity()
-        if ent is None:
-            return
-        n = 1
-        while ent.get(f"neu{n}"):
-            n += 1
-        self.editor.run(ReplaceObjects([ent.with_keyvalue(f"neu{n}", "")], self.tr("Eigenschaft hinzufügen")))
-
-    def _kv_remove(self) -> None:
-        ent = self._entity()
-        row = self.table.currentRow()
-        if ent is None or row < 0:
-            return
-        key = self.table.item(row, 0).text()
-        if key == "origin":
-            return
-        kvs = tuple(kv for kv in ent.keyvalues if kv[0] != key)
-        self.editor.run(ReplaceObjects([ent.replace(keyvalues=kvs)], self.tr("Eigenschaft entfernen")))

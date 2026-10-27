@@ -122,10 +122,10 @@ class Viewport(QOpenGLWidget):
             self.renderer.sync(self.editor.scene.arrays(), self.editor.scene.atlas if self.is_3d else None)
             tool = self.editor.tool
             if self.is_3d:
-                extra = _join_lines(tool.lines_3d(self) if tool else None, self.editor.leak_lines)
+                extra = _join_lines(tool.lines_3d(self) if tool else None, self.editor.leak_lines, self.editor.io_lines())
                 self.renderer.draw_3d(fbo, self.cam3d, w, h, self.render_mode, extra, pixels)
             else:
-                extra = _join_lines(tool.lines_2d(self) if tool else None, self.editor.leak_lines)
+                extra = _join_lines(tool.lines_2d(self) if tool else None, self.editor.leak_lines, self.editor.io_lines())
                 self.renderer.draw_2d(fbo, self.cam2d, w, h, self.editor.grid, extra, pixels)
             self.ctx.disable(moderngl.DEPTH_TEST)
         finally:
@@ -472,7 +472,7 @@ class Viewport(QOpenGLWidget):
 
 
 def _join_lines(*parts):
-    """Werkzeug-Linien und Leck-Spur in einen Puffer, leere Teile fallen weg."""
+    """Werkzeug-Linien, Leck-Spur und I/O-Linien in einen Puffer, leere Teile fallen weg."""
     present = [p for p in parts if p is not None and len(p)]
     if not present:
         return None

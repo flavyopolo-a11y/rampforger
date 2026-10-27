@@ -818,6 +818,7 @@ class MainWindow(QMainWindow):
         profile = self.profiles.active_profile()
         folders = [textures_dir(), *self.texture_packs()]
         self.editor.set_material_library(MaterialLibrary.for_game(profile.game_dir if profile else None, folders))
+        self.editor.set_entity_fgds(list(profile.fgds) if profile else [])
 
     # ---- Texturen ---------------------------------------------------------------
     def ramp_assistant(self) -> bool:

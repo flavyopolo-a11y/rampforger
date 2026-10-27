@@ -9,6 +9,8 @@ from PySide6.QtCore import QObject, Signal
 
 from ..core.blocks import clone_objects, transform_command
 from ..core.commands import AddObjects, Command, CommandStack, RemoveObjects, ReplaceObjects
+from ..core.entities.fgd import EntityCatalog, builtin_catalog, load_catalog
+from ..core.entities.io import io_segments
 from ..core.geometry import transform
 from ..core.geometry.transform import TransformError
 from ..core.materials import MaterialLibrary
@@ -75,6 +77,8 @@ class EditorContext(QObject):
         #: Leck-Spur aus der letzten .lin-Datei, als Linienpaare für die Ansichten
         self.leak_lines: np.ndarray | None = None
         self.leak_points: list[Point] = []
+        self._entity_fgds: list[str] = []
+        self._entity_catalog: EntityCatalog | None = None
         self._hook_document()
 
     # ---- Dokument --------------------------------------------------------------
@@ -98,6 +102,23 @@ class EditorContext(QObject):
         self.history_changed.emit()
         self.grid_changed.emit(self.doc.editor.grid_size)
         self.redraw_requested.emit()
+
+    def set_entity_fgds(self, paths: list[str]) -> None:
+        """FGD-Dateien des Spielprofils; die Entity-Liste wird beim nächsten Zugriff neu gelesen."""
+        if list(paths) != self._entity_fgds:
+            self._entity_fgds = list(paths)
+            self._entity_catalog = None
+
+    @property
+    def entity_catalog(self) -> EntityCatalog:
+        if self._entity_catalog is None:
+            existing = [p for p in self._entity_fgds if Path(p).is_file()]
+            try:
+                self._entity_catalog = load_catalog(existing)
+            except Exception as exc:  # kaputte FGD: eingebaute Liste reicht zum Arbeiten
+                self._entity_catalog = builtin_catalog()
+                self.status_message.emit(f"FGD-Dateien nicht lesbar, nutze eingebaute Entity-Liste ({exc})")
+        return self._entity_catalog
 
     def set_material_library(self, library: MaterialLibrary | None) -> None:
         self.materials = library
@@ -176,6 +197,13 @@ class EditorContext(QObject):
             self.scene.set_selection(sel)
             self.selection_changed.emit()
             self.redraw_requested.emit()
+
+    def io_lines(self) -> np.ndarray | None:
+        """Verbindungslinien der gewählten Entities (Ausgänge grün, Eingänge orange)."""
+        segs = io_segments(self.doc, self.selection) if self.selection else []
+        if not segs:
+            return None
+        return np.asarray([[*p, *c] for a, b, c in segs for p in (a, b)], dtype=np.float32)
 
     def selected_objects(self) -> list[MapObject]:
         return [o for i in sorted(self.selection) if (o := self.doc.get(i)) is not None]
