@@ -22,6 +22,8 @@ class ToolStep:
     program: str
     args: list[str]
     cwd: str
+    #: Zusätzliche Umgebungsvariablen (z. B. VPROJECT für bspzip)
+    env: dict[str, str] = field(default_factory=dict)
 
     def command_line(self) -> str:
         return " ".join(_quote(a) for a in [self.program, *self.args])
@@ -43,6 +45,13 @@ class WriteStep:
 
 
 @dataclass
+class CopyFilesStep:
+    """Mehrere Dateien kopieren (eigene Texturen ins Spiel, wenn bspzip fehlt)."""
+    label: str
+    files: list[tuple[str, str]]
+
+
+@dataclass
 class LaunchStep:
     label: str
     program: str
@@ -52,7 +61,7 @@ class LaunchStep:
         return " ".join(_quote(a) for a in [self.program, *self.args])
 
 
-Step = ToolStep | CopyStep | WriteStep | LaunchStep
+Step = ToolStep | CopyStep | WriteStep | CopyFilesStep | LaunchStep
 
 
 @dataclass
@@ -61,6 +70,8 @@ class CompilePlan:
     map_name: str
     steps: list[Step] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    #: Hinweise, die das Kompilieren nicht verhindern
+    notes: list[str] = field(default_factory=list)
 
     @property
     def bsp_path(self) -> str:
@@ -95,9 +106,11 @@ def map_name_for(title: str) -> str:
 
 
 def build_plan(profile: GameProfile, vmf_path: str | Path, settings: CompileSettings,
-               momentum_zones: str | None = None) -> CompilePlan:
+               momentum_zones: str | None = None, pack_files: list[tuple[str, str]] | None = None) -> CompilePlan:
     """`momentum_zones`: Inhalt der Zonendatei. Nur bei Momentum-Profilen wird sie neben die
-    BSP und (beim Kopieren ins Spiel) nach maps/zones/local geschrieben."""
+    BSP und (beim Kopieren ins Spiel) nach maps/zones/local geschrieben.
+    `pack_files`: eigene Dateien (Pfad in der BSP, Pfad auf der Platte), die per bspzip in
+    die BSP gepackt werden."""
     vmf = Path(vmf_path).absolute()  # die Compiler laufen im VMF-Ordner, relative Pfade gingen ins Leere
     base = str(vmf.with_suffix(""))
     plan = CompilePlan(str(vmf), vmf.stem)
@@ -115,6 +128,23 @@ def build_plan(profile: GameProfile, vmf_path: str | Path, settings: CompileSett
             plan.problems.append(f"{tool} nicht gefunden (Spielprofil prüfen)")
             continue
         plan.steps.append(ToolStep(tool.upper(), tool, str(program), [*game, *split_args(extra), base], cwd))
+    if pack_files and settings.run_vbsp:
+        bspzip = profile.tool_path("bspzip")
+        if bspzip is not None:
+            listfile = str(vmf.with_name(f"{vmf.stem}_packliste.txt"))
+            from ..materials.authoring import bspzip_list
+
+            plan.steps.append(WriteStep("Packliste", [listfile], bspzip_list(pack_files)))
+            # bspzip versteht -game nicht in allen Versionen an derselben Stelle, VPROJECT schon
+            plan.steps.append(ToolStep("BSPZIP", "bspzip", str(bspzip),
+                                       ["-addlist", plan.bsp_path, listfile, plan.bsp_path], cwd,
+                                       {"VPROJECT": profile.game_dir}))
+        else:
+            plan.notes.append("bspzip nicht gefunden: eigene Texturen werden nur ins Spiel kopiert, "
+                              "nicht in die Map gepackt")
+            if settings.copy_to_game:
+                plan.steps.append(CopyFilesStep("Eigene Texturen", [
+                    (outer, str(Path(profile.game_dir) / inner)) for inner, outer in pack_files]))
     if not (Path(profile.game_dir) / "gameinfo.txt").is_file():
         plan.problems.append("Spielordner mit gameinfo.txt fehlt (Spielprofil prüfen)")
 

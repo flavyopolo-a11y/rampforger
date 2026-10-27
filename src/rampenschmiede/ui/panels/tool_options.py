@@ -16,8 +16,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...core.materials import texturing
 from ..editor import EditorContext
 from ..tools.entity_tool import POINT_ENTITIES, EntityTool
+from ..tools.face_tool import FaceTool
 from ..tools.shape_tool import SHAPES, ShapeTool
 
 
@@ -36,6 +38,8 @@ class ToolOptionsPanel(QStackedWidget):
         self._add("select", self._select_page())
         self._add("shape", self._shape_page())
         self._add("entity", self._entity_page())
+        if "face" in editor.tools:
+            self._add("face", self._face_page())
         editor.tool_changed.connect(self._on_tool)
 
     def _add(self, name: str, page: QWidget) -> None:
@@ -70,6 +74,107 @@ class ToolOptionsPanel(QStackedWidget):
         lay.addStretch(1)
         return w
 
+    # ---- Seiten (Face-Editor) ------------------------------------------------------------
+    def _face_page(self) -> QWidget:
+        tool: FaceTool = self.editor.tools["face"]  # type: ignore[assignment]
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        self.face_info = QLabel()
+        self.face_info.setWordWrap(True)
+        lay.addWidget(self.face_info)
+        apply = QPushButton(self.tr("Aktuelles Material anwenden"))
+        apply.setToolTip(self.tr("Die ausgewählten Seiten bekommen das Material aus dem Material-Browser"))
+        apply.clicked.connect(lambda: tool.apply_material(self.editor.current_material))
+        lay.addWidget(apply)
+
+        form = QFormLayout()
+        fields: dict[str, QDoubleSpinBox | QSpinBox] = {}
+
+        def dspin(lo: float, hi: float, step: float, decimals: int, suffix: str = "") -> QDoubleSpinBox:
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setSingleStep(step)
+            sp.setDecimals(decimals)
+            sp.setSuffix(suffix)
+            sp.setKeyboardTracking(False)
+            return sp
+
+        fields["scale_u"] = dspin(0.01, 64, 0.05, 3)
+        fields["scale_v"] = dspin(0.01, 64, 0.05, 3)
+        fields["shift_u"] = dspin(-8192, 8192, 1, 1)
+        fields["shift_v"] = dspin(-8192, 8192, 1, 1)
+        fields["rotation"] = dspin(-360, 360, 15, 1, "°")
+        lm = QSpinBox()
+        lm.setRange(1, 128)
+        lm.setKeyboardTracking(False)
+        fields["lightmap"] = lm
+        for key, label in (("scale_u", "Skalierung X"), ("scale_v", "Skalierung Y"), ("shift_u", "Verschiebung X"),
+                           ("shift_v", "Verschiebung Y"), ("rotation", "Drehung"), ("lightmap", "Lightmap-Skalierung")):
+            form.addRow(self.tr(label), fields[key])
+        lay.addLayout(form)
+
+        def changed(key: str, value: float) -> None:
+            kw: dict = {
+                "scale_u": {"scale": (value, None)}, "scale_v": {"scale": (None, value)},
+                "shift_u": {"shift": (value, None)}, "shift_v": {"shift": (None, value)},
+                "rotation": {"rotation": value}, "lightmap": {"lightmapscale": int(value)},
+            }[key]
+            tool.edit(lambda f: texturing.set_values(f, **kw), self.tr("Textur ausrichten"),
+                      merge_key=("face", key, tuple(tool.faces)))
+
+        for key, field in fields.items():
+            field.valueChanged.connect(lambda v, k=key: changed(k, v))
+
+        just = QHBoxLayout()
+        for mode, label, tip in (("fit", "Einpassen", "Textur genau einmal auf die Seite strecken"),
+                                 ("left", "L", "Linke Kante bündig"), ("right", "R", "Rechte Kante bündig"),
+                                 ("top", "O", "Obere Kante bündig"), ("bottom", "U", "Untere Kante bündig"),
+                                 ("center", "M", "Mittig")):
+            b = QPushButton(self.tr(label))
+            b.setToolTip(self.tr(tip))
+            if len(label) == 1:
+                b.setFixedWidth(30)
+            b.clicked.connect(lambda _=False, m=mode: tool.per_face(
+                lambda f, poly, size: texturing.justify(f, poly, size, m), self.tr("Textur ausrichten")))
+            just.addWidget(b)
+        lay.addLayout(just)
+        align = QHBoxLayout()
+        world = QPushButton(self.tr("An Welt ausrichten"))
+        world.setToolTip(self.tr("Textur nach der Weltachse projizieren, wie bei neuen Brushes"))
+        world.clicked.connect(lambda: tool.edit(texturing.align_world, self.tr("An Welt ausrichten")))
+        face = QPushButton(self.tr("An Fläche ausrichten"))
+        face.setToolTip(self.tr("Textur liegt flach auf der Seite, gut für Rampen und Schrägen"))
+        face.clicked.connect(lambda: tool.edit(texturing.align_face, self.tr("An Fläche ausrichten")))
+        align.addWidget(world)
+        align.addWidget(face)
+        lay.addLayout(align)
+        lay.addWidget(_hint(self.tr(
+            "In der 3D-Ansicht: Klick wählt eine Seite, Strg+Klick ergänzt. Shift+Klick gibt einer Seite "
+            "sofort das aktuelle Material, Alt+Klick nimmt das Material einer Seite auf.")))
+        lay.addStretch(1)
+
+        def refresh() -> None:
+            sel = tool.selected()
+            for f in fields.values():
+                f.setEnabled(bool(sel))
+            if not sel:
+                self.face_info.setText(self.tr("Keine Seite ausgewählt"))
+                return
+            mats = {face.material for _r, face in sel}
+            self.face_info.setText(self.tr("{0} Seite(n): {1}").format(
+                len(sel), mats.pop() if len(mats) == 1 else self.tr("verschiedene Materialien")))
+            f0 = sel[0][1]
+            values = {"scale_u": f0.uaxis.scale, "scale_v": f0.vaxis.scale, "shift_u": f0.uaxis.offset,
+                      "shift_v": f0.vaxis.offset, "rotation": f0.rotation, "lightmap": f0.lightmapscale}
+            for key, field in fields.items():
+                field.blockSignals(True)
+                field.setValue(values[key])
+                field.blockSignals(False)
+
+        tool.signals.faces_changed.connect(refresh)
+        refresh()
+        return w
+
     # ---- Formen -------------------------------------------------------------------------
     def _shape_page(self) -> QWidget:
         tool: ShapeTool = self.editor.tools["shape"]  # type: ignore[assignment]
@@ -81,9 +186,10 @@ class ToolOptionsPanel(QStackedWidget):
         for key, label in SHAPES.items():
             shape.addItem(self.tr(label), key)
         form.addRow(self.tr("Form"), shape)
-        material = QLineEdit(opts.material)
-        material.setToolTip(self.tr("Material für alle Seiten. Der Material-Browser folgt in Etappe 4."))
-        material.editingFinished.connect(lambda: setattr(opts, "material", material.text().strip().upper() or opts.material))
+        material = QLineEdit(self.editor.current_material)
+        material.setToolTip(self.tr("Material für alle Seiten. Im Material-Browser per Doppelklick wählen."))
+        material.editingFinished.connect(lambda: self.editor.set_current_material(material.text()))
+        self.editor.current_material_changed.connect(material.setText)
         form.addRow(self.tr("Material"), material)
 
         def spin(value: int, lo: int, hi: int, attr: str, tip: str) -> QSpinBox:

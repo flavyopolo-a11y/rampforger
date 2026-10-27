@@ -49,6 +49,9 @@ class Tool:
     def cursor_2d(self, vp: "Viewport", pos: QPointF) -> Qt.CursorShape:
         return Qt.ArrowCursor
 
+    def cursor_3d(self, vp: "Viewport", pos: QPointF) -> Qt.CursorShape:
+        return Qt.ArrowCursor
+
     # Zeichnen
     def lines_2d(self, vp: "Viewport") -> np.ndarray | None:
         return None

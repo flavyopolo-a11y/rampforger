@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Callable
 
 from .logparse import Level, LineSplitter, LogLine, classify, parse_pointfile
-from .plan import CompilePlan, CopyStep, LaunchStep, Step, ToolStep, WriteStep
+from .plan import CompilePlan, CopyFilesStep, CopyStep, LaunchStep, Step, ToolStep, WriteStep
 
 
 @dataclass
@@ -90,6 +90,8 @@ class CompileRunner:
                 self._emit(LogLine(p, Level.ERROR), result)
             result.failed_step = "Vorbereitung"
             return
+        for note in plan.notes:
+            self._emit(LogLine(note, Level.WARNING), result)
         lin = Path(plan.pointfile_path)
         if lin.exists():
             lin.unlink()  # alte Leak-Spur darf nicht als neue erscheinen
@@ -122,6 +124,10 @@ class CompileRunner:
                 if not self._copy(step, result):
                     result.failed_step = step.label
                     return
+            elif isinstance(step, CopyFilesStep):
+                if not self._copy_files(step, result):
+                    result.failed_step = step.label
+                    return
             elif isinstance(step, WriteStep):
                 if not self._write(step, result):
                     result.failed_step = step.label
@@ -141,6 +147,8 @@ class CompileRunner:
         kwargs: dict = {}
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+        if step.env:
+            kwargs["env"] = {**os.environ, **step.env}
         try:
             proc = subprocess.Popen(
                 [step.program, *step.args], cwd=step.cwd, stdin=subprocess.DEVNULL,
@@ -186,6 +194,18 @@ class CompileRunner:
             self._emit(LogLine(f"Kopieren fehlgeschlagen: {exc}", Level.ERROR), result)
             return False
         self._emit(LogLine(f"{src.name} -> {step.target}"), result)
+        return True
+
+    def _copy_files(self, step: CopyFilesStep, result: CompileResult) -> bool:
+        self._emit(LogLine(f"==== {step.label} ====", Level.STEP), result)
+        for src, dst in step.files:
+            try:
+                Path(dst).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+            except OSError as exc:
+                self._emit(LogLine(f"Kopieren fehlgeschlagen: {exc}", Level.ERROR), result)
+                return False
+        self._emit(LogLine(f"{len(step.files)} Dateien kopiert"), result)
         return True
 
     def _write(self, step: WriteStep, result: CompileResult) -> bool:

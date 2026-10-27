@@ -43,6 +43,7 @@ from ...core.blocks import (
 )
 from ...core.commands import AddObjects
 from ...core.io.rsmap import ProjectFormatError
+from ...core.materials.theme import block_defaults
 from ...core.model import Entity
 from ...core.prefabs import list_prefabs, load_prefab, make_prefab, place_prefab, save_prefab
 from ...core.surf.catalog import (
@@ -57,8 +58,12 @@ from ...core.surf.catalog import (
 )
 from ...core.surf.sweep import Materials
 from ..editor import EditorContext
+from ..icons import icon
 from ..paths import prefabs_dir
+from ..widgets.material_field import MaterialField
 
+#: Symbol je Gruppe in der Bibliothek
+CATEGORY_ICONS = {"Rampen": "ramp", "Kurven": "curve", "Spezial": "halfpipe", "Bhop": "bhop", "Zonen": "flag"}
 MIME_TEMPLATE = "application/x-rampenschmiede-vorlage"
 PREFAB_PREFIX = "prefab:"
 OK_STYLE = "color: #3a3;"
@@ -88,9 +93,12 @@ class _TemplateTree(QTreeWidget):
         drag.exec(Qt.CopyAction)
 
 
-def _editor_for(p: Param) -> tuple[QWidget, Callable[[], Any], Callable[[Any], None], Any]:
+def _editor_for(p: Param, editor: EditorContext | None = None) -> tuple[QWidget, Callable[[], Any], Callable[[Any], None], Any]:
     """Eingabefeld für einen Regler: (Widget, lesen, setzen, Änderungs-Signal)."""
     kind = p.kind
+    if p.key.startswith("mat_"):
+        m = MaterialField(editor)
+        return m, m.value, m.set_value, m.changed
     if kind == "bool":
         w = QCheckBox()
         return w, w.isChecked, w.setChecked, w.toggled
@@ -147,12 +155,15 @@ class LibraryPanel(QWidget):
             g = groups.get(t.category)
             if g is None:
                 g = groups[t.category] = QTreeWidgetItem(self.tree, [self.tr(t.category)])
+                g.setIcon(0, icon(CATEGORY_ICONS.get(t.category, "shape")))
                 g.setFlags(g.flags() & ~Qt.ItemIsDragEnabled)
                 g.setExpanded(True)
             item = QTreeWidgetItem(g, [self.tr(t.name)])
+            item.setIcon(0, icon(CATEGORY_ICONS.get(t.category, "shape")))
             item.setData(0, Qt.UserRole, t.key)
             item.setToolTip(0, self.tr(t.description))
         self.prefab_group = QTreeWidgetItem(self.tree, [self.tr("Eigene Prefabs")])
+        self.prefab_group.setIcon(0, icon("prefab"))
         self.prefab_group.setFlags(self.prefab_group.flags() & ~Qt.ItemIsDragEnabled)
         self.prefab_group.setExpanded(True)
         self.refresh_prefabs()
@@ -244,7 +255,7 @@ class LibraryPanel(QWidget):
             self.box.setTitle(self.tr("Baustein: {0}").format(self.tr(template.name) if template else "?"))
         else:
             template = self.current_template()
-            values = template.values(self.next_values.get(template.key)) if template else {}
+            values = template.values(self._insert_values(template)) if template else {}
             at = None
             self.box.setTitle(self.tr("Vorlage: {0}").format(self.tr(template.name)) if template else "")
         self.dissolve_btn.setVisible(root is not None)
@@ -294,7 +305,7 @@ class LibraryPanel(QWidget):
                     Param("_z", "Anker Z", int(at.z), -32768, 32768, 16, "u"),
                 ] + params
             for p in params:
-                widget, read, write, changed = _editor_for(p)
+                widget, read, write, changed = _editor_for(p, self.editor)
                 write(values.get(p.key, p.default) if not p.key.startswith("_") else p.default)
                 if p.hint:
                     widget.setToolTip(self.tr(p.hint))
@@ -355,7 +366,8 @@ class LibraryPanel(QWidget):
             template = self.current_template()
             if template is None:
                 return
-            self.next_values[template.key] = values
+            # Nur die geänderten Regler merken, der Rest kommt weiter aus dem Map-Thema
+            self.next_values.setdefault(template.key, {})[key] = values[key]
             self._show_angles(generate(template, values))
             return
         cmd, gen = change_block(self.editor.doc, root.id, values, at, merge_key=("baustein", root.id, key))
@@ -367,6 +379,15 @@ class LibraryPanel(QWidget):
         root = self.editor.doc.get(root.id)
         self._shown = ("block", root.id, block_info(root))
         self._show_angles(gen)
+
+    def _insert_values(self, template: Template) -> dict:
+        """Werte fürs nächste Einfügen: Map-Thema, darüber die selbst gestellten Regler."""
+        return {**block_defaults(self.editor.doc, template), **self.next_values.get(template.key, {})}
+
+    def refresh(self) -> None:
+        """Formular neu aufbauen, z. B. nachdem sich das Map-Thema geändert hat."""
+        self._shown = None
+        self._sync_from_selection()
 
     # ---- Aktionen ----------------------------------------------------------------------
     def insert_current(self) -> None:
@@ -382,7 +403,7 @@ class LibraryPanel(QWidget):
             return None
         snap = self.editor.snap
         at = Placement(snap(point[0]), snap(point[1]), snap(point[2]), yaw)
-        objs, gen = insert_block(self.editor.doc, key, self.next_values.get(key), at)
+        objs, gen = insert_block(self.editor.doc, key, self._insert_values(template), at)
         if not self.editor.run(AddObjects(objs, self.tr("{0} einfügen").format(self.tr(template.name)))):
             return None
         self.editor.set_selection({objs[0].id})
@@ -396,6 +417,7 @@ class LibraryPanel(QWidget):
         self.prefab_group.takeChildren()
         for name, path in list_prefabs(prefabs_dir()):
             item = QTreeWidgetItem(self.prefab_group, [name])
+            item.setIcon(0, icon("prefab"))
             item.setData(0, Qt.UserRole, PREFAB_PREFIX + str(path))
             item.setToolTip(0, str(path))
         if not self.prefab_group.childCount():

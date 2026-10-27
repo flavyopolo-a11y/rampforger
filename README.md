@@ -41,8 +41,11 @@ Tests: `pytest` · eigene .exe bauen: `python packaging/build_exe.py` (Ergebnis 
 Die Steuerung folgt Hammer, damit Umsteiger sich sofort zurechtfinden. **F1** zeigt alle Tasten.
 
 **Ansichten.** Vier Ansichten: 3D, Oben (X/Y), Vorne (Y/Z), Seite (X/Z). Jede lässt sich über
-ihre Kopfzeile umstellen, die Trenner sind verschiebbar. Die 3D-Ansicht kennt die Modi
-Schattiert, Flach und Drahtgitter.
+ihre Kopfzeile umstellen, die Trenner sind verschiebbar. Die Ansicht unter der Maus ist orange
+umrandet. Die 3D-Ansicht kennt die Modi Texturiert, Schattiert, Flach und Drahtgitter.
+
+**Werkzeuge.** Links stehen die Werkzeuge mit Symbol (Auswahl, Formen, Entity, Seiten). Das aktive
+ist orange hinterlegt, oben rechts steht zusätzlich „Werkzeug: …“.
 
 | Kamera | |
 | --- | --- |
@@ -134,6 +137,28 @@ nacheinander tiefer liegen, ein Fall-Teleporter unter jeder Stage zurück zu ihr
 Zielplattform mit Zielzone, Sonne und eine dichte Skybox-Hülle. F9 testet sie sofort. Ist die Strecke zu lang
 für Source (über 32768 Units), sagt der Assistent das, bevor er etwas erzeugt.
 
+**Texturen und Materialien.** Der Material-Browser (unten) liest alle Materialien des Spiels aus
+dem Spielprofil, auch aus den VPKs, so wie Hammer. Suchen, Favoriten (★), „In dieser Map“ und
+„Zuletzt benutzt“ helfen beim Finden. Klick wählt das aktuelle Material, Doppelklick legt es auf
+die Auswahl. Neue Formen bekommen das aktuelle Material. Bei Rampen-Bausteinen lassen sich
+Surf-Fläche und Seiten getrennt in den Reglern setzen (⇐ übernimmt das aktuelle Material).
+
+**Seiten-Werkzeug (Shift+A).** Wie der Face-Editor in Hammer: in der 3D-Ansicht Seiten anklicken
+(Strg+Klick ergänzt), dann rechts Skalierung, Verschiebung, Drehung und Lightmap-Skalierung
+einstellen, einpassen oder ausrichten. Shift+Klick legt das aktuelle Material direkt auf eine
+Seite, Alt+Klick nimmt das Material einer Seite auf.
+
+**Rampen-Assistent (Strg+Shift+R, Menü *Texturen*).** Farbe der Rampen, der Rampenlinien und
+der Wände wählen oder eine fertige Kombination anklicken. Die Rampenschmiede erzeugt daraus
+passende Texturen und färbt die ganze Map oder nur die Auswahl in einem Undo-Schritt um. Neue
+Rampen bekommen die Farben automatisch. Der Haken „Playerclip auf Rampen“ (auch im Menü
+*Texturen*) schaltet die glatte Clip-Hülle für alle Rampen an oder aus.
+
+**Eigene Texturen.** *Texturen → Bild als Textur importieren* macht aus PNG, JPG, TGA oder BMP
+ein Source-Material (VTF und VMT). *Texturen → Texturpakete* bindet eigene Ordner ein, die wie
+ein Spielordner einen Unterordner `materials` haben. Eigene Texturen werden beim Kompilieren
+mit bspzip in die Map gepackt, sie läuft also auch bei anderen Spielern ohne Zusatz-Download.
+
 **Hammer-Maps.** „Öffnen“ liest `.rsmap` und `.vmf`. Beim Import bleibt alles erhalten, auch
 was Rampenschmiede noch nicht bearbeiten kann (Displacements, Gruppen, Visgroups, Kameras):
 Ein Export ergibt wieder dieselbe Map.
@@ -162,7 +187,7 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - [Architektur](docs/architektur.md)
 - [Entscheidungslog](docs/entscheidungen.md)
 
-## Bekannte Grenzen (Etappe 3)
+## Bekannte Grenzen (Etappe 4)
 
 - Bausteine bleiben nur im Projektformat `.rsmap` über Regler änderbar. Im VMF-Export sind es
   normale Brushes.
@@ -173,6 +198,9 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - Bei der Gabelung überlappen sich die beiden Äste am Anfang.
 - Die Playerclip-Brushes werden in den Ansichten nicht gezeichnet, weil sie genau auf den
   sichtbaren Teilen liegen.
+- Texturen werden in der 3D-Ansicht mit höchstens 256×256 Pixeln gezeigt; im Spiel gilt die volle
+  Auflösung. Animierte Texturen zeigen das erste Bild.
+- Ohne Spielprofil gibt es nur eigene Texturen im Browser.
 - Zonen: Den Namen der Momentum-Zonendatei (`maps/zones/local/<map>.json`) sagt die
   Momentum-Doku nicht ausdrücklich, er ist angenommen. Das Format selbst folgt dem Prüfcode von
   Momentum. CS:S-Timer, die Zonen nur aus ihrer Datenbank lesen (nicht bhoptimer), müssen die

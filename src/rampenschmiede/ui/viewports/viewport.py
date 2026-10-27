@@ -12,7 +12,7 @@ import time
 
 import moderngl
 import numpy as np
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QCursor, QFont, QKeyEvent, QMouseEvent, QPainter, QWheelEvent
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
@@ -28,17 +28,20 @@ VIEW_TITLES = {
     "side": "Seite (X/Z)",
 }
 
-RENDER_MODES = {"shaded": "Schattiert", "flat": "Flach", "wireframe": "Drahtgitter"}
+RENDER_MODES = {"textured": "Texturiert", "shaded": "Schattiert", "flat": "Flach", "wireframe": "Drahtgitter"}
 
 FLY_KEYS = {Qt.Key_W, Qt.Key_A, Qt.Key_S, Qt.Key_D, Qt.Key_Q, Qt.Key_E}
 
 
 class Viewport(QOpenGLWidget):
+    #: Maus ist in die Ansicht gekommen oder sie hat den Fokus bekommen
+    activated = Signal()
+
     def __init__(self, editor: EditorContext, view: str = "3d", parent=None) -> None:
         super().__init__(parent)
         self.editor = editor
         self.view = view
-        self.render_mode = "shaded"
+        self.render_mode = "textured"
         self.cam3d = Camera3D.default()
         self.cam2d = Camera2D(view if view != "3d" else "top")
         self.ctx: moderngl.Context | None = None
@@ -113,7 +116,7 @@ class Viewport(QOpenGLWidget):
         painter.beginNativePainting()
         try:
             fbo = self.ctx.detect_framebuffer(self.defaultFramebufferObject())
-            self.renderer.sync(self.editor.scene.arrays())
+            self.renderer.sync(self.editor.scene.arrays(), self.editor.scene.atlas if self.is_3d else None)
             tool = self.editor.tool
             if self.is_3d:
                 extra = _join_lines(tool.lines_3d(self) if tool else None, self.editor.leak_lines)
@@ -244,6 +247,8 @@ class Viewport(QOpenGLWidget):
         if self.editor.tool:
             if self.is_3d:
                 self.editor.tool.move_3d(self, e)
+                if not self._mouselook:
+                    self.setCursor(self.editor.tool.cursor_3d(self, e.position()))
             else:
                 self.editor.tool.move_2d(self, e)
                 self.setCursor(self.editor.tool.cursor_2d(self, e.position()))
@@ -404,7 +409,12 @@ class Viewport(QOpenGLWidget):
 
     def focusInEvent(self, e) -> None:
         super().focusInEvent(e)
+        self.activated.emit()
         self.update()
+
+    def enterEvent(self, e) -> None:
+        super().enterEvent(e)
+        self.activated.emit()
 
 
 def _join_lines(*parts):
