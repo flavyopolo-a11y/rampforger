@@ -1,4 +1,6 @@
 """Eigene Texturen: Import, Farb-Texturen und Packen in die BSP."""
+from pathlib import Path
+
 from PIL import Image
 
 from rampenschmiede.core.compile import CompileSettings, ToolStep, WriteStep, build_plan
@@ -82,7 +84,7 @@ def test_plan_without_bspzip_copies_into_game(tmp_path):
     plan = build_plan(_profile(tmp_path, False), tmp_path / "k" / "m.vmf", CompileSettings(launch_game=False),
                       pack_files=[("materials/a.vmt", "/x/a.vmt")])
     step = next(s for s in plan.steps if isinstance(s, CopyFilesStep))
-    assert step.files[0][1].endswith("materials/a.vmt") and plan.notes
+    assert Path(step.files[0][1]).parts[-2:] == ("materials", "a.vmt") and plan.notes
 
 
 def test_safe_name():
