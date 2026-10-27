@@ -19,6 +19,7 @@ from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from ...render.camera import VIEW_AXES, Camera2D, Camera3D
 from ...render.gl_renderer import ViewportRenderer
 from ..editor import EditorContext
+from ..panels.library_panel import MIME_TEMPLATE
 
 VIEW_TITLES = {
     "3d": "3D",
@@ -45,6 +46,7 @@ class Viewport(QOpenGLWidget):
         self.gl_error: str | None = None
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
+        self.setAcceptDrops(True)
         self.setMinimumSize(120, 90)
 
         self._mouselook = False
@@ -156,6 +158,43 @@ class Viewport(QOpenGLWidget):
 
     def ray(self, pos: QPointF | QPoint) -> tuple[np.ndarray, np.ndarray]:
         return self.cam3d.ray(pos.x(), pos.y(), self.width(), self.height())
+
+    # ---- Vorlagen hineinziehen ---------------------------------------------------------
+    def dragEnterEvent(self, e) -> None:
+        if e.mimeData().hasFormat(MIME_TEMPLATE):
+            e.acceptProposedAction()
+
+    def dragMoveEvent(self, e) -> None:
+        if e.mimeData().hasFormat(MIME_TEMPLATE):
+            e.acceptProposedAction()
+
+    def dropEvent(self, e) -> None:
+        if not e.mimeData().hasFormat(MIME_TEMPLATE):
+            return
+        key = bytes(e.mimeData().data(MIME_TEMPLATE)).decode("utf-8")
+        e.acceptProposedAction()
+        self.editor.template_dropped.emit(key, self.drop_point(e.position()))
+
+    def drop_point(self, pos: QPointF) -> tuple[float, float, float]:
+        """Weltpunkt unter der Maus: in 2D auf Höhe 0 der fehlenden Achse, in 3D die
+        getroffene Fläche oder sonst der Boden (z = 0)."""
+        if not self.is_3d:
+            h_axis, v_axis, _ = self.axes()
+            wh, wv = self.to_world(pos)
+            p = [0.0, 0.0, 0.0]
+            p[h_axis], p[v_axis] = wh, wv
+            return (p[0], p[1], p[2])
+        from ..tools.base import pick_3d
+
+        origin, direction = self.ray(pos)
+        hit = pick_3d(self.editor, origin, direction)
+        if hit is not None:
+            point = origin + direction * hit[1]
+        elif direction[2] < -1e-6:
+            point = origin + direction * (-origin[2] / direction[2])
+        else:
+            point = origin + direction * 512
+        return (float(point[0]), float(point[1]), float(point[2]))
 
     def center_on(self, point: tuple[float, float, float], size: float | None = None) -> None:
         if self.is_3d:

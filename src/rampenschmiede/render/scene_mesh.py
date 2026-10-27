@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..core.model import ChangeSet, Entity, MapDocument, MapObject, Solid, object_bbox
+from ..core.model import ChangeSet, Entity, MapDocument, MapObject, Solid, object_bbox, owner_id
 
 # Werkzeug-Texturen bekommen feste, aus Hammer bekannte Farben.
 TOOL_COLORS = {
@@ -188,16 +188,17 @@ class SceneMesh:
         for obj in self.doc.objects():
             if obj.editor.hidden:
                 continue
-            if isinstance(obj, Solid) and obj.parent_id is not None:
-                parent = self.doc.get(obj.parent_id)
+            owner = owner_id(obj)
+            if owner is not None:
+                if isinstance(obj, Solid) and obj.parent_id is None:
+                    continue  # Kollisions-Brush eines Bausteins: deckungsgleich mit dem sichtbaren Teil
+                parent = self.doc.get(owner)
                 if isinstance(parent, Entity) and parent.editor.hidden:
                     continue
             mesh = self._mesh(obj)
             if mesh is None:
                 continue
-            selected = obj.id in self._selection or (
-                isinstance(obj, Solid) and obj.parent_id is not None and obj.parent_id in self._selection
-            )
+            selected = obj.id in self._selection or (owner is not None and owner in self._selection)
             tris, lines = mesh.variant(selected)
             (faces_sel if selected else faces_unsel).append(tris)
             (lines_sel2d if selected else lines_unsel).append(lines)

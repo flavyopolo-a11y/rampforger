@@ -9,7 +9,7 @@ from PySide6.QtGui import QKeyEvent, QMouseEvent, QPainter
 
 from ...core.geometry.brush import ray_intersect_solid
 from ...core.mathutil import BBox
-from ...core.model import Entity, MapObject, Solid, object_bbox
+from ...core.model import Entity, MapObject, Solid, object_bbox, owner_id
 
 if TYPE_CHECKING:
     from ..editor import EditorContext
@@ -63,9 +63,10 @@ class Tool:
 # ---- Hilfen ------------------------------------------------------------------------
 
 def selection_root(editor: "EditorContext", obj: MapObject) -> MapObject:
-    """Ein Brush einer Brush-Entity wird als die ganze Entity ausgewählt."""
-    if isinstance(obj, Solid) and obj.parent_id is not None:
-        parent = editor.doc.get(obj.parent_id)
+    """Ein Brush einer Brush-Entity oder eines Bausteins wird als das Ganze ausgewählt."""
+    owner = owner_id(obj)
+    if owner is not None:
+        parent = editor.doc.get(owner)
         if parent is not None:
             return parent
     return obj
@@ -74,14 +75,15 @@ def selection_root(editor: "EditorContext", obj: MapObject) -> MapObject:
 def _visible(editor: "EditorContext", obj: MapObject) -> bool:
     if not editor.selectable(obj):
         return False
-    if isinstance(obj, Solid) and obj.parent_id is not None:
-        parent = editor.doc.get(obj.parent_id)
+    owner = owner_id(obj)
+    if owner is not None:
+        parent = editor.doc.get(owner)
         return parent is None or editor.selectable(parent)
     return True
 
 
 def _brush_entity_ids(editor: "EditorContext") -> set[int]:
-    return {s.parent_id for s in editor.doc.solids() if s.parent_id is not None}
+    return {o for s in editor.doc.solids() if (o := owner_id(s)) is not None}
 
 
 def pick_2d(editor: "EditorContext", vp: "Viewport", pos: QPointF) -> MapObject | None:

@@ -6,6 +6,7 @@ from .base import (
     RemoveObjects,
     ReplaceObjects,
     SetWorldKeyvalues,
+    SwapObjects,
     solids_from_faces,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "RemoveObjects",
     "ReplaceObjects",
     "SetWorldKeyvalues",
+    "SwapObjects",
     "solids_from_faces",
 ]

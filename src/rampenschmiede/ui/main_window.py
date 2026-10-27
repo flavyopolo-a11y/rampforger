@@ -17,19 +17,22 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
+from ..core.blocks import clone_objects
 from ..core.commands import AddObjects
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.io import rsmap, vmf
 from ..core.model import Entity, MapDocument, MapObject
 from ..core.profiles import ProfileStore, detect_profiles
-from ..core.templates import enclose_map, starter_room
+from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
 from ..core.validation.seal import describe as describe_seal
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
 from .dialogs.profiles_dialog import ProfilesDialog
+from .dialogs.surf_wizard import SurfWizard
 from .dialogs.transform_dialog import TransformDialog
 from .editor import EditorContext
 from .panels.compile_log import CompileLogPanel
+from .panels.library_panel import LibraryPanel
 from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
 from .paths import profiles_file
@@ -65,6 +68,12 @@ CONTROLS_HELP = """
 <tr><td>Strg+L / Strg+I</td><td>Spiegeln horizontal / vertikal (bezogen auf die aktive 2D-Ansicht)</td></tr>
 <tr><td>H / Strg+H / U</td><td>Auswahl ausblenden / Rest ausblenden / alles einblenden</td></tr>
 <tr><td>Enter / Esc</td><td>Form erstellen / Rahmen oder Auswahl verwerfen</td></tr>
+</table>
+<h3>Bibliothek</h3>
+<table>
+<tr><td>Doppelklick oder Ziehen in eine Ansicht</td><td>Vorlage oder Prefab einfügen</td></tr>
+<tr><td>Klick auf einen Baustein</td><td>Regler im Panel „Bibliothek“ ändern, sofort neu gebaut</td></tr>
+<tr><td>Strg+Shift+N</td><td>Assistent „Neue Surf-Map“</td></tr>
 </table>
 <h3>Testen</h3>
 <table>
@@ -124,8 +133,13 @@ class MainWindow(QMainWindow):
         self.sel_dock.setObjectName("dock_selection")
         self.sel_dock.setWidget(SelectionPanel(self.editor))
         self.addDockWidget(Qt.RightDockWidgetArea, self.sel_dock)
+        self.lib_dock = QDockWidget(self.tr("Bibliothek"), self)
+        self.lib_dock.setObjectName("dock_library")
+        self.library = LibraryPanel(self.editor, self._insert_point)
+        self.lib_dock.setWidget(self.library)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
         # Ohne Mindestbreite drücken die Ansichten die Panels auf wenige Pixel zusammen.
-        for dock in (self.tool_dock, self.sel_dock):
+        for dock in (self.tool_dock, self.sel_dock, self.lib_dock):
             dock.widget().setMinimumWidth(DOCK_MIN_WIDTH)
         self.log_dock = QDockWidget(self.tr("Kompilieren"), self)
         self.log_dock.setObjectName("dock_compile_log")
@@ -153,6 +167,8 @@ class MainWindow(QMainWindow):
                                     "Neue Map, auf Wunsch mit Startraum (Spawn in dichter Skybox)")
         self.act_new_empty = self._action("Neu (&leer)", lambda: self.file_new(empty=True), "Ctrl+Alt+N",
                                           "Neue Map ganz ohne Inhalt")
+        self.act_surf_wizard = self._action("Neue S&urf-Map (Assistent) …", self.surf_wizard, "Ctrl+Shift+N",
+                                            "Spielbare Surf-Map aus Stages, Rampen und Teleportern erzeugen")
         self.act_starter = self._action("Neue Maps mit &Startraum", self._toggle_starter, None,
                                         "Neue Maps beginnen mit Spawn, Sonne und dichter Skybox-Hülle. "
                                         "So lässt sich sofort ohne Leck kompilieren.", checkable=True)
@@ -223,7 +239,7 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         mb = self.menuBar()
         m = mb.addMenu(self.tr("&Datei"))
-        for a in (self.act_new, self.act_new_empty, self.act_starter, self.act_open):
+        for a in (self.act_new, self.act_new_empty, self.act_surf_wizard, self.act_starter, self.act_open):
             m.addAction(a)
         self.recent_menu = m.addMenu(self.tr("&Zuletzt geöffnet"))
         self.recent_menu.aboutToShow.connect(self._fill_recent)
@@ -245,6 +261,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addAction(self.tool_dock.toggleViewAction())
         m.addAction(self.sel_dock.toggleViewAction())
+        m.addAction(self.lib_dock.toggleViewAction())
 
         m = mb.addMenu(self.tr("&Werkzeuge"))
         for a in self.tool_actions.values():
@@ -341,6 +358,32 @@ class MainWindow(QMainWindow):
     def file_new(self, empty: bool = False) -> None:
         if self._confirm_discard():
             self._new_document(empty)
+
+    def surf_wizard(self) -> None:
+        profile = self.profiles.active_profile()
+        dlg = SurfWizard(profile.key if profile else None, self)
+        if dlg.exec() and self._confirm_discard():
+            self.new_surf_map(dlg.settings())
+
+    def new_surf_map(self, settings: SurfMapSettings) -> bool:
+        doc = MapDocument()
+        try:
+            objs = new_surf_map(doc, settings)
+        except ValueError as exc:
+            QMessageBox.warning(self, self.tr("Neue Surf-Map"), str(exc))
+            return False
+        doc._insert(objs)
+        spawn = next((o.origin for o in objs if isinstance(o, Entity) and o.classname.startswith("info_player")
+                      and o.origin), None)
+        if spawn is not None:
+            # Hinter dem Spawn, Blick die Strecke entlang
+            doc.editor.camera_position = (spawn[0] - 256, spawn[1], spawn[2] + 160)
+            doc.editor.camera_angles = (0.0, -12.0)
+        self.editor.set_document(doc, None)
+        self._update_title()
+        QTimer.singleShot(0, self._center_2d_on_map)
+        self.statusBar().showMessage(self.tr("Surf-Map erzeugt: F9 zum Testen"), 5000)
+        return True
 
     def _starter_enabled(self) -> bool:
         return str(self.settings.value("new_map_starter", "true")).lower() in ("true", "1")
@@ -526,11 +569,7 @@ class MainWindow(QMainWindow):
     # ---- Bearbeiten -------------------------------------------------------------------
     def edit_copy(self) -> None:
         objs = self.editor.selected_objects()
-        out: list[MapObject] = list(objs)
-        for o in objs:
-            if isinstance(o, Entity):
-                out += self.editor.doc.children(o.id)
-        self._clipboard = out
+        self._clipboard = objs + self.editor.doc.attached(o.id for o in objs)
 
     def edit_cut(self) -> None:
         self.edit_copy()
@@ -539,21 +578,7 @@ class MainWindow(QMainWindow):
     def edit_paste(self) -> None:
         if not self._clipboard:
             return
-        doc = self.editor.doc
-        id_map: dict[int, int] = {}
-        new: list[MapObject] = []
-        roots: list[int] = []
-        for o in self._clipboard:
-            id_map[o.id] = doc.new_id()
-        for o in self._clipboard:
-            if isinstance(o, Entity):
-                new.append(o.replace(id=id_map[o.id], vmf_id=None))
-                roots.append(id_map[o.id])
-            else:
-                parent = id_map.get(o.parent_id) if o.parent_id is not None else None
-                new.append(o.replace(id=id_map[o.id], parent_id=parent, vmf_id=None))
-                if parent is None:
-                    roots.append(id_map[o.id])
+        new, roots = clone_objects(self.editor.doc, self._clipboard)
         self.editor.run(AddObjects(new, self.tr("Einfügen")))
         self.editor.set_selection(roots)
 
@@ -686,6 +711,13 @@ class MainWindow(QMainWindow):
         for vp in self.grid_view.viewports():
             vp.center_on(point, size)
 
+    def _insert_point(self) -> tuple[float, float, float]:
+        """Wohin „Einfügen“ aus der Bibliothek setzt: Mitte der Ansicht von oben, Höhe 0."""
+        for vp in self.grid_view.viewports():
+            if vp.view == "top":
+                return (vp.cam2d.center_h, vp.cam2d.center_v, 0.0)
+        return (0.0, 0.0, 0.0)
+
     def center_on_selection(self) -> None:
         bb = self.editor.selection_bbox() or self.editor.doc.bbox()
         if bb is None:
@@ -700,6 +732,9 @@ class MainWindow(QMainWindow):
             dock.setFloating(False)
             dock.show()
             self.addDockWidget(Qt.RightDockWidgetArea, dock)
+        self.lib_dock.setFloating(False)
+        self.lib_dock.show()
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
 
     def set_expert(self, on: bool) -> None:
         self.editor.doc.editor.expert_mode = on
@@ -725,7 +760,7 @@ class MainWindow(QMainWindow):
         state = self.settings.value("window_state")
         if state is not None:
             self.restoreState(state)
-        self.resizeDocks([self.tool_dock, self.sel_dock], [DOCK_MIN_WIDTH, DOCK_MIN_WIDTH], Qt.Horizontal)
+        self.resizeDocks([self.tool_dock, self.sel_dock, self.lib_dock], [DOCK_MIN_WIDTH] * 3, Qt.Horizontal)
         try:
             self.grid_view.restore_state(json.loads(self.settings.value("viewports", "{}")))
         except (TypeError, ValueError):

@@ -96,6 +96,12 @@ class MapDocument:
     def children(self, entity_id: int) -> list[Solid]:
         return [s for s in self.solids() if s.parent_id == entity_id]
 
+    def attached(self, ids: Iterable[int]) -> list[Solid]:
+        """Brushes, die zu den genannten Objekten gehören: Brushes einer Brush-Entity und
+        die Kollisions-Brushes eines Bausteins (`extra["block_of"]`)."""
+        owners = set(ids)
+        return [s for s in self.solids() if s.id not in owners and owner_id(s) in owners]
+
     def world_get(self, key: str, default: str = "") -> str:
         for k, v in self.world_keyvalues:
             if k == key:
@@ -103,7 +109,13 @@ class MapDocument:
         return default
 
     def bbox(self, ids: Iterable[int] | None = None) -> BBox | None:
-        objs = self._objects.values() if ids is None else (self._objects[i] for i in ids if i in self._objects)
+        """Umgebende Box; bei Brush-Entities und Bausteinen samt ihrer Brushes."""
+        if ids is None:
+            return BBox.union(object_bbox(o) for o in self._objects.values())
+        known = [i for i in ids if i in self._objects]
+        objs = [self._objects[i] for i in known]
+        if any(isinstance(o, Entity) for o in objs):
+            objs += self.attached(known)
         return BBox.union(object_bbox(o) for o in objs)
 
     def snapshot(self) -> "MapDocument":
@@ -167,6 +179,15 @@ class MapDocument:
 
 
 POINT_ENTITY_HALF_SIZE = 8
+
+
+def owner_id(obj: MapObject) -> int | None:
+    """Zu welchem Objekt ein Brush gehört: seiner Brush-Entity oder seinem Baustein."""
+    if isinstance(obj, Solid):
+        if obj.parent_id is not None:
+            return obj.parent_id
+        return obj.extra.get("block_of")
+    return None
 
 
 def object_bbox(obj: MapObject) -> BBox | None:

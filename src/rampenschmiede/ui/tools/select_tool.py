@@ -17,7 +17,7 @@ import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QKeyEvent, QMouseEvent, QPainter, QPen
 
-from ...core.commands import ReplaceObjects
+from ...core.blocks import transform_command
 from ...core.geometry import transform
 from ...core.geometry.transform import TransformError
 from ...core.mathutil import BBox
@@ -66,13 +66,9 @@ class SelectTool(Tool):
 
     # ---- Hilfen -----------------------------------------------------------------
     def _targets(self) -> list[MapObject]:
-        """Ausgewählte Objekte samt Brushes ausgewählter Brush-Entities."""
-        out: list[MapObject] = []
-        for o in self.editor.selected_objects():
-            out.append(o)
-            if isinstance(o, Entity):
-                out += self.editor.doc.children(o.id)
-        return out
+        """Ausgewählte Objekte samt Brushes ausgewählter Brush-Entities und Bausteine."""
+        objs = self.editor.selected_objects()
+        return objs + self.editor.doc.attached(o.id for o in objs)
 
     def _sel_rect(self, vp: "Viewport", bb: BBox | None = None) -> QRectF | None:
         bb = bb or self.editor.selection_bbox()
@@ -187,8 +183,12 @@ class SelectTool(Tool):
         return Qt.ArrowCursor
 
     # ---- Anwenden -------------------------------------------------------------------
-    def _replace(self, new: list[MapObject], description: str, merge_key: object) -> None:
-        self.editor.run(ReplaceObjects(new, description, merge_key=merge_key))
+    def _replace(self, d: _Drag, fn, description: str) -> None:
+        try:
+            cmd = transform_command(self.editor.doc, d.originals, fn, description, d.merge_key)
+        except TransformError:
+            return
+        self.editor.run(cmd)
 
     def _apply_move(self, vp: "Viewport", d: _Drag) -> None:
         if d.bbox is None:
@@ -198,8 +198,8 @@ class SelectTool(Tool):
         delta[h] = self.editor.snap(d.bbox.mins[h] + d.current[0] - d.start[0]) - d.bbox.mins[h]
         delta[v] = self.editor.snap(d.bbox.mins[v] + d.current[1] - d.start[1]) - d.bbox.mins[v]
         lock = self.editor.texture_lock
-        new = [transform.translate(o, tuple(delta), lock) for o in d.originals]  # type: ignore[arg-type]
-        self._replace(new, "Kopieren und verschieben" if d.clone else "Verschieben", d.merge_key)
+        self._replace(d, lambda o: transform.translate(o, tuple(delta), lock),  # type: ignore[arg-type]
+                      "Kopieren und verschieben" if d.clone else "Verschieben")
 
     def _apply_scale(self, vp: "Viewport", d: _Drag) -> None:
         bb, handle = d.bbox, d.handle
@@ -224,12 +224,9 @@ class SelectTool(Tool):
                 new_lo = min(hi - g, self.editor.snap(lo + cur - start))
                 factors[axis] = (hi - new_lo) / size
                 pivot[axis] = hi
-        try:
-            new = [transform.scale_obj(o, tuple(pivot), tuple(factors), self.editor.texture_lock)  # type: ignore[arg-type]
-                   for o in d.originals]
-        except TransformError:
-            return
-        self._replace(new, "Skalieren", d.merge_key)
+        lock = self.editor.texture_lock
+        self._replace(d, lambda o: transform.scale_obj(o, tuple(pivot), tuple(factors), lock),  # type: ignore[arg-type]
+                      "Skalieren")
 
     def _rotation_angle(self, vp: "Viewport", d: _Drag, free: bool) -> float:
         bb = d.bbox
@@ -253,11 +250,8 @@ class SelectTool(Tool):
         if vp.view == "side":
             deg = -deg  # (X, Z) ist um Y gesehen linkshändig
         pivot = tuple(math.floor(c + 0.5) for c in bb.center)
-        try:
-            new = [transform.rotate(o, pivot, depth, deg, self.editor.texture_lock) for o in d.originals]  # type: ignore[arg-type]
-        except TransformError:
-            return
-        self._replace(new, "Drehen", d.merge_key)
+        lock = self.editor.texture_lock
+        self._replace(d, lambda o: transform.rotate(o, pivot, depth, deg, lock), "Drehen")  # type: ignore[arg-type]
         self.editor.status_message.emit(f"Drehung {deg:+.0f}°")
 
     def _finish_marquee(self, vp: "Viewport", d: _Drag) -> None:

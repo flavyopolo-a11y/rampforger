@@ -25,6 +25,13 @@ def profiles_file() -> Path:
     return data_dir() / "spielprofile.json"
 
 
+def prefabs_dir() -> Path:
+    """Eigene Prefabs der Bibliothek."""
+    d = data_dir() / "prefabs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def compile_dir(project_path: Path | None, create: bool = True) -> Path:
     """Arbeitsordner fürs Kompilieren. Neben dem Projekt, damit nie eine fremde VMF
     überschrieben wird, in einem eigenen Unterordner."""

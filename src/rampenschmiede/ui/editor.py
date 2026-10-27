@@ -7,11 +7,12 @@ from typing import TYPE_CHECKING, Iterable
 import numpy as np
 from PySide6.QtCore import QObject, Signal
 
+from ..core.blocks import clone_objects, transform_command
 from ..core.commands import AddObjects, Command, CommandStack, RemoveObjects, ReplaceObjects
 from ..core.geometry import transform
 from ..core.geometry.transform import TransformError
 from ..core.mathutil import BBox, Point
-from ..core.model import ChangeSet, Entity, MapDocument, MapObject, Solid
+from ..core.model import ChangeSet, MapDocument, MapObject, owner_id
 from ..render.scene_mesh import SceneMesh
 
 if TYPE_CHECKING:
@@ -30,6 +31,8 @@ class EditorContext(QObject):
     history_changed = Signal()
     status_message = Signal(str)
     redraw_requested = Signal()
+    #: Eine Vorlage aus der Bibliothek wurde in eine Ansicht gezogen: (Schlüssel, Weltpunkt)
+    template_dropped = Signal(str, object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -139,19 +142,15 @@ class EditorContext(QObject):
     # ---- Bearbeiten der Auswahl ---------------------------------------------------
     def transform_selection(self, fn, description: str, merge_key: object | None = None) -> bool:
         objs = self.selected_objects()
-        targets: list[MapObject] = []
-        for o in objs:
-            targets.append(o)
-            if isinstance(o, Entity):
-                targets += self.doc.children(o.id)
+        targets: list[MapObject] = objs + self.doc.attached(o.id for o in objs)
         if not targets:
             return False
         try:
-            new = [fn(o) for o in targets]
+            cmd = transform_command(self.doc, targets, fn, description, merge_key)
         except TransformError as exc:
             self.status_message.emit(str(exc))
             return False
-        return self.run(ReplaceObjects(new, description, merge_key=merge_key))
+        return self.run(cmd)
 
     def move_selection(self, delta: Point, merge_key: object | None = None) -> bool:
         return self.transform_selection(
@@ -177,23 +176,10 @@ class EditorContext(QObject):
             self.run(RemoveObjects(sorted(self.selection), "Löschen"))
 
     def duplicate(self, objs: list[MapObject], offset: Point) -> list[MapObject]:
-        """Kopiert Objekte mit neuen IDs (Brush-Entities samt Brushes) und verschiebt sie."""
-        new_objs: list[MapObject] = []
-        roots: list[int] = []
-        for o in objs:
-            if isinstance(o, Entity):
-                ne = o.replace(id=self.doc.new_id(), vmf_id=None)
-                ne = transform.translate(ne, offset)
-                new_objs.append(ne)
-                roots.append(ne.id)
-                for child in self.doc.children(o.id):
-                    nc = child.replace(id=self.doc.new_id(), parent_id=ne.id, vmf_id=None)
-                    new_objs.append(transform.translate(nc, offset, self.texture_lock))
-            elif isinstance(o, Solid):
-                ns = o.replace(id=self.doc.new_id(), vmf_id=None)
-                ns = transform.translate(ns, offset, self.texture_lock)
-                new_objs.append(ns)
-                roots.append(ns.id)
+        """Kopiert Objekte mit neuen IDs (Brush-Entities und Bausteine samt Brushes) und verschiebt sie."""
+        objs = list(objs)
+        clones, roots = clone_objects(self.doc, objs + self.doc.attached(o.id for o in objs))
+        new_objs = [transform.translate(o, offset, self.texture_lock) for o in clones]
         if new_objs:
             self.run(AddObjects(new_objs, "Duplizieren"))
             self.set_selection(roots)
@@ -238,4 +224,4 @@ class EditorContext(QObject):
 
 
 def _is_entity_child(obj: MapObject) -> bool:
-    return isinstance(obj, Solid) and obj.parent_id is not None
+    return owner_id(obj) is not None
