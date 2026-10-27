@@ -58,6 +58,7 @@ from ...core.surf.catalog import (
 from ...core.surf.sweep import Materials
 from ..editor import EditorContext
 from ..paths import prefabs_dir
+from ..widgets.material_field import MaterialField
 
 MIME_TEMPLATE = "application/x-rampenschmiede-vorlage"
 PREFAB_PREFIX = "prefab:"
@@ -88,9 +89,12 @@ class _TemplateTree(QTreeWidget):
         drag.exec(Qt.CopyAction)
 
 
-def _editor_for(p: Param) -> tuple[QWidget, Callable[[], Any], Callable[[Any], None], Any]:
+def _editor_for(p: Param, editor: EditorContext | None = None) -> tuple[QWidget, Callable[[], Any], Callable[[Any], None], Any]:
     """Eingabefeld für einen Regler: (Widget, lesen, setzen, Änderungs-Signal)."""
     kind = p.kind
+    if p.key.startswith("mat_"):
+        m = MaterialField(editor)
+        return m, m.value, m.set_value, m.changed
     if kind == "bool":
         w = QCheckBox()
         return w, w.isChecked, w.setChecked, w.toggled
@@ -294,7 +298,7 @@ class LibraryPanel(QWidget):
                     Param("_z", "Anker Z", int(at.z), -32768, 32768, 16, "u"),
                 ] + params
             for p in params:
-                widget, read, write, changed = _editor_for(p)
+                widget, read, write, changed = _editor_for(p, self.editor)
                 write(values.get(p.key, p.default) if not p.key.startswith("_") else p.default)
                 if p.hint:
                     widget.setToolTip(self.tr(p.hint))

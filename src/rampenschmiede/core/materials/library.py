@@ -68,6 +68,8 @@ class MaterialLibrary:
     _infos: dict[str, MaterialInfo | None] = field(default_factory=dict)
     _images: dict[str, TextureImage | None] = field(default_factory=dict)
     _lock: threading.RLock = field(default_factory=threading.RLock)
+    own_folders: list[str] = field(default_factory=list)
+    _own: list[str] | None = None
 
     @classmethod
     def for_game(cls, game_dir: str | Path | None, extra_dirs: Iterable[str | Path] = ()) -> "MaterialLibrary":
@@ -89,11 +91,13 @@ class MaterialLibrary:
         if Path(folder).is_dir():
             with self._lock:
                 self.fsys.add_sys(RawFileSystem(str(folder)), priority=True)
+                self.own_folders.append(str(folder))
                 self.forget()
 
     def forget(self) -> None:
         with self._lock:
             self._names = None
+            self._own = None
             self._infos.clear()
             self._images.clear()
 
@@ -149,16 +153,32 @@ class MaterialLibrary:
                             translucent, keywords, mat.get("$surfaceprop", ""))
 
     def texture(self, name: str) -> TextureImage | None:
-        """Vorschaubild für ein Material (aus %tooltexture oder $basetexture)."""
+        """Vorschaubild für ein Material (aus %tooltexture oder $basetexture). Threadsicher:
+        Vorschauen dürfen im Hintergrund geladen werden."""
         key = normalize(name)
         with self._lock:
             if key in self._images:
                 return self._images[key]
-        info = self.material(key)
-        image = self._read_texture(info.preview_texture) if info and info.preview_texture else None
-        with self._lock:
+            info = self.material(key)
+            image = self._read_texture(info.preview_texture) if info and info.preview_texture else None
             self._images[key] = image
-        return image
+            return image
+
+    def own_names(self) -> list[str]:
+        """Materialien aus den eigenen Ordnern (Texturpakete, importierte Texturen)."""
+        with self._lock:
+            if self._own is None:
+                found: set[str] = set()
+                for folder in self.own_folders:
+                    base = Path(folder) / "materials"
+                    if base.is_dir():
+                        found |= {normalize(str(p.relative_to(folder))) for p in base.rglob("*.vmt")}
+                self._own = sorted(found)
+            return self._own
+
+    def is_own(self, name: str) -> bool:
+        """Liegt das Material in einem eigenen Ordner (muss also in die BSP gepackt werden)?"""
+        return normalize(name) in set(self.own_names())
 
     def _read_texture(self, tex_name: str) -> TextureImage | None:
         f = self._file(f"materials/{tex_name}.vtf")

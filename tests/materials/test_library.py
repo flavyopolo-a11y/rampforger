@@ -49,3 +49,13 @@ def test_extra_folder_overrides_game(tmp_path):
 def test_missing_game_gives_empty_library(tmp_path):
     lib = MaterialLibrary.for_game(tmp_path / "gibtsnicht")
     assert lib.names() == [] and lib.material("dev/x") is None and lib.texture("dev/x") is None
+
+
+def test_own_folders_are_known(tmp_path):
+    own = tmp_path / "pack"
+    (own / "materials" / "pack").mkdir(parents=True)
+    (own / "materials" / "pack" / "Gelb.vmt").write_text(vmt_text("pack/gelb"), encoding="utf-8")
+    lib = MaterialLibrary.for_game(make_game(tmp_path), [own])
+    assert lib.own_names() == ["pack/gelb"]
+    assert lib.is_own("PACK/GELB") and not lib.is_own("test/rot")
+    assert "pack/gelb" in lib.names()
