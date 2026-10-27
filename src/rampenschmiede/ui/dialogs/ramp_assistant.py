@@ -147,7 +147,7 @@ class RampAssistant(QDialog):
         self.clip = QCheckBox(self.tr("Playerclip auf Rampen (empfohlen, damit das Surfen glatt ist)"))
         self.clip.setChecked(start.clip)
         self.clip.setToolTip(self.tr(
-            "An: Jede Rampe bekommt eine glatte Playerclip-Hülle, die sichtbare Rampe ist ein func_brush. "
+            "An: Jede Rampe bekommt eine glatte Playerclip-Hülle über der sichtbaren Rampe (func_detail). "
             "Aus: Die Rampe selbst ist die Kollision (func_detail)."))
         self.walls = QCheckBox(self.tr("Wände, Böden und Bhop-Blöcke mitfärben"))
         self.walls.setChecked(start.walls)

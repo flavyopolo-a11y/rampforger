@@ -168,7 +168,7 @@ MATERIAL_PARAMS = (
     SIDE_MATERIAL,
     Param("unterseite_nodraw", "Unterseite unsichtbar (Nodraw)", True),
     Param("kollision", "Kollision", "clip", choices=(
-        ("clip", "Playerclip + func_brush (empfohlen)"), ("detail", "Nur func_detail"))),
+        ("clip", "Playerclip + func_detail (empfohlen)"), ("detail", "Nur func_detail"))),
 )
 
 

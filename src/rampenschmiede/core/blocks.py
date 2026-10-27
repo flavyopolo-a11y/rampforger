@@ -1,7 +1,7 @@
 """Bausteine: Objekte aus der Bibliothek, deren Regler sich nachträglich ändern lassen.
 
 Ein Baustein besteht aus
-- einer Wurzel-Entity (func_brush „nie fest“ oder func_detail), die in `extra["block"]`
+- einer Wurzel-Entity (func_detail), die in `extra["block"]`
   Vorlage, Reglerwerte und Platzierung speichert, mit den sichtbaren Brushes als Kindern,
 - bei Kollision „Playerclip“ zusätzlich aus Welt-Brushes mit Playerclip-Textur, die über
   `extra["block_of"]` zur Wurzel gehören. Sie sind deckungsgleich mit den sichtbaren
@@ -52,15 +52,28 @@ def _root_entity(root_id: int, collision: str, info: dict, editor: EditorInfo | 
         classname, kvs = template.entity(info["values"], placement_of(info))
         return Entity(id=root_id, classname=classname, keyvalues=kvs,
                       editor=editor or EditorInfo(color=(220, 30, 220)), extra={BLOCK_KEY: info})
-    if collision == "clip":
-        # Nie fest: Die Kollision kommt von den Playerclip-Brushes in der Welt
-        kvs = (("Solidity", "1"), ("vrad_brush_cast_shadows", "1"))
-        classname = "func_brush"
-    else:
-        kvs = ()
-        classname = "func_detail"
+    # Immer func_detail: vbsp verschweißt Detail-Brushes mit der Welt (T-Kreuzungen). Als
+    # func_brush zeigten Kurven im Spiel helle und dunkle Risse zwischen den Segmenten (E51).
+    kvs: tuple = ()
+    classname = "func_detail"
     return Entity(id=root_id, classname=classname, keyvalues=kvs,
                   editor=editor or EditorInfo(color=(220, 30, 220)), extra={BLOCK_KEY: info})
+
+
+#: Glättungsgruppe der Surf-Flächen: vrad rechnet das Licht über die Segmente hinweg weich
+SURF_SMOOTHING = 1
+
+
+def _smooth(faces: tuple) -> tuple:
+    """Schräge Flächen (Surf-Flächen) bekommen eine gemeinsame Glättungsgruppe, damit Kurven
+    im Spiel ohne helle und dunkle Streifen an den Segmentgrenzen beleuchtet werden."""
+    out = []
+    for f in faces:
+        nz = abs(f.plane.normal[2])
+        if 0.05 < nz < 0.95 and not f.material.upper().startswith("TOOLS/"):
+            f = dataclasses.replace(f, smoothing_groups=f.smoothing_groups | SURF_SMOOTHING)
+        out.append(f)
+    return tuple(out)
 
 
 def build_block(doc: MapDocument, template: str, values: dict | None = None, at: Placement = ORIGIN,
@@ -78,13 +91,27 @@ def build_block(doc: MapDocument, template: str, values: dict | None = None, at:
         color = (rng.randint(80, 255), rng.randint(80, 255), rng.randint(80, 255))
     objs: list[MapObject] = [root]
     for faces in gen.face_sets:
-        objs.append(Solid(id=doc.new_id(), faces=faces, parent_id=root.id, editor=EditorInfo(color=color)))
+        objs.append(Solid(id=doc.new_id(), faces=_smooth(faces), parent_id=root.id, editor=EditorInfo(color=color)))
     if collision == "clip":
         for faces in gen.face_sets:
             clip = tuple(dataclasses.replace(f, material=PLAYERCLIP) for f in faces)
             objs.append(Solid(id=doc.new_id(), faces=clip, editor=EditorInfo(color=CLIP_COLOR),
                               extra={MEMBER_KEY: root.id}))
     return objs, gen
+
+
+def upgrade_roots(doc: MapDocument) -> int:
+    """Ältere Projekte: sichtbare Rampen waren func_brush. Beim Öffnen auf func_detail
+    umstellen (E51). Liefert die Zahl der geänderten Bausteine; kein Undo-Schritt."""
+    changed = []
+    for obj in doc.objects():
+        if isinstance(obj, Entity) and obj.classname == "func_brush" and BLOCK_KEY in obj.extra \
+                and CATALOG[obj.extra[BLOCK_KEY]["template"]].entity is None:
+            kvs = tuple((k, v) for k, v in obj.keyvalues if k not in ("Solidity", "vrad_brush_cast_shadows"))
+            changed.append(dataclasses.replace(obj, classname="func_detail", keyvalues=kvs))
+    if changed:
+        doc._replace(changed)
+    return len(changed)
 
 
 def _unique_name(doc: MapDocument, base: str) -> str:
