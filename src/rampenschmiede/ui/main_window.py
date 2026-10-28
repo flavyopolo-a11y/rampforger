@@ -14,12 +14,14 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QScrollArea,
     QSizePolicy,
     QToolBar,
     QToolButton,
     QWidget,
+    QWidgetAction,
 )
 
 from .. import __version__
@@ -63,7 +65,7 @@ from .dialogs.sky_dialog import SkyDialog
 from .dialogs.surf_wizard import SurfWizard
 from .dialogs.texture_packs import TexturePacksDialog
 from .dialogs.transform_dialog import TransformDialog
-from .dialogs.world_styles import WorldStylesDialog
+from .dialogs.world_styles import StyleGallery, WorldStylesDialog
 from .editor import EditorContext
 from .icons import ACTIVE, icon, pixmap
 from .panels.compile_log import CompileLogPanel
@@ -109,6 +111,8 @@ MAX_RECENT = 8
 #: Steigt, wenn neue Panels dazukommen: Alte gespeicherte Anordnungen werden dann verworfen
 LAYOUT_VERSION = 6
 DOCK_MIN_WIDTH = 340
+#: Bildgröße der Stile im Stil-Knopf oben
+STYLE_THUMB = QSize(150, 96)
 
 CONTROLS_HELP = """
 <h3>Kamera</h3>
@@ -516,6 +520,8 @@ class MainWindow(QMainWindow):
             tb.addSeparator() if a is None else tb.addAction(a)
         for a in (self.act_grid_finer, self.act_grid_coarser):
             tb.widgetForAction(a).setToolButtonStyle(Qt.ToolButtonIconOnly)
+        tb.addSeparator()
+        tb.addWidget(self._style_button())
         # Rechts oben: welches Werkzeug gerade aktiv ist
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -535,6 +541,33 @@ class MainWindow(QMainWindow):
         for a in self.tool_actions.values():
             tools.addAction(a)
         self.addToolBar(Qt.LeftToolBarArea, tools)
+
+    def _style_button(self) -> QToolButton:
+        """Stil der Map: Klick zeigt alle Welt-Stile als Bilder, ein Klick auf eins wendet ihn an."""
+        button = QToolButton()
+        button.setIcon(icon("palette"))
+        button.setText(self.tr("Stil"))
+        button.setToolTip(self.tr("Stil der ganzen Map wählen: Himmel, Sonne, Nebel, Texturen (Tag, Nacht, Neon …)"))
+        button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        button.setPopupMode(QToolButton.InstantPopup)
+        menu = QMenu(button)
+        self.style_gallery = StyleGallery(STYLE_THUMB, columns=4)
+        gallery_action = QWidgetAction(menu)
+        gallery_action.setDefaultWidget(self.style_gallery)
+        menu.addAction(gallery_action)
+        menu.addSeparator()
+        menu.addAction(self.act_world_style)
+
+        def picked(item) -> None:
+            style = self.style_gallery.style_at(item)
+            menu.close()
+            if style is not None:
+                self.apply_world_style(style, get_theme(self.editor.doc).collision == "clip")
+
+        self.style_gallery.itemClicked.connect(picked)
+        button.setMenu(menu)
+        self.style_button = button
+        return button
 
     def _build_statusbar(self) -> None:
         sb = self.statusBar()

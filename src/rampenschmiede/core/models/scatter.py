@@ -64,7 +64,8 @@ KITS: tuple[DetailKit, ...] = (
 KITS_BY_KEY = {k.key: k for k in KITS}
 #: Passendes Kit je Welt-Stil
 STYLE_KITS = {"tag": "wald", "abend": "wald", "nacht": "stadt", "wueste": "wueste", "industrie": "industrie",
-              "neon": "stadt"}
+              "neon": "stadt", "eis": "felsen", "dschungel": "wald", "retro": "stadt", "weltraum": "industrie",
+              "inferno": "industrie", "pastell": "wald"}
 
 
 def kit_models(kit: DetailKit, names: list[str]) -> list[str]:
