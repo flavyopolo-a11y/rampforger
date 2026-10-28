@@ -318,11 +318,23 @@ passende Texturen und färbt die ganze Map oder nur die Auswahl in einem Undo-Sc
 Rampen bekommen die Farben automatisch. Der Haken „Playerclip auf Rampen“ (auch im Menü
 *Texturen*) schaltet die glatte Clip-Hülle für alle Rampen an oder aus.
 
-**Welt-Stile (Menü *Texturen*).** Sonniger Tag, Sonnenuntergang, Nacht, Wüste, Industrie oder
-Neon: Ein Klick setzt Himmel, Sonne, Nebel, Wand-Texturen und Rampenfarben der ganzen Map. Hat
+**Welt-Stile (Knopf *Stil* oben, oder Menü *Texturen*).** Sonniger Tag, Sonnenuntergang, Nacht,
+Wüste, Industrie, Neon, Eis, Dschungel, Retro (Synthwave), Weltraum, Inferno oder Pastell, alle als
+Bild zum Anklicken: Ein Klick setzt Himmel, Sonne, Nebel, Wand-Texturen und Rampenfarben der ganzen
+Map, Strg+Z nimmt alles zurück. Hat
 das Spiel passende CS:S- oder HL2-Texturen, werden die genommen, sonst erzeugt die Rampenschmiede
 sie. **Umfärben per Klick:** Im Seiten-Werkzeug färbt Strg+Shift+Klick das Material dieser Seite
 in der ganzen Map in das aktuelle Material um.
+
+**Freie Texturen und Himmel (Menü *Texturen*).** Durchsucht die Bibliothek von
+[Poly Haven](https://polyhaven.com): Hunderte Texturen und Himmel, alle CC0 (frei nutzbar, auch
+kommerziell). Ein Klick lädt eine Textur, wandelt sie in VTF/VMT um (mit Normal-Map für Licht und
+Schatten) und macht sie zum aktuellen Material. Ein Himmel wird aus dem Rundum-Bild in eine
+Source-Skybox umgerechnet und gleich gesetzt. Geladenes landet unter `materials/rampenschmiede/frei`
+bzw. `materials/skybox/rs_*` und wird beim Kompilieren mit in die Map gepackt.
+
+**3D-Vorschau in den Browsern.** Der Modell-Browser zeigt das gewählte Modell texturiert in 3D,
+der Material-Browser das Material auf Kugel, Würfel oder Rampe. Ziehen dreht, das Mausrad zoomt.
 
 **Eigene Texturen.** *Texturen → Bild als Textur importieren* macht aus PNG, JPG, TGA oder BMP
 ein Source-Material (VTF und VMT). *Texturen → Texturpakete* bindet eigene Ordner ein, die wie

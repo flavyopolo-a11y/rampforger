@@ -38,9 +38,12 @@ from ...core.materials import MaterialLibrary, normalize
 from ...core.materials.apply import SCOPE_ALL, apply_to_objects, expand_scope
 from ...render.scene_mesh import material_color
 from ..editor import EditorContext
+from ..widgets.preview_3d import SHAPES, Preview3D, material_groups
 from ..widgets.scope_switch import ScopeSwitch
 
 THUMB = 72
+#: Kantenlänge der 3D-Vorschau rechts neben den Kacheln
+PREVIEW_3D = 150
 FILTERS = (("all", "Alle"), ("favorites", "Favoriten"), ("map", "In dieser Map"), ("recent", "Zuletzt benutzt"),
            ("own", "Eigene Texturen"))
 MAX_RECENT = 40
@@ -245,7 +248,22 @@ class MaterialBrowser(QWidget):
         self.view.setDragDropMode(QListView.DragOnly)
         self.view.setToolTip(self.tr("Klick wählt, Doppelklick legt auf die Auswahl, "
                                      "Ziehen auf eine Fläche in der 3D-Ansicht legt es genau dort hin"))
-        lay.addWidget(self.view, 1)
+        middle = QHBoxLayout()
+        middle.addWidget(self.view, 1)
+        # Rechts: das gewählte Material in 3D auf Kugel, Würfel oder Rampe
+        side = QVBoxLayout()
+        self.preview3d = Preview3D()
+        self.preview3d.setFixedSize(PREVIEW_3D, PREVIEW_3D)
+        side.addWidget(self.preview3d)
+        self.shape = QComboBox()
+        for key, label in SHAPES.items():
+            self.shape.addItem(self.tr(label), key)
+        self.shape.setToolTip(self.tr("Form, auf der das Material gezeigt wird"))
+        self.shape.currentIndexChanged.connect(lambda _i: self._show_3d(self.editor.current_material))
+        side.addWidget(self.shape)
+        side.addStretch(1)
+        middle.addLayout(side)
+        lay.addLayout(middle, 1)
 
         bottom = QHBoxLayout()
         self.preview = QLabel()
@@ -369,6 +387,13 @@ class MaterialBrowser(QWidget):
         if self.filter.currentData() == "favorites":
             self._refilter()
 
+    def _show_3d(self, material: str) -> None:
+        name = normalize(material or "")
+        groups = material_groups(name, self.editor.materials, self.shape.currentData() or "kugel")
+        if groups and groups[0].texture is None:
+            groups[0].color = material_color(name)
+        self.preview3d.set_groups(groups, reset_view=False)
+
     def _show_current(self, material: str) -> None:
         name = normalize(material)
         lib = self.editor.materials
@@ -381,6 +406,7 @@ class MaterialBrowser(QWidget):
             self.preview.setPixmap(_swatch(name, 48))
             size = "" if lib is None or lib.exists(name) else self.tr("  ·  nicht im Spiel gefunden")
         self.current_label.setText(f"<b>{name}</b>{size}")
+        self._show_3d(name)
         fav = name in self.favorites()
         self.fav_button.blockSignals(True)
         self.fav_button.setChecked(fav)

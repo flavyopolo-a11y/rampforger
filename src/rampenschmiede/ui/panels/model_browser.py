@@ -13,14 +13,13 @@ from PySide6.QtCore import (
     QMimeData,
     QModelIndex,
     QObject,
-    QPointF,
     QRunnable,
     QSize,
     Qt,
     QThreadPool,
     Signal,
 )
-from PySide6.QtGui import QColor, QIcon, QImage, QMouseEvent, QPainter, QPixmap
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -48,9 +47,10 @@ from ...core.models.props import (
 )
 from ...render.model_preview import render_preview
 from ..editor import EditorContext
+from ..widgets.preview_3d import Preview3D, model_groups
 
 THUMB = 88
-PREVIEW = 180
+PREVIEW = 220
 #: Modell per Ziehen aus dem Browser in eine Ansicht
 MIME_MODEL = "application/x-rampenschmiede-modell"
 ALL_FOLDERS = "*"
@@ -197,48 +197,28 @@ def _placeholder(size: int) -> QPixmap:
     return pix
 
 
-class ModelPreview(QLabel):
-    """Große Vorschau. Ziehen mit der Maus dreht das Modell."""
+class ModelPreview(Preview3D):
+    """Große Vorschau: das Modell texturiert in 3D. Ziehen dreht, Mausrad zoomt."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setFixedSize(PREVIEW, PREVIEW)
-        self.setAlignment(Qt.AlignCenter)
-        self.setStyleSheet("background: #1e1f22; border: 1px solid #3a3d42;")
-        self.setToolTip(self.tr("Ziehen dreht das Modell"))
         self.model: LoadedModel | None = None
         self.lib: ModelLibrary | None = None
-        self.yaw, self.pitch, self.skin = 30.0, 20.0, 0
-        self._last: QPointF | None = None
-        self.setText(self.tr("Kein Modell gewählt"))
+        self.skin = 0
 
     def show_model(self, lib: ModelLibrary | None, model: LoadedModel | None, skin: int = 0) -> None:
         self.lib, self.model, self.skin = lib, model, skin
-        self.redraw()
+        self.set_groups(self._groups())
 
     def redraw(self) -> None:
+        """Nach Skin-Wechsel: neue Texturen, Blickwinkel bleibt."""
+        self.set_groups(self._groups(), reset_view=False)
+
+    def _groups(self):
         if self.model is None or self.lib is None:
-            self.setPixmap(QPixmap())
-            self.setText(self.tr("Kein Modell gewählt"))
-            return
-        data = render_preview(self.model, self.lib.materials, PREVIEW - 2, self.yaw, self.pitch, self.skin)
-        img = QImage(data, PREVIEW - 2, PREVIEW - 2, (PREVIEW - 2) * 4, QImage.Format_RGBA8888).copy()
-        self.setPixmap(QPixmap.fromImage(img))
-
-    def mousePressEvent(self, e: QMouseEvent) -> None:
-        self._last = e.position()
-
-    def mouseMoveEvent(self, e: QMouseEvent) -> None:
-        if self._last is None:
-            return
-        d = e.position() - self._last
-        self._last = e.position()
-        self.yaw = (self.yaw - d.x() * 0.8) % 360
-        self.pitch = max(-85.0, min(85.0, self.pitch + d.y() * 0.6))
-        self.redraw()
-
-    def mouseReleaseEvent(self, e: QMouseEvent) -> None:
-        self._last = None
+            return []
+        return model_groups(self.model, self.lib.materials, self.skin)
 
 
 class ModelBrowser(QWidget):

@@ -14,12 +14,14 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QScrollArea,
     QSizePolicy,
     QToolBar,
     QToolButton,
     QWidget,
+    QWidgetAction,
 )
 
 from .. import __version__
@@ -48,6 +50,7 @@ from .autosave import DEFAULT_MINUTES, Autosaver, backup_before_save, backups_di
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
 from .dialogs.find_dialog import FindDialog
+from .dialogs.free_assets import FreeAssetsDialog
 from .dialogs.organize_dialogs import MultiCopyDialog, TieEntityDialog
 from .dialogs.problems_dialog import ProblemsDialog
 from .dialogs.profiles_dialog import ProfilesDialog
@@ -63,7 +66,7 @@ from .dialogs.sky_dialog import SkyDialog
 from .dialogs.surf_wizard import SurfWizard
 from .dialogs.texture_packs import TexturePacksDialog
 from .dialogs.transform_dialog import TransformDialog
-from .dialogs.world_styles import WorldStylesDialog
+from .dialogs.world_styles import StyleGallery, WorldStylesDialog
 from .editor import EditorContext
 from .icons import ACTIVE, icon, pixmap
 from .panels.compile_log import CompileLogPanel
@@ -109,6 +112,8 @@ MAX_RECENT = 8
 #: Steigt, wenn neue Panels dazukommen: Alte gespeicherte Anordnungen werden dann verworfen
 LAYOUT_VERSION = 6
 DOCK_MIN_WIDTH = 340
+#: Bildgröße der Stile im Stil-Knopf oben
+STYLE_THUMB = QSize(150, 96)
 
 CONTROLS_HELP = """
 <h3>Kamera</h3>
@@ -207,8 +212,8 @@ class MainWindow(QMainWindow):
         self._build_docks()
         self._build_actions()
         self._set_icons()
-        self.material_browser.add_actions([self.act_ramp_assistant, self.act_world_style, None, self.act_import_texture,
-                                           self.act_texture_packs])
+        self.material_browser.add_actions([self.act_ramp_assistant, self.act_world_style, None, self.act_free_assets,
+                                           self.act_import_texture, self.act_texture_packs])
         self._build_menus()
         self._build_toolbars()
         self._build_statusbar()
@@ -438,6 +443,8 @@ class MainWindow(QMainWindow):
                                                "PNG, JPG, TGA oder BMP als eigenes Material übernehmen")
         self.act_texture_packs = self._action("Textur&pakete …", self.edit_texture_packs, None,
                                               "Eigene Ordner mit Materialien einbinden")
+        self.act_free_assets = self._action("&Freie Texturen und Himmel …", self.free_assets, None,
+                                            "Texturen und Himmel von Poly Haven (CC0) mit einem Klick laden")
 
         self.act_controls = self._action("&Steuerung", self.show_controls, "F1")
         self.act_about = self._action("Ü&ber Rampenschmiede", self.show_about)
@@ -480,7 +487,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("Te&xturen"))
         for a in (self.act_ramp_assistant, self.act_world_style, self.act_sky, self.act_skybox3d, self.act_ramp_clip, None,
-                  self.act_import_texture, self.act_texture_packs):
+                  self.act_free_assets, self.act_import_texture, self.act_texture_packs):
             m.addSeparator() if a is None else m.addAction(a)
 
         m = mb.addMenu(self.tr("&Testen"))
@@ -516,6 +523,8 @@ class MainWindow(QMainWindow):
             tb.addSeparator() if a is None else tb.addAction(a)
         for a in (self.act_grid_finer, self.act_grid_coarser):
             tb.widgetForAction(a).setToolButtonStyle(Qt.ToolButtonIconOnly)
+        tb.addSeparator()
+        tb.addWidget(self._style_button())
         # Rechts oben: welches Werkzeug gerade aktiv ist
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -535,6 +544,33 @@ class MainWindow(QMainWindow):
         for a in self.tool_actions.values():
             tools.addAction(a)
         self.addToolBar(Qt.LeftToolBarArea, tools)
+
+    def _style_button(self) -> QToolButton:
+        """Stil der Map: Klick zeigt alle Welt-Stile als Bilder, ein Klick auf eins wendet ihn an."""
+        button = QToolButton()
+        button.setIcon(icon("palette"))
+        button.setText(self.tr("Stil"))
+        button.setToolTip(self.tr("Stil der ganzen Map wählen: Himmel, Sonne, Nebel, Texturen (Tag, Nacht, Neon …)"))
+        button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        button.setPopupMode(QToolButton.InstantPopup)
+        menu = QMenu(button)
+        self.style_gallery = StyleGallery(STYLE_THUMB, columns=4)
+        gallery_action = QWidgetAction(menu)
+        gallery_action.setDefaultWidget(self.style_gallery)
+        menu.addAction(gallery_action)
+        menu.addSeparator()
+        menu.addAction(self.act_world_style)
+
+        def picked(item) -> None:
+            style = self.style_gallery.style_at(item)
+            menu.close()
+            if style is not None:
+                self.apply_world_style(style, get_theme(self.editor.doc).collision == "clip")
+
+        self.style_gallery.itemClicked.connect(picked)
+        button.setMenu(menu)
+        self.style_button = button
+        return button
 
     def _build_statusbar(self) -> None:
         sb = self.statusBar()
@@ -1310,6 +1346,13 @@ class MainWindow(QMainWindow):
             self.editor.set_current_material(names[-1])
             self.editor.status_message.emit(self.tr("{0} Textur(en) importiert, sie stehen unter „Eigene“").format(len(names)))
         return names
+
+    def free_assets(self) -> FreeAssetsDialog:
+        if getattr(self, "free_assets_dialog", None) is None:
+            self.free_assets_dialog = FreeAssetsDialog(self.editor, parent=self)
+        self.free_assets_dialog.show()
+        self.free_assets_dialog.raise_()
+        return self.free_assets_dialog
 
     def edit_texture_packs(self) -> bool:
         dlg = TexturePacksDialog(self.texture_packs(), self)

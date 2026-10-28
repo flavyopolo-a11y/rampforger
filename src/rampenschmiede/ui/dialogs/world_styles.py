@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.materials.authoring import ramp_image, wall_image
-from ...core.materials.styles import STYLES, WorldStyle
+from ...core.materials.styles import STYLE_BY_KEY, STYLES, WorldStyle
 from .ramp_assistant import pil_pixmap
 
 PREVIEW = QSize(168, 108)
@@ -50,11 +50,39 @@ def style_preview(style: WorldStyle, w: int = PREVIEW.width(), h: int = PREVIEW.
     return img
 
 
+class StyleGallery(QListWidget):
+    """Alle Welt-Stile als Bilder zum Anklicken (im Dialog und im Stil-Knopf oben)."""
+
+    def __init__(self, size: QSize = PREVIEW, columns: int = 0, parent=None) -> None:
+        super().__init__(parent)
+        self.setViewMode(QListView.IconMode)
+        self.setIconSize(size)
+        self.setGridSize(QSize(size.width() + 20, size.height() + 34))
+        self.setResizeMode(QListView.Adjust)
+        self.setMovement(QListView.Static)
+        self.setWordWrap(True)
+        for style in STYLES:
+            item = QListWidgetItem(QIcon(pil_pixmap(style_preview(style, size.width(), size.height()))),
+                                   self.tr(style.name))
+            item.setData(Qt.UserRole, style.key)
+            item.setToolTip(self.tr(style.description))
+            self.addItem(item)
+        if columns:
+            # Feste Größe, damit die Galerie im Menü ohne Rollbalken ganz sichtbar ist
+            rows = -(-len(STYLES) // columns)
+            self.setFixedSize(columns * self.gridSize().width() + 12, rows * self.gridSize().height() + 12)
+            self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+    def style_at(self, item: QListWidgetItem | None) -> WorldStyle | None:
+        return STYLE_BY_KEY.get(item.data(Qt.UserRole)) if item is not None else None
+
+
 class WorldStylesDialog(QDialog):
     def __init__(self, clip: bool = True, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(self.tr("Welt-Stil"))
-        self.resize(640, 520)
+        self.resize(760, 600)
         lay = QVBoxLayout(self)
         intro = QLabel(self.tr(
             "Ein Stil setzt Himmel, Sonne, Nebel, Wand-Texturen und Rampenfarben der ganzen Map auf einmal. "
@@ -62,17 +90,7 @@ class WorldStylesDialog(QDialog):
             "und lässt sich danach frei ändern."))
         intro.setWordWrap(True)
         lay.addWidget(intro)
-        self.list = QListWidget()
-        self.list.setViewMode(QListView.IconMode)
-        self.list.setIconSize(PREVIEW)
-        self.list.setGridSize(QSize(PREVIEW.width() + 20, PREVIEW.height() + 34))
-        self.list.setResizeMode(QListView.Adjust)
-        self.list.setMovement(QListView.Static)
-        for style in STYLES:
-            item = QListWidgetItem(QIcon(pil_pixmap(style_preview(style))), self.tr(style.name))
-            item.setData(Qt.UserRole, style.key)
-            item.setToolTip(self.tr(style.description))
-            self.list.addItem(item)
+        self.list = StyleGallery()
         self.list.currentItemChanged.connect(self._show)
         self.list.itemDoubleClicked.connect(lambda _item: self.accept())
         lay.addWidget(self.list, 1)
@@ -96,4 +114,4 @@ class WorldStylesDialog(QDialog):
         self.description.setText(self.tr(self.chosen().description))
 
 
-__all__ = ["WorldStylesDialog", "style_preview"]
+__all__ = ["StyleGallery", "WorldStylesDialog", "style_preview"]
