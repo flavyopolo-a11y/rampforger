@@ -38,12 +38,23 @@ from ...core.entities.fgd import EntityCatalog, EntityClass, KeyDef, builtin_cat
 from ...core.entities.io import entities_named, incoming, target_names
 from ...core.lights import LIGHT_CLASSES
 from ...core.model import Entity, Output
+from ...core.models.props import (
+    PROP_CLASSES,
+    PROP_HELP,
+    PROP_LABELS,
+    change_class,
+    class_problem,
+    is_model_entity,
+)
 from ..editor import EditorContext
+from ..icons import ACTIVE
 
 #: Breite der Beschriftungen; längere brechen um
 LABEL_WIDTH = 120
 #: Keys, die das Auswahl-Panel über Position und Größe schon abdeckt
 GEOMETRY_KEYS = {"origin"}
+PROP_STYLE = (f"QPushButton {{ padding: 3px 8px; }} QPushButton:checked {{ background: {ACTIVE}; color: #111; "
+              "font-weight: bold; border: 1px solid #ffb070; }")
 #: Lichter mit Richtung (bekommen den Knopf „In Blickrichtung ausrichten“)
 AIMED_LIGHTS = {"light_spot", "light_environment"}
 
@@ -264,12 +275,17 @@ class EntityPanel(QWidget):
             hint.setWordWrap(True)
             hint.setStyleSheet("color: #9aa0a6;")
             form.addRow(hint)
+        if is_model_entity(ent) or ent.classname.lower() in PROP_CLASSES:
+            form.addRow(self._prop_box(ent))
         if ent.classname.lower() in AIMED_LIGHTS:
             aim = QPushButton(self.tr("In Blickrichtung der 3D-Kamera ausrichten"))
             aim.setToolTip(self.tr("Schau in der 3D-Ansicht dorthin, wohin das Licht scheinen soll, und klick hier."))
             aim.clicked.connect(self.aim_at_camera)
             form.addRow(aim)
-        for k in cls.keys if cls else ():
+        keys = list(cls.keys) if cls else []
+        if is_model_entity(ent) or ent.classname.lower() in PROP_CLASSES:
+            keys = _prop_keys(keys)
+        for k in keys:
             if k.name.lower() in GEOMETRY_KEYS:
                 continue
             known.add(k.name.lower())
@@ -310,6 +326,72 @@ class EntityPanel(QWidget):
         form.addRow(add_row)
         self.props_area.setWidget(w)
 
+    # ---- Props ------------------------------------------------------------------------
+    def _loaded_model(self, ent: Entity):
+        lib = getattr(self.editor, "models", None)
+        name = ent.get("model", "")
+        return lib.load(name) if lib is not None and name else None
+
+    def _prop_box(self, ent: Entity) -> QWidget:
+        """Prop-Art als drei Knöpfe und, wenn das Modell nicht zur Art passt, warum."""
+        box = QWidget()
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(0, 0, 0, 4)
+        row = QHBoxLayout()
+        row.setSpacing(0)
+        model = self._loaded_model(ent)
+        self.prop_buttons: dict[str, QPushButton] = {}
+        for cls in PROP_CLASSES:
+            b = QPushButton(self.tr(PROP_LABELS[cls]))
+            b.setCheckable(True)
+            b.setChecked(ent.classname.lower() == cls)
+            b.setStyleSheet(PROP_STYLE)
+            problem = class_problem(cls, model)
+            b.setToolTip(f"{cls}: {self.tr(PROP_HELP[cls])}" + (f"\n\n{self.tr(problem)}" if problem else ""))
+            if problem:
+                b.setText(b.text() + " ⚠")
+            b.clicked.connect(lambda _=False, c=cls: self.set_prop_class(c))
+            self.prop_buttons[cls] = b
+            row.addWidget(b)
+        lay.addLayout(row)
+        problem = class_problem(ent.classname, model)
+        self.prop_warning = QLabel(self.tr(problem))
+        self.prop_warning.setWordWrap(True)
+        self.prop_warning.setStyleSheet("color: #e5a050;")
+        self.prop_warning.setVisible(bool(problem))
+        lay.addWidget(self.prop_warning)
+        if ent.get("model") and model is None and getattr(self.editor, "models", None) is not None:
+            missing = QLabel(self.tr("Modell nicht gefunden: Im Spiel fehlt es, oder der Pfad ist falsch."))
+            missing.setWordWrap(True)
+            missing.setStyleSheet("color: #e57373;")
+            lay.addWidget(missing)
+        return box
+
+    def set_prop_class(self, classname: str) -> None:
+        ent = self.entity()
+        if ent is None or ent.classname == classname:
+            if ent is not None:
+                self.show_entity(ent)
+            return
+        cls = self.catalog.get(classname)
+        new = change_class(ent, classname)
+        if cls is not None:
+            have = {k.lower() for k, _ in new.keyvalues}
+            new = new.replace(keyvalues=new.keyvalues + tuple((k, v) for k, v in cls.defaults() if k.lower() not in have))
+        self._run(new, self.tr("Prop-Art ändern"))
+
+    def choose_model(self) -> bool:
+        from ..dialogs.model_dialog import ModelDialog
+
+        ent = self.entity()
+        if ent is None:
+            return False
+        dlg = ModelDialog(getattr(self.editor, "models", None), ent.get("model", ""), self)
+        if dlg.exec() != ModelDialog.Accepted or not dlg.chosen():
+            return False
+        self.set_value("model", dlg.chosen())
+        return True
+
     def aim_at_camera(self) -> bool:
         """Spot oder Sonne in die Richtung drehen, in die die 3D-Kamera schaut."""
         ent = self.entity()
@@ -325,6 +407,33 @@ class EntityPanel(QWidget):
         return True
 
     def _field(self, k: KeyDef, value: str, names: list[str]) -> QWidget:
+        if k.kind == "model":
+            w = QWidget()
+            row = QHBoxLayout(w)
+            row.setContentsMargins(0, 0, 0, 0)
+            edit = QLineEdit(value)
+            edit.editingFinished.connect(lambda key=k.name, e=edit: self.set_value(key, e.text().strip()))
+            pick = QPushButton(self.tr("Wählen …"))
+            pick.setToolTip(self.tr("Modell aus dem Spiel mit Vorschau wählen"))
+            pick.clicked.connect(self.choose_model)
+            row.addWidget(edit, 1)
+            row.addWidget(pick)
+            self.model_edit = edit
+            return w
+        if k.name.lower() == "skin":
+            ent = self.entity()
+            model = self._loaded_model(ent) if ent is not None else None
+            if model is not None:
+                spin = QSpinBox()
+                spin.setRange(0, model.skin_count - 1)
+                try:
+                    spin.setValue(int(float(value or 0)))
+                except ValueError:
+                    spin.setValue(0)
+                spin.setEnabled(model.skin_count > 1)
+                spin.setSuffix(self.tr(" von {0}").format(model.skin_count))
+                spin.valueChanged.connect(lambda v, key=k.name: self.set_value(key, str(v)))
+                return spin
         if k.kind == "boolean":
             box = QCheckBox()
             box.setChecked(value not in ("", "0"))
@@ -534,6 +643,20 @@ class EntityPanel(QWidget):
     def _jump_to_source(self, row: int, _col: int) -> None:
         if 0 <= row < len(self._sources):
             self.editor.set_selection([self._sources[row]])
+
+
+MODEL_KEY = KeyDef("model", "Modell", "model", desc="Pfad des Modells, z. B. models/props_c17/oildrum001.mdl")
+SOLID_KEY = KeyDef("solid", "Kollision", "choices", "6", "Wie Spieler mit dem Prop zusammenstoßen",
+                   (("0", "Keine (durchlässig)"), ("2", "Kasten (Bounding Box)"), ("6", "Modell (VPhysics)")))
+
+
+def _prop_keys(keys: list[KeyDef]) -> list[KeyDef]:
+    """Props zeigen immer zuerst das Modell; manche FGDs (engine_dbase bei prop_static)
+    führen es nicht. Kollision als Auswahl statt als nackte Zahl."""
+    out = [k for k in keys if k.name.lower() != "model"]
+    out = [SOLID_KEY if k.name.lower() == "solid" and k.kind == "integer" else k for k in out]
+    model = next((k for k in keys if k.name.lower() == "model"), MODEL_KEY)
+    return [model, *out]
 
 
 def _existing_key(ent: Entity, key: str) -> str | None:

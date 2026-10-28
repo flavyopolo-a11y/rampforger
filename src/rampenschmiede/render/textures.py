@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from ..core.materials import MaterialLibrary, normalize
 
 LAYER_SIZE = 256
+#: Auf die Textur-Ebene aufgeschlagen, wenn der Shader durchsichtige Pixel weglassen soll:
+#: bei $alphatest unter halber Deckkraft, bei $translucent nur fast ganz durchsichtige
+CUTOUT_ALPHATEST = 512
+CUTOUT_TRANSLUCENT = 1024
 #: GL garantiert mindestens 256 Ebenen; Ebene 0 ist weiß (für Farben ohne Textur)
 MAX_LAYERS = 256
 
@@ -22,6 +26,12 @@ class TextureSlot:
     layer: int
     width: int    # Größe der Originaltextur in Pixeln (für UV)
     height: int
+    #: Aufschlag auf die Ebene für durchsichtige Materialien (0, CUTOUT_ALPHATEST, CUTOUT_TRANSLUCENT)
+    cutout: int = 0
+
+    @property
+    def shader_layer(self) -> int:
+        return self.layer + self.cutout
 
 
 class TextureAtlas:
@@ -55,6 +65,9 @@ class TextureAtlas:
                 return self._slots[key]
             lib = self.library
         image = lib.texture(key) if lib is not None else None
+        info = lib.material(key) if image is not None and lib is not None else None
+        cutout = {"alphatest": CUTOUT_ALPHATEST, "translucent": CUTOUT_TRANSLUCENT}.get(
+            info.transparency if info else "", 0)
         with self._lock:
             if key in self._slots:
                 return self._slots[key]
@@ -62,7 +75,7 @@ class TextureAtlas:
                 self._slots[key] = None
                 return None
             self._layers.append(_to_layer(image.rgba, image.width, image.height))
-            slot = TextureSlot(len(self._layers) - 1, image.source_width, image.source_height)
+            slot = TextureSlot(len(self._layers) - 1, image.source_width, image.source_height, cutout)
             self._slots[key] = slot
             return slot
 

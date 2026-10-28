@@ -44,6 +44,8 @@ class MaterialInfo:
     translucent: bool
     keywords: tuple[str, ...]
     surfaceprop: str
+    #: Durchsichtige Pixel: "alphatest" (hart ausgeschnitten), "translucent" (halb durchsichtig) oder ""
+    transparency: str = ""
 
     @property
     def preview_texture(self) -> str | None:
@@ -149,8 +151,10 @@ class MaterialLibrary:
 
         translucent = any(mat.get(k, "0") not in ("0", "") for k in TRANSLUCENT_KEYS)
         keywords = tuple(k.strip() for k in mat.get("%keywords", "").split(",") if k.strip())
+        transparency = ("alphatest" if mat.get("$alphatest", "0") not in ("0", "") else
+                        "translucent" if mat.get("$translucent", "0") not in ("0", "") else "")
         return MaterialInfo(key, mat.shader.lower(), tex("$basetexture"), tex("%tooltexture"),
-                            translucent, keywords, mat.get("$surfaceprop", ""))
+                            translucent, keywords, mat.get("$surfaceprop", ""), transparency)
 
     def texture(self, name: str) -> TextureImage | None:
         """Vorschaubild für ein Material (aus %tooltexture oder $basetexture). Threadsicher:

@@ -4,12 +4,12 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Etappe 6 von 11** – Fenster, 3D- und 2D-Ansichten, Grundformen, Auswählen,
+> **Stand: Etappe 7 von 11** – Fenster, 3D- und 2D-Ansichten, Grundformen, Auswählen,
 > Verschieben, Drehen, Skalieren, Undo/Redo, Speichern als `.rsmap`, VMF-Import und -Export
 > ohne Verluste, Kompilieren und Testen mit einem Tastendruck (F9) für CS:S und Momentum Mod,
 > Startraum mit Dicht-Prüfung, Rampen-Bibliothek mit 20 Vorlagen, deren Regler sich jederzeit
 > ändern lassen, eigene Prefabs und der Assistent „Neue Surf-Map“, Texturen und Welt-Stile,
-> Entities mit FGD-Feldern und I/O, BSPs öffnen, Licht-Vorschau und Himmel.
+> Entities mit FGD-Feldern und I/O, BSPs öffnen, Licht-Vorschau und Himmel, Props mit Modell-Browser.
 
 ![Rampenschmiede, Etappe 3: Rampen-Bibliothek mit Reglern einer Kurve](docs/bilder/etappe3.png)
 
@@ -116,6 +116,17 @@ und *Licht-Vorschau* zeigt die 3D-Ansicht den Himmel im Hintergrund und auf alle
 so wie im Spiel. **Cubemaps:** `env_cubemap` setzen (Entity-Werkzeug), dann im Kompilier-Dialog
 *Cubemaps bauen* anhaken. Das Spiel startet mit `-buildcubemaps`, baut die Spiegelungen in die BSP
 und schließt sich; danach normal starten.
+
+**Props (Reiter „Modelle“ unten).** Alle Modelle des Spiels als Bildchen, mit Suche und Ordnern
+(„In dieser Map“ zeigt, was schon verwendet wird). Rechts eine Vorschau, die sich mit der Maus
+drehen lässt, dazu Größe, Skins und was das Modell kann. Ein Modell in eine Ansicht ziehen setzt
+es dort als Prop, *In Map setzen* setzt es in die Mitte. Die Prop-Art wählt Rampenschmiede
+passend: **Statisch**, wenn das Modell dafür gebaut ist (am günstigsten im Spiel), sonst
+**Dynamisch**. Im Auswahl-Panel lässt sie sich mit drei Knöpfen wechseln; passt sie nicht zum
+Modell (statisch mit einem dynamischen Modell löscht vbsp, Physik ohne Kollisionsmodell erscheint
+nicht), steht dort warum, und vor dem Kompilieren kommt eine Warnung ins Log. Sind Props
+ausgewählt, tauscht *Für Auswahl übernehmen* (oder Doppelklick) ihr Modell. Props erscheinen in
+3D texturiert und gedreht, in 2D als Umriss, auch in geöffneten BSPs.
 
 | Weitere Tasten | |
 | --- | --- |
@@ -295,7 +306,10 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
   schmaler als eine Rasterzelle sind, findet nur vbsp.
 
 - Displacements werden importiert und wieder exportiert, aber noch als flache Fläche angezeigt
-  und sind nicht bearbeitbar (Etappe 7).
+  und sind nicht bearbeitbar (Etappe 8).
+- Props zeigen die Grundpose ihres Modells (keine Animation) und die erste Variante jeder
+  Bodygroup. Modelle ab MDL-Version 52 (neuere Strata-Modelle) erscheinen als Kasten.
+  Eigene Modelle werden noch nicht in die BSP gepackt; Spielmodelle brauchen das nicht.
 - Eigene Inhalte (Texturen, Modelle) werden noch nicht in die BSP gepackt (bspzip folgt mit dem
   Material-Browser in Etappe 4).
 - Momentum Mod: Kompilieren und Starten ist auf einem echten System getestet. Falls die

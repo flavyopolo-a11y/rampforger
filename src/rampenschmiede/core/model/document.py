@@ -190,9 +190,23 @@ def owner_id(obj: MapObject) -> int | None:
     return None
 
 
+#: Hülle von Entities mit Modell (Props). Der Kern kennt keine Spieldateien; der Editor
+#: setzt diese Funktion, sobald eine Modell-Bibliothek da ist.
+_entity_bounds: Callable[[Entity], BBox | None] | None = None
+
+
+def set_entity_bounds(fn: Callable[[Entity], BBox | None] | None) -> None:
+    global _entity_bounds
+    _entity_bounds = fn
+
+
 def object_bbox(obj: MapObject) -> BBox | None:
     if isinstance(obj, Solid):
         return obj.bbox()
+    if _entity_bounds is not None:
+        bb = _entity_bounds(obj)
+        if bb is not None:
+            return bb
     origin = obj.origin
     if origin is None:
         return None

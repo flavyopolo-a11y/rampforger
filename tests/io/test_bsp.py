@@ -112,9 +112,13 @@ def test_packed_materials_are_extracted(tmp_path):
         "materials/maps/surf_pack/eigen/rampe_0_0_0.vmt": b"patch",
         "materials/maps/surf_pack/c0_0_0.vtf": b"cubemap",
         "sound/musik.wav": b"RIFF",
+        "models/eigen/baum.mdl": b"IDST",
+        "models/eigen/baum.dx90.vtx": b"vtx",
+        "models/eigen/baum.txt": b"nein",
     })
     target = tmp_path / "aus"
-    assert extract_materials(path, target) == 2
+    assert extract_materials(path, target) == 4
+    assert (target / "models/eigen/baum.dx90.vtx").is_file() and not (target / "models/eigen/baum.txt").exists()
     assert (target / "materials/eigen/rampe.vmt").read_bytes().startswith(b'"LightmappedGeneric"')
     assert not (target / "materials/maps").exists() and not (target / "sound").exists()
     # Ohne Pakfile: nichts
