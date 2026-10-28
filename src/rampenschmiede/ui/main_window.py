@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDockWidget,
     QFileDialog,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -22,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
-from ..core import organize
+from ..core import organize, search
 from ..core.blocks import clone_objects, is_block_root, upgrade_roots
 from ..core.commands import AddObjects, Command, MacroCommand
 from ..core.compile import CompileSettings, Level, LogLine
@@ -36,11 +37,14 @@ from ..core.model import Entity, MapDocument, MapObject
 from ..core.models.props import prop_problems
 from ..core.profiles import ProfileStore, detect_profiles
 from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
+from ..core.validation.problems import find_problems
 from ..core.validation.seal import describe as describe_seal
 from ..core.zones import collect_zones, momentum_zones, zone_problems
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
+from .dialogs.find_dialog import FindDialog
 from .dialogs.organize_dialogs import MultiCopyDialog, TieEntityDialog
+from .dialogs.problems_dialog import ProblemsDialog
 from .dialogs.profiles_dialog import ProfilesDialog
 from .dialogs.ramp_assistant import (
     PRESETS,
@@ -69,6 +73,7 @@ from .seal_watcher import SealWatcher
 from .tools.clip_tool import ClipTool, HoleTool
 from .tools.entity_tool import EntityTool
 from .tools.face_tool import FaceTool
+from .tools.measure_tool import MeasureTool
 from .tools.paint_tool import PaintTool
 from .tools.scatter_tool import ScatterTool
 from .tools.select_tool import SelectTool
@@ -80,7 +85,7 @@ from .viewports.viewport import MAP_SUFFIXES, dropped_maps
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
-TOOL_ORDER = ("select", "paint", "shape", "vertex", "terrain", "scatter", "entity", "face", "clip", "hole")
+TOOL_ORDER = ("select", "paint", "shape", "vertex", "terrain", "scatter", "entity", "face", "clip", "hole", "measure")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -145,6 +150,9 @@ CONTROLS_HELP = """
 <tr><td>F9</td><td>Kompilieren und testen (Dialog)</td></tr>
 <tr><td>Strg+F9</td><td>Sofort mit den letzten Einstellungen kompilieren</td></tr>
 <tr><td>Klick auf eine rote Log-Zeile</td><td>springt zum betroffenen Objekt</td></tr>
+<tr><td>Alt+P</td><td>Probleme suchen, mit Hinspringen und Reparieren</td></tr>
+<tr><td>Strg+F / Strg+Shift+G</td><td>Suchen und Ersetzen / Gehe zu ID</td></tr>
+<tr><td>Shift+M</td><td>Messen: Abstand, Versatz und Steigung</td></tr>
 </table>
 """
 
@@ -154,7 +162,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.editor = EditorContext()
         for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor),
-                     ClipTool(self.editor), HoleTool(self.editor), TerrainTool(self.editor), VertexTool(self.editor)):
+                     ClipTool(self.editor), HoleTool(self.editor), TerrainTool(self.editor), VertexTool(self.editor),
+                     MeasureTool(self.editor)):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")
@@ -301,6 +310,11 @@ class MainWindow(QMainWindow):
                                       "(Carve wie in Hammer)")
         self.act_flip_h = self._action("Spiegeln &horizontal", lambda: self._flip(0), "Ctrl+L")
         self.act_flip_v = self._action("Spiegeln &vertikal", lambda: self._flip(1), "Ctrl+I")
+        self.act_find = self._action("&Suchen und Ersetzen …", self.show_find, "Ctrl+F",
+                                     "Entities nach Klasse, Name oder Wert suchen; Texturen ersetzen")
+        self.act_goto = self._action("&Gehe zu ID …", self.goto_dialog, "Ctrl+Shift+G",
+                                     "Objekt über seine Nummer (wie im Kompilier-Log oder in Hammer) oder "
+                                     "seinen Namen finden")
         self.act_multi_copy = self._action("&Mehrfach kopieren …", self.multi_copy, "Ctrl+Shift+V",
                                            "Auswahl mehrmals kopieren, jede Kopie weiter verschoben und gedreht "
                                            "(Treppen, Säulenreihen, Wendel)")
@@ -350,6 +364,9 @@ class MainWindow(QMainWindow):
         self.act_load_pointfile = self._action("Leck-Spur &laden …", self.open_pointfile, None,
                                                "Eine .lin-Datei von vbsp anzeigen")
         self.act_clear_leak = self._action("Leck-Spur &ausblenden", lambda: self.editor.set_leak_path([]))
+        self.act_problems = self._action("&Probleme suchen …", self.show_problems, "Alt+P",
+                                         "Kaputte Brushes, fehlende Texturen und Modelle, Teleporter ohne Ziel, "
+                                         "Spawns, Zonen, Engine-Grenzen, zu flache Rampen und Rampbug-Gefahr")
         self.act_check_seal = self._action("&Dichtheit prüfen", self.show_seal_problem, None,
                                            "Prüft ohne Kompilieren, ob alle Entities umschlossen sind")
         self.act_enclose = self._action("Map mit Skybox &umhüllen", self.enclose_with_skybox, None,
@@ -389,7 +406,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("&Bearbeiten"))
         for a in (self.act_undo, self.act_redo, None, self.act_cut, self.act_copy, self.act_paste, self.act_delete,
-                  None, self.act_select_all, None, self.act_group, self.act_ungroup, self.act_ignore_groups, None,
+                  None, self.act_select_all, self.act_find, self.act_goto, None, self.act_group, self.act_ungroup, self.act_ignore_groups, None,
                   self.act_tie, self.act_to_world, None, self.act_carve, None, self.act_transform, self.act_flip_h,
                   self.act_flip_v, self.act_multi_copy, self.act_snap_selection):
             m.addSeparator() if a is None else m.addAction(a)
@@ -416,7 +433,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("&Testen"))
         for a in (self.act_compile, self.act_compile_again, self.act_compile_cancel, None,
-                  self.act_check_seal, self.act_enclose, None,
+                  self.act_problems, self.act_check_seal, self.act_enclose, None,
                   self.act_load_pointfile, self.act_clear_leak, None, self.act_profiles):
             m.addSeparator() if a is None else m.addAction(a)
         m.addAction(self.log_dock.toggleViewAction())
@@ -845,6 +862,47 @@ class MainWindow(QMainWindow):
         self.editor.run(cmd)
         self.editor.status_message.emit(self.tr("Ausgehöhlt: {0} Brushes").format(len(ids)))
         return True
+
+    # ---- Probleme ------------------------------------------------------------------
+    def find_problems(self):
+        ed = self.editor
+        try:
+            catalog = ed.entity_catalog
+        except Exception:  # ohne Katalog fehlt nur die Prüfung leerer Brush-Entities
+            catalog = None
+        game = ed.materials is not None and ed.materials.has_game
+        return find_problems(ed.doc, ed.materials if game else None, ed.models if game else None, catalog,
+                             self.seal.check_now())
+
+    def show_find(self) -> FindDialog:
+        if getattr(self, "find_dialog", None) is None:
+            self.find_dialog = FindDialog(self)
+        self.find_dialog.refresh()
+        self.find_dialog.show()
+        self.find_dialog.raise_()
+        return self.find_dialog
+
+    def goto_dialog(self, text: str | None = None) -> bool:
+        if not text:
+            text, ok = QInputDialog.getText(self, self.tr("Gehe zu ID"),
+                                            self.tr("Nummer (wie im Kompilier-Log: „Brush 12“) oder Name:"))
+            if not ok or not text.strip():
+                return False
+        oid = search.goto_id(self.editor.doc, text)
+        if oid is None:
+            self._status(self.tr("Nichts gefunden: {0}").format(text))
+            return False
+        self.editor.set_selection([oid])
+        self.center_on_selection()
+        return True
+
+    def show_problems(self) -> ProblemsDialog:
+        if getattr(self, "problems_dialog", None) is None:
+            self.problems_dialog = ProblemsDialog(self)
+        self.problems_dialog.refresh()
+        self.problems_dialog.show()
+        self.problems_dialog.raise_()
+        return self.problems_dialog
 
     # ---- Ordnen -------------------------------------------------------------------
     def _status(self, text: str) -> None:
