@@ -6,7 +6,7 @@ selbst bleibt unverändert; gespeichert wird der Bereich in `doc.extra["cordon"]
 
 Was zählt: Brushes, die den Bereich berühren (ganz, nicht abgeschnitten), Punkt-Entities mit
 dem Ursprung darin und Brush-Entities, deren Mitte darin liegt (samt allen ihren Brushes).
-Entities ohne Lage (Logik) bleiben immer drin.
+Entities ohne Lage (Logik) und die 3D-Skybox bleiben immer drin.
 """
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from .mathutil import BBox
 from .model import MapDocument, Solid, owner_id
+from .skybox3d import skybox_ids
 from .templates.starter import ALL_SPAWNS, hull_around
 
 KEY = "cordon"
@@ -109,6 +110,8 @@ def apply_cordon(doc: MapDocument, box: BBox) -> CordonResult:
         bb = s.bbox()
         if bb is None or not bb.intersects(box):
             drop.add(s.id)
+    # Die 3D-Skybox ist ein eigener, dichter Raum: sie bleibt immer dabei
+    drop -= set(skybox_ids(doc))
     for oid in drop:
         out._objects.pop(oid, None)
     for wall in hull_around(out, box):

@@ -13,6 +13,7 @@ from ..commands import Command, ReplaceObjects
 from ..geometry import primitives
 from ..mathutil import BBox, Point
 from ..model import EditorInfo, Entity, MapDocument, MapObject, Solid, object_bbox
+from ..skybox3d import is_sky3d, main_bounds
 
 SKY = "TOOLS/TOOLSSKYBOX"
 FLOOR = "DEV/DEV_MEASUREGENERIC01B"
@@ -95,7 +96,7 @@ def enclose_map(doc: MapDocument, margin: int = 256, snap: int = 64, bounds: BBo
     auf `snap` gerundet."""
     import math
 
-    bounds = bounds or doc.bbox()
+    bounds = bounds or main_bounds(doc)
     if bounds is None:
         bounds = BBox((0, 0, 0), (0, 0, 0))
     lo = tuple(int(math.floor((bounds.mins[i] - margin) / snap) * snap) for i in range(3))
@@ -137,10 +138,11 @@ def grow_hull(doc: MapDocument, margin: int = HULL_MARGIN, snap: int = HULL_SNAP
     inner_hi = [boxes["+x"].mins[0], boxes["+y"].mins[1], boxes["decke"].mins[2]]  # type: ignore[union-attr]
     hull_ids = {s.id for s in parts.values()}
     # Brushes brauchen Platz drumherum, Punkt-Entities (Spawn, Sonne) nur ein wenig
+    # Die 3D-Skybox ist ein eigener Raum außerhalb der Hülle
     solids = BBox.union(object_bbox(o) for o in doc.objects()
-                        if o.id not in hull_ids and isinstance(o, Solid))
+                        if o.id not in hull_ids and isinstance(o, Solid) and not is_sky3d(o, doc))
     points = BBox.union(object_bbox(o) for o in doc.objects()
-                        if isinstance(o, Entity) and not doc.children(o.id))
+                        if isinstance(o, Entity) and not doc.children(o.id) and not is_sky3d(o))
     lo, hi = list(inner_lo), list(inner_hi)
     for box, room in ((solids, margin), (points, 16)):
         if box is None:
