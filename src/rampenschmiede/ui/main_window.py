@@ -36,10 +36,15 @@ from ..core.materials.theme import SetTheme, Theme, apply_collision, apply_theme
 from ..core.model import Entity, MapDocument, MapObject
 from ..core.models.props import prop_problems
 from ..core.profiles import ProfileStore, detect_profiles
+from ..core.skybox3d import STYLE_BY_KEY as SKY3D_BY_KEY
+from ..core.skybox3d import STYLES as SKY3D_STYLES
+from ..core.skybox3d import pick_material, remove_command, skybox_command, skybox_ids
 from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
 from ..core.validation.problems import find_problems
+from ..core.validation.seal import check_seal
 from ..core.validation.seal import describe as describe_seal
 from ..core.zones import collect_zones, momentum_zones, zone_problems
+from .autosave import DEFAULT_MINUTES, Autosaver, backup_before_save, backups_dir, latest_autosave
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
 from .dialogs.find_dialog import FindDialog
@@ -71,6 +76,7 @@ from .panels.tool_options import ToolOptionsPanel
 from .paths import bsp_textures_dir, profiles_file, textures_dir
 from .seal_watcher import SealWatcher
 from .tools.clip_tool import ClipTool, HoleTool
+from .tools.cordon_tool import CordonTool
 from .tools.entity_tool import EntityTool
 from .tools.face_tool import FaceTool
 from .tools.measure_tool import MeasureTool
@@ -78,6 +84,7 @@ from .tools.paint_tool import PaintTool
 from .tools.scatter_tool import ScatterTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
+from .tools.sticker_tool import StickerTool
 from .tools.terrain_tool import TerrainTool
 from .tools.vertex_tool import VertexTool
 from .tools.wall_tool import WallTool
@@ -86,7 +93,7 @@ from .viewports.viewport import MAP_SUFFIXES, dropped_maps
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
-TOOL_ORDER = ("select", "paint", "shape", "wall", "vertex", "terrain", "scatter", "entity", "face", "clip", "hole", "measure")
+TOOL_ORDER = ("select", "paint", "shape", "wall", "vertex", "terrain", "scatter", "entity", "decal", "face", "clip", "hole", "measure", "cordon")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -134,6 +141,17 @@ CONTROLS_HELP = """
 <tr><td>Enter / zweiter Klick auf den letzten Punkt</td><td>fertig</td></tr>
 <tr><td>Rücktaste / Esc</td><td>letzten Punkt zurück / verwerfen</td></tr>
 </table>
+<h3>Aufkleber (Shift+T)</h3>
+<table>
+<tr><td>Klick in 3D auf eine Fläche</td><td>Overlay oder Decal mit dem Material aus dem Browser setzen</td></tr>
+<tr><td>Overlay / Decal</td><td>beliebige Größe und jedes Material / Bild aus decals/ in Originalgröße</td></tr>
+</table>
+<h3>Bereich / Cordon (Shift+O)</h3>
+<table>
+<tr><td>Rechteck ziehen in 2D</td><td>Bereich setzen: beim Kompilieren wird nur er gebaut</td></tr>
+<tr><td>Kante oder Ecke ziehen / innen ziehen</td><td>Größe ändern / verschieben</td></tr>
+<tr><td>Entf</td><td>Bereich löschen, wieder die ganze Map bauen</td></tr>
+</table>
 <h3>Ecken (Shift+V)</h3>
 <table>
 <tr><td>Ecke oder Kantenmitte ziehen</td><td>Brush verformen; Kantenmitte zieht beide Ecken</td></tr>
@@ -171,7 +189,7 @@ class MainWindow(QMainWindow):
         self.editor = EditorContext()
         for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor),
                      ClipTool(self.editor), HoleTool(self.editor), TerrainTool(self.editor), VertexTool(self.editor),
-                     MeasureTool(self.editor), WallTool(self.editor)):
+                     MeasureTool(self.editor), WallTool(self.editor), CordonTool(self.editor), StickerTool(self.editor)):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")
@@ -181,6 +199,7 @@ class MainWindow(QMainWindow):
         self.compile_settings = self._load_compile_settings()
         self.compiler = CompileController(self.editor, self)
         self.seal = SealWatcher(self.editor, self)
+        self.autosaver = Autosaver(self.editor, int(self.settings.value("autosave_minutes", DEFAULT_MINUTES)), self)
         self._reload_materials()
 
         self.grid_view = ViewportGrid(self.editor)
@@ -205,16 +224,24 @@ class MainWindow(QMainWindow):
         ed.tool_changed.connect(self._on_tool_changed)
         ed.document_changed.connect(self._sync_ramp_clip)
         ed.document_replaced.connect(self._sync_ramp_clip)
+        ed.document_replaced.connect(self._sync_cordon)
+        ed.cordon_changed.connect(self._sync_cordon)
         self.compiler.started.connect(self._on_compile_started)
         self.compiler.finished.connect(self._on_compile_finished)
 
         ed.set_tool("select")
+        self._sync_cordon()
         self._restore_window()
         self.seal.checked.connect(self._on_seal_checked)
         self.setAcceptDrops(True)
         ed.files_dropped.connect(lambda paths: QTimer.singleShot(0, lambda: self.open_dropped(paths)))
         self._new_document()
         self._update_undo_actions()
+        # Letzte Sitzung abgestürzt? Neueste automatische Sicherung anbieten
+        crashed = self.settings.value("clean_exit", "true") == "false"
+        self.settings.setValue("clean_exit", "false")
+        if crashed:
+            QTimer.singleShot(0, self._offer_recovery)
 
     # ---- Aufbau ------------------------------------------------------------------
     def _build_docks(self) -> None:
@@ -301,6 +328,12 @@ class MainWindow(QMainWindow):
                                          "Geht auch per Ziehen ins Fenster")
         self.act_export_vmf = self._action("Als VMF e&xportieren …", self.file_export_vmf, "Ctrl+Shift+E",
                                            "Map als .vmf für Hammer oder andere Werkzeuge speichern")
+        self.act_autosave = self._action("Automatisch &sichern (alle 5 Minuten)", self._toggle_autosave, None,
+                                         "Geänderte Maps regelmäßig in den Sicherungsordner schreiben; vor jedem "
+                                         "Speichern wird die alte Fassung dort abgelegt", checkable=True)
+        self.act_autosave.setChecked(self.autosaver.minutes > 0)
+        self.act_open_backup = self._action("Sicherung ö&ffnen …", lambda: self.open_backup(), None,
+                                            "Automatische Sicherungen und alte Fassungen vor dem Speichern")
         self.act_quit = self._action("&Beenden", self.close, QKeySequence.Quit)
 
         self.act_undo = self._action("&Rückgängig", ed.undo, QKeySequence.Undo)
@@ -377,6 +410,12 @@ class MainWindow(QMainWindow):
                                          "Spawns, Zonen, Engine-Grenzen, zu flache Rampen und Rampbug-Gefahr")
         self.act_check_seal = self._action("&Dichtheit prüfen", self.show_seal_problem, None,
                                            "Prüft ohne Kompilieren, ob alle Entities umschlossen sind")
+        self.act_cordon = self._action("Nur &Bereich bauen (Cordon)", self._toggle_cordon, None,
+                                       "Kompiliert nur, was im Bereich liegt, und dichtet ihn mit Skybox ab. "
+                                       "Den Bereich zieht das Werkzeug „Bereich“ (Shift+O).", checkable=True)
+        self.act_cordon_selection = self._action("Bereich = Aus&wahl", self.cordon_from_selection, None,
+                                                 "Bereich um die Auswahl legen (mit etwas Luft) und einschalten")
+        self.act_cordon_clear = self._action("Bereich &löschen", lambda: self.editor.set_cordon(None))
         self.act_enclose = self._action("Map mit Skybox &umhüllen", self.enclose_with_skybox, None,
                                         "Legt eine dichte Skybox-Hülle um alles, was in der Map ist")
 
@@ -388,6 +427,9 @@ class MainWindow(QMainWindow):
         self.act_sky = self._action("&Himmel …", self.choose_sky, None,
                                     "Skybox der Map wählen; die 3D-Ansicht zeigt sie in „Texturiert“ und "
                                     "„Licht-Vorschau“")
+        self.act_skybox3d = self._action("&3D-Skybox …", self.skybox3d_dialog, None,
+                                         "Berge, Stadt oder Dünen am Horizont: legt einen 3D-Skybox-Raum mit "
+                                         "Kamera und Kulisse an")
         self.act_ramp_clip = self._action("&Playerclip auf Rampen", self.set_ramp_clip, None,
                                           "Glatte Playerclip-Hülle auf allen Rampen (empfohlen). Aus: Die Rampe "
                                           "selbst ist die Kollision.", checkable=True)
@@ -407,7 +449,8 @@ class MainWindow(QMainWindow):
         self.recent_menu = m.addMenu(self.tr("&Zuletzt geöffnet"))
         self.recent_menu.aboutToShow.connect(self._fill_recent)
         m.addSeparator()
-        for a in (self.act_save, self.act_save_as, None, self.act_import_vmf, self.act_open_bsp, self.act_export_vmf):
+        for a in (self.act_save, self.act_save_as, None, self.act_autosave, self.act_open_backup, None,
+                  self.act_import_vmf, self.act_open_bsp, self.act_export_vmf):
             m.addSeparator() if a is None else m.addAction(a)
         m.addSeparator()
         m.addAction(self.act_quit)
@@ -435,13 +478,14 @@ class MainWindow(QMainWindow):
             m.addAction(a)
 
         m = mb.addMenu(self.tr("Te&xturen"))
-        for a in (self.act_ramp_assistant, self.act_world_style, self.act_sky, self.act_ramp_clip, None,
+        for a in (self.act_ramp_assistant, self.act_world_style, self.act_sky, self.act_skybox3d, self.act_ramp_clip, None,
                   self.act_import_texture, self.act_texture_packs):
             m.addSeparator() if a is None else m.addAction(a)
 
         m = mb.addMenu(self.tr("&Testen"))
         for a in (self.act_compile, self.act_compile_again, self.act_compile_cancel, None,
                   self.act_problems, self.act_check_seal, self.act_enclose, None,
+                  self.act_cordon, self.act_cordon_selection, self.act_cordon_clear, None,
                   self.act_load_pointfile, self.act_clear_leak, None, self.act_profiles):
             m.addSeparator() if a is None else m.addAction(a)
         m.addAction(self.log_dock.toggleViewAction())
@@ -659,6 +703,28 @@ class MainWindow(QMainWindow):
             "{0}. Rote Linie zeigt den Weg ins Freie. Tipp: Testen → Map mit Skybox umhüllen."
         ).format(describe_seal(self.editor.doc, result)), 8000)
 
+    # ---- Bereich (Cordon) --------------------------------------------------------
+    def _sync_cordon(self) -> None:
+        box, on = self.editor.cordon()
+        self.act_cordon.blockSignals(True)
+        self.act_cordon.setChecked(box is not None and on)
+        self.act_cordon.blockSignals(False)
+        self.act_cordon_clear.setEnabled(box is not None)
+
+    def _toggle_cordon(self, on: bool) -> None:
+        box, _ = self.editor.cordon()
+        if box is None:
+            if on and not self.cordon_from_selection():
+                self.editor.set_tool("cordon")
+            self._sync_cordon()
+            return
+        self.editor.set_cordon(box, on)
+        self.statusBar().showMessage(self.tr("Beim Kompilieren wird nur der Bereich gebaut") if on else
+                                     self.tr("Es wird wieder die ganze Map gebaut"), 4000)
+
+    def cordon_from_selection(self) -> bool:
+        return self.editor.cordon_from_selection()
+
     def enclose_with_skybox(self) -> None:
         hull = enclose_map(self.editor.doc)
         self.editor.run(AddObjects(hull, self.tr("Map umhüllen")))
@@ -713,6 +779,39 @@ class MainWindow(QMainWindow):
         self._update_title()
         self.statusBar().showMessage(self.tr("{0} geladen ({1} Objekte)").format(path.name, len(doc)), 5000)
         return True
+
+    # ---- Sicherungen ---------------------------------------------------------------
+    def _toggle_autosave(self, on: bool) -> None:
+        minutes = DEFAULT_MINUTES if on else 0
+        self.settings.setValue("autosave_minutes", minutes)
+        self.autosaver.set_minutes(minutes)
+
+    def open_backup(self, path: Path | None = None) -> bool:
+        """Sicherung öffnen; Speichern fragt danach nach einem Ort (nie in den Sicherungsordner)."""
+        if path is None:
+            name, _ = QFileDialog.getOpenFileName(self, self.tr("Sicherung öffnen"), str(backups_dir()),
+                                                  self.tr(FILE_FILTER))
+            if not name:
+                return False
+            path = Path(name)
+        if not self._confirm_discard() or not self.open_path(path):
+            return False
+        self.editor.file_path = None
+        self.editor.stack.set_dirty()  # ungespeichert, bis man einen Ort wählt
+        self.statusBar().showMessage(self.tr("Sicherung geöffnet: {0}. Mit „Speichern unter“ ablegen").format(
+            path.name), 8000)
+        return True
+
+    def _offer_recovery(self) -> None:
+        latest = latest_autosave()
+        if latest is None:
+            return
+        answer = QMessageBox.question(
+            self, APP_NAME, self.tr("Die letzte Sitzung wurde nicht sauber beendet.\n"
+                                    "Neueste automatische Sicherung öffnen?\n\n{0}").format(latest.name),
+            QMessageBox.Yes | QMessageBox.No)
+        if answer == QMessageBox.Yes:
+            self.open_backup(latest)
 
     def _import_vmf(self, path: Path) -> bool:
         try:
@@ -810,6 +909,7 @@ class MainWindow(QMainWindow):
     def _save_to(self, path: Path) -> bool:
         for vp in self.grid_view.viewports():
             vp.store_camera()
+        backup_before_save(path)
         try:
             rsmap.save(self.editor.doc, path)
         except OSError as exc:
@@ -1124,6 +1224,47 @@ class MainWindow(QMainWindow):
         self.editor.status_message.emit(self.tr("Welt-Stil „{0}“ angewendet").format(self.tr(style.name)))
         return True
 
+    def skybox3d_dialog(self) -> bool:
+        has = bool(skybox_ids(self.editor.doc))
+        items = [f"{self.tr(st.name)}: {self.tr(st.description)}" for st in SKY3D_STYLES]
+        if has:
+            items.append(self.tr("Entfernen: 3D-Skybox aus der Map löschen"))
+        choice, ok = QInputDialog.getItem(
+            self, self.tr("3D-Skybox"),
+            self.tr("Was soll am Horizont stehen? Die Kulisse erscheint im Spiel 16-mal so groß hinter dem "
+                    "Himmel.") + ("\n" + self.tr("Die vorhandene 3D-Skybox wird ersetzt.") if has else ""),
+            items, 0, False)
+        if not ok:
+            return False
+        index = items.index(choice)
+        if index >= len(SKY3D_STYLES):
+            cmd = remove_command(self.editor.doc)
+            if cmd is not None:
+                self.editor.run(cmd)
+                self.editor.status_message.emit(self.tr("3D-Skybox entfernt"))
+            return cmd is not None
+        return self.make_skybox3d(SKY3D_STYLES[index].key)
+
+    def make_skybox3d(self, key: str) -> bool:
+        style = SKY3D_BY_KEY[key]
+        lib = self.editor.materials
+        try:
+            ground = (pick_material(lib, style.ground, style.ground_words)
+                      or wall_material(textures_dir(), style.ground_color)).upper()
+            detail = (pick_material(lib, style.detail, style.detail_words)
+                      or wall_material(textures_dir(), style.detail_color)).upper()
+        except OSError as exc:
+            QMessageBox.critical(self, APP_NAME, self.tr("Texturen konnten nicht gespeichert werden:\n{0}").format(exc))
+            return False
+        self.editor.refresh_materials()
+        cmd, objs = skybox_command(self.editor.doc, style, ground, detail)
+        self.editor.run(cmd)
+        self.editor.set_selection([o.id for o in objs])
+        self.editor.status_message.emit(self.tr(
+            "3D-Skybox „{0}“ angelegt und ausgewählt. Strg+E springt hin; im Spiel steht sie hinter dem Himmel."
+        ).format(self.tr(style.name)))
+        return True
+
     def choose_sky(self) -> bool:
         current = self.editor.doc.world_get("skyname")
         dlg = SkyDialog(self.editor.materials, current, self)
@@ -1223,23 +1364,31 @@ class MainWindow(QMainWindow):
         profile = self.profiles.active_profile()
         if profile is None or self.compiler.running:
             return False
-        seal = self.seal.check_now()
+        doc, cordon = self.compiler.build_doc()
+        seal = self.seal.check_now() if cordon is None else check_seal(doc)
         warnings = []
+        if cordon is not None:
+            warnings.append(LogLine(self.tr(
+                "Bereich (Cordon) aktiv: Es wird nur gebaut, was darin liegt ({0} Objekte außerhalb weggelassen). "
+                "Ganze Map: Testen → Nur Bereich bauen ausschalten.").format(cordon.dropped), Level.WARNING))
+            if not cordon.spawns:
+                warnings.append(LogLine(self.tr(
+                    "Bereich: Darin liegt kein Spawn. Im Spiel startest du dann nicht im Bereich."), Level.WARNING))
         if not seal.sealed:
             warnings.append(LogLine(
                 self.tr("Vorab-Prüfung: {0}. vbsp wird vermutlich ein Leck melden. "
-                        "Tipp: Testen → Map mit Skybox umhüllen.").format(describe_seal(self.editor.doc, seal)),
+                        "Tipp: Testen → Map mit Skybox umhüllen.").format(describe_seal(doc, seal)),
                 Level.WARNING, position=seal.path[0] if seal.path else None))
-        zones = collect_zones(self.editor.doc)
+        zones = collect_zones(doc)
         for problem in zone_problems(zones):
             warnings.append(LogLine(self.tr("Zonen: {0}").format(problem), Level.WARNING))
         if zones and profile.key == "momentum" and momentum_zones(zones) is None:
             warnings.append(LogLine(self.tr(
                 "Zonen: Ohne Start- und Zielzone der Hauptstrecke wird keine Momentum-Zonendatei geschrieben."),
                 Level.WARNING))
-        for ent, problem in prop_problems(self.editor.doc, self.editor.models):
+        for ent, problem in prop_problems(doc, self.editor.models):
             warnings.append(LogLine(self.tr("Props: {0}").format(problem), Level.WARNING, position=ent.origin))
-        started = self.compiler.start(profile, self.compile_settings, warnings)
+        started = self.compiler.start(profile, self.compile_settings, warnings, doc)
         if started and not seal.sealed:
             self.editor.set_leak_path(seal.path)
         return started
@@ -1377,6 +1526,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("window_state", self.saveState(LAYOUT_VERSION))
         self.settings.setValue("viewports", json.dumps(self.grid_view.save_state()))
+        self.settings.setValue("clean_exit", "true")
         e.accept()
 
 

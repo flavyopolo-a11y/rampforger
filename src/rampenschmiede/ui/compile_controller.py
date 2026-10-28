@@ -19,8 +19,10 @@ from ..core.compile import (
     map_name_for,
     resolve,
 )
+from ..core.cordon import CordonResult, active_cordon, apply_cordon
 from ..core.io.vmf import ExportResult, save_vmf
 from ..core.materials.authoring import pack_list
+from ..core.model import MapDocument
 from ..core.profiles import GameProfile
 from ..core.zones import collect_zones, momentum_zones
 from .editor import EditorContext
@@ -53,22 +55,34 @@ class CompileController(QObject):
         path = self.editor.file_path or self.editor.import_path
         return map_name_for(path.stem if path else "unbenannt")
 
-    def prepare(self, profile: GameProfile, settings: CompileSettings) -> CompilePlan:
+    def build_doc(self) -> tuple[MapDocument, CordonResult | None]:
+        """Was gebaut wird: die Map, oder bei aktivem Bereich nur dessen Inhalt samt Hülle."""
+        box = active_cordon(self.editor.doc)
+        if box is None:
+            return self.editor.doc, None
+        res = apply_cordon(self.editor.doc, box)
+        return res.doc, res
+
+    def prepare(self, profile: GameProfile, settings: CompileSettings, doc: MapDocument | None = None) -> CompilePlan:
         """Plan ohne Seiteneffekte, für die Vorschau im Dialog."""
+        doc = doc if doc is not None else self.build_doc()[0]
         folder = compile_dir(self.editor.file_path or self.editor.import_path, create=False)
         vmf = folder / f"{self.map_name()}.vmf"
-        zones = momentum_zones(collect_zones(self.editor.doc))
+        zones = momentum_zones(collect_zones(doc))
         text = json.dumps(zones, indent=2) if zones else None
         lib = self.editor.materials
-        used = {f.material for s in self.editor.doc.solids() for f in s.faces}
+        used = {f.material for s in doc.solids() for f in s.faces}
         pack = pack_list(lib, used) if lib is not None else []
         return build_plan(profile, vmf, settings, momentum_zones=text, pack_files=pack)
 
-    def start(self, profile: GameProfile, settings: CompileSettings, notes: list[LogLine] | None = None) -> bool:
-        """`notes` erscheinen nach dem Start oben im Log (z. B. Ergebnis der Vorab-Prüfung)."""
+    def start(self, profile: GameProfile, settings: CompileSettings, notes: list[LogLine] | None = None,
+              doc: MapDocument | None = None) -> bool:
+        """`notes` erscheinen nach dem Start oben im Log (z. B. Ergebnis der Vorab-Prüfung).
+        `doc` ist, was gebaut wird (Standard: `build_doc`)."""
         if self.running:
             return False
-        plan = self.prepare(profile, settings)
+        doc = doc if doc is not None else self.build_doc()[0]
+        plan = self.prepare(profile, settings, doc)
         self.editor.set_leak_path([])
         self.plan = plan
         self.started.emit(plan)
@@ -77,7 +91,7 @@ class CompileController(QObject):
         if not plan.problems:
             try:
                 Path(plan.vmf_path).parent.mkdir(parents=True, exist_ok=True)
-                self.export = save_vmf(self.editor.doc, plan.vmf_path, for_compile=True)
+                self.export = save_vmf(doc, plan.vmf_path, for_compile=True)
             except OSError as exc:
                 self.line.emit(LogLine(f"VMF konnte nicht geschrieben werden: {exc}", Level.ERROR))
                 self.finished.emit(CompileResult(failed_step="VMF schreiben"))

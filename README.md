@@ -84,6 +84,30 @@ verschoben oder größer gezogen, wandert die Zone mit.
 **In 3D direkt ziehen.** Ein Objekt in der 3D-Ansicht anfassen und ziehen schiebt es waagrecht am
 Raster, Shift kopiert. Hoch und runter über den blauen Pfeil.
 
+**Aufkleber (Shift+T).** Material im Browser wählen und in 3D auf eine Fläche klicken; ein Rahmen
+zeigt vorher, wo er landet. *Overlay* (Standard) hat eine einstellbare Größe und nimmt jedes
+Material, auch Wandtexturen für Wege oder Schilder; über mehrere Brushes in derselben Ebene klebt
+es auf alle und wandert beim Verschieben mit. *Decal* nimmt ein Bild aus `decals/` in
+Originalgröße (Graffiti, Risse). „Probleme suchen“ meldet Overlays, unter denen keine Fläche mehr ist.
+
+**Bereich / Cordon (Shift+O).** In einer 2D-Ansicht ein Rechteck um den Teil ziehen, an dem du
+gerade baust: Beim Kompilieren wird nur er gebaut und automatisch mit Skybox abgedichtet, das geht
+bei großen Maps viel schneller. Kanten ziehen ändert die Größe, innen ziehen verschiebt, Entf
+löscht. *Testen → Nur Bereich bauen* schaltet ihn an und aus, *Bereich = Auswahl* legt ihn um die
+Auswahl. Der rote Rahmen zeigt in allen Ansichten, dass er aktiv ist. Die Map selbst bleibt
+unverändert, die 3D-Skybox wird immer mitgebaut.
+
+**3D-Skybox (Texturen → 3D-Skybox).** Ein Klick legt unter der Map einen abgedichteten Raum mit
+`sky_camera` an und baut darin eine Kulisse: Berge, Stadt oder Dünen (oder leer, zum Selberbauen).
+Im Spiel erscheint sie 16-mal so groß rings um die Map hinter dem Himmel, im Nebel der Map. Ein
+neuer Klick ersetzt sie, dort lässt sie sich auch entfernen. Die mitwachsende Hülle lässt den
+Raum außen vor.
+
+**Automatische Sicherung.** Alle 5 Minuten wird eine geänderte Map in den Ordner `sicherungen` im
+Datenordner geschrieben (je Map die letzten 10), und vor jedem Speichern landet die alte Fassung
+dort (die letzten 5). *Datei → Sicherung öffnen* zeigt den Ordner. Stürzt das Programm ab, bietet
+es beim nächsten Start die neueste Sicherung an. Abschalten unter *Datei → Automatisch sichern*.
+
 **Ecken (Shift+V).** Brush auswählen, Werkzeug „Ecken“: Weiße Griffe sind Ecken, gelbe die Mitten
 der Kanten. Ziehen verformt den Brush, eine Kantenmitte zieht beide Ecken. Strg+Klick oder ein
 Rahmen wählt mehrere Ecken, Pfeiltasten schieben sie um eine Rasterweite, in 3D hebt Shift+Ziehen

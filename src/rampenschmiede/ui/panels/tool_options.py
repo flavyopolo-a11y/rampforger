@@ -61,6 +61,10 @@ class ToolOptionsPanel(QStackedWidget):
             self._add("vertex", self._vertex_page())
         if "wall" in editor.tools:
             self._add("wall", self._wall_page())
+        if "decal" in editor.tools:
+            self._add("decal", self._sticker_page())
+        if "cordon" in editor.tools:
+            self._add("cordon", self._cordon_page())
         editor.tool_changed.connect(self._on_tool)
 
     def _add(self, name: str, page: QWidget) -> None:
@@ -92,6 +96,90 @@ class ToolOptionsPanel(QStackedWidget):
             "Ein zweiter Klick auf die Auswahl schaltet zwischen Skalier- und Drehgriffen um. "
             "Pfeiltasten verschieben um eine Rasterweite. Exakte Werte: Strg+M."
         )))
+        lay.addStretch(1)
+        return w
+
+    # ---- Aufkleber ----------------------------------------------------------------------
+    def _sticker_page(self) -> QWidget:
+        opts = self.editor.tools["decal"].options  # type: ignore[attr-defined]
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        row = QHBoxLayout()
+        group = QButtonGroup(w)
+        self.sticker_modes: dict[str, QPushButton] = {}
+        for key, label, tip in (("overlay", "Overlay", "Beliebige Größe, jedes Material (auch Wege, Schilder)"),
+                                ("decal", "Decal", "Bild aus decals/ in Originalgröße, z. B. Graffiti, Risse")):
+            b = QPushButton(self.tr(label))
+            b.setCheckable(True)
+            b.setChecked(opts.mode == key)
+            b.setToolTip(self.tr(tip))
+            b.clicked.connect(lambda _=False, k=key: (setattr(opts, "mode", k), size.setEnabled(k == "overlay")))
+            group.addButton(b)
+            row.addWidget(b)
+            self.sticker_modes[key] = b
+        lay.addLayout(row)
+        form = QFormLayout()
+        size = QSpinBox()
+        size.setRange(8, 4096)
+        size.setSingleStep(16)
+        size.setSuffix(" u")
+        size.setValue(opts.size)
+        size.setEnabled(opts.mode == "overlay")
+        size.setToolTip(self.tr("Längere Seite des Overlays; das Seitenverhältnis kommt vom Bild"))
+        size.valueChanged.connect(lambda v: setattr(opts, "size", v))
+        self.sticker_size = size
+        form.addRow(self.tr("Größe"), size)
+        lay.addLayout(form)
+        lay.addWidget(_hint(self.tr(
+            "Material im Material-Browser wählen (Suche „decals“ oder „overlays“) und in der 3D-Ansicht auf eine "
+            "Fläche klicken. Overlays über mehrere Brushes werden auf alle Flächen in derselben Ebene geklebt und "
+            "wandern beim Verschieben mit.")))
+        lay.addStretch(1)
+        return w
+
+    # ---- Bereich (Cordon) -------------------------------------------------------------
+    def _cordon_page(self) -> QWidget:
+        ed = self.editor
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        self.cordon_on = QCheckBox(self.tr("Nur den Bereich bauen"))
+        self.cordon_on.setToolTip(self.tr("Aus: Der Bereich bleibt gespeichert, gebaut wird die ganze Map"))
+        self.cordon_size = QLabel()
+        row = QHBoxLayout()
+        from_sel = QPushButton(self.tr("Um Auswahl"))
+        from_sel.setToolTip(self.tr("Bereich um die ausgewählten Objekte legen, mit 64 Units Luft"))
+        from_sel.clicked.connect(lambda: ed.cordon_from_selection())
+        clear = QPushButton(self.tr("Löschen"))
+        clear.clicked.connect(lambda: ed.set_cordon(None))
+        row.addWidget(from_sel)
+        row.addWidget(clear)
+
+        def sync() -> None:
+            box, on = ed.cordon()
+            self.cordon_on.blockSignals(True)
+            self.cordon_on.setChecked(box is not None and on)
+            self.cordon_on.setEnabled(box is not None)
+            self.cordon_on.blockSignals(False)
+            clear.setEnabled(box is not None)
+            self.cordon_size.setText(self.tr("Kein Bereich: es wird die ganze Map gebaut") if box is None else
+                                     self.tr("Bereich: {0}").format(" × ".join(
+                                         f"{b - a:.0f}" for a, b in zip(box.mins, box.maxs))))
+
+        def toggled(on: bool) -> None:
+            box, _ = ed.cordon()
+            if box is not None:
+                ed.set_cordon(box, on)
+        self.cordon_on.toggled.connect(toggled)
+        ed.cordon_changed.connect(sync)
+        ed.document_replaced.connect(sync)
+        sync()
+        lay.addWidget(self.cordon_on)
+        lay.addWidget(self.cordon_size)
+        lay.addLayout(row)
+        lay.addWidget(_hint(self.tr(
+            "Große Maps brauchen zum Kompilieren lange. Zieh in einer 2D-Ansicht ein Rechteck um den Teil, an dem "
+            "du gerade baust: Nur der wird kompiliert und automatisch mit Skybox abgedichtet. Kanten ziehen ändert "
+            "die Größe, innen ziehen verschiebt, Entf löscht. Die Map selbst bleibt unverändert.")))
         lay.addStretch(1)
         return w
 
