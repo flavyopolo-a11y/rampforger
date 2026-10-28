@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Iterable
 import numpy as np
 from PySide6.QtCore import QObject, Signal
 
+from ..core import cordon as cordon_mod
 from ..core.attach import follow_supports
 from ..core.blocks import clone_objects, transform_command
 from ..core.commands import AddObjects, Command, CommandStack, RemoveObjects, ReplaceObjects
@@ -52,6 +53,8 @@ def _size_lookup(library: MaterialLibrary | None):
         return (tex.source_width, tex.source_height) if tex else None
     return lookup
 LEAK_COLOR = (1.0, 0.1, 0.1)
+CORDON_COLOR = (1.0, 0.3, 0.3)
+CORDON_OFF_COLOR = (0.5, 0.5, 0.55)
 
 
 def _use_model_bounds(editor: "EditorContext") -> None:
@@ -73,6 +76,8 @@ class EditorContext(QObject):
     history_changed = Signal()
     status_message = Signal(str)
     redraw_requested = Signal()
+    #: Bereich (Cordon) gesetzt, verändert, an- oder ausgeschaltet
+    cordon_changed = Signal()
     #: Eine Vorlage aus der Bibliothek wurde in eine Ansicht gezogen: (Schlüssel, Weltpunkt)
     template_dropped = Signal(str, object)
     #: Map-Dateien (rsmap, vmf, bsp) wurden ins Fenster gezogen
@@ -277,6 +282,40 @@ class EditorContext(QObject):
         if not segs:
             return None
         return np.asarray([[*p, *c] for a, b, c in segs for p in (a, b)], dtype=np.float32)
+
+    # ---- Bereich (Cordon) -----------------------------------------------------------
+    def cordon(self) -> tuple[BBox | None, bool]:
+        return cordon_mod.get_cordon(self.doc)
+
+    def set_cordon(self, box: BBox | None, active: bool = True) -> None:
+        """Bereich setzen (None löscht ihn). Kein Rückgängig-Schritt, aber die Map gilt als geändert."""
+        old = self.doc.extra.get(cordon_mod.KEY)
+        cordon_mod.set_cordon(self.doc, box, active)
+        if self.doc.extra.get(cordon_mod.KEY) == old:
+            return
+        self.stack.set_dirty()
+        self.cordon_changed.emit()
+        self.history_changed.emit()
+        self.redraw_requested.emit()
+
+    def cordon_from_selection(self, pad: int = 64) -> bool:
+        """Bereich um die Auswahl legen (mit `pad` Luft) und einschalten."""
+        bb = self.selection_bbox()
+        if bb is None:
+            self.status_message.emit("Erst etwas auswählen oder mit dem Werkzeug „Bereich“ ziehen")
+            return False
+        self.set_cordon(BBox(tuple(v - pad for v in bb.mins), tuple(v + pad for v in bb.maxs)), True)  # type: ignore[arg-type]
+        self.status_message.emit("Bereich um die Auswahl gelegt: beim Kompilieren wird nur er gebaut")
+        return True
+
+    def cordon_lines(self) -> np.ndarray | None:
+        """Rahmen des Bereichs: rot, wenn nur er gebaut wird, sonst grau."""
+        from .tools.base import box_lines
+
+        box, on = self.cordon()
+        if box is None:
+            return None
+        return box_lines(box, CORDON_COLOR if on else CORDON_OFF_COLOR)
 
     def selected_objects(self) -> list[MapObject]:
         return [o for i in sorted(self.selection) if (o := self.doc.get(i)) is not None]
