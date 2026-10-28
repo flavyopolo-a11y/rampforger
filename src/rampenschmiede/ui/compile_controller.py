@@ -21,7 +21,7 @@ from ..core.compile import (
 )
 from ..core.cordon import CordonResult, active_cordon, apply_cordon
 from ..core.io.vmf import ExportResult, save_vmf
-from ..core.materials.authoring import pack_list
+from ..core.materials.authoring import pack_list, used_materials
 from ..core.model import MapDocument
 from ..core.profiles import GameProfile
 from ..core.zones import collect_zones, momentum_zones
@@ -71,7 +71,7 @@ class CompileController(QObject):
         zones = momentum_zones(collect_zones(doc))
         text = json.dumps(zones, indent=2) if zones else None
         lib = self.editor.materials
-        used = {f.material for s in doc.solids() for f in s.faces}
+        used = used_materials(doc)
         pack = pack_list(lib, used) if lib is not None else []
         return build_plan(profile, vmf, settings, momentum_zones=text, pack_files=pack)
 

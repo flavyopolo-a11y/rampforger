@@ -157,6 +157,28 @@ def ramp_material(root: str | Path, color: RGB, lines: RGB) -> str:
 
 # ---- Packen --------------------------------------------------------------------------------
 
+#: Keyvalues von Entities, die ein Material nennen (Decals, Overlays, Sprites)
+MATERIAL_KEYVALUES = ("material", "texture")
+SKY_SUFFIXES = ("rt", "lf", "bk", "ft", "up", "dn")
+
+
+def used_materials(doc) -> set[str]:
+    """Alle Materialien, die die Map braucht: Brush-Seiten, Decals/Overlays und die sechs
+    Bilder des Himmels (eigene Himmel müssen mit in die BSP)."""
+    from ..model import Entity
+
+    used = {f.material for s in doc.solids() for f in s.faces}
+    for obj in doc.objects():
+        if isinstance(obj, Entity) and obj.classname in ("infodecal", "info_overlay"):
+            for key in MATERIAL_KEYVALUES:
+                if obj.get(key):
+                    used.add(obj.get(key))
+    sky = dict(doc.world_keyvalues).get("skyname", "")
+    if sky:
+        used |= {f"skybox/{sky}{s}" for s in SKY_SUFFIXES}
+    return used
+
+
 def pack_list(library: MaterialLibrary, materials: Iterable[str]) -> list[tuple[str, str]]:
     """Dateien eigener Materialien zum Packen in die BSP: (Pfad in der BSP, Datei auf der
     Platte). Spiel-Materialien werden nicht gepackt."""

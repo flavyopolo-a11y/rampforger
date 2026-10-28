@@ -50,6 +50,7 @@ from .autosave import DEFAULT_MINUTES, Autosaver, backup_before_save, backups_di
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
 from .dialogs.find_dialog import FindDialog
+from .dialogs.free_assets import FreeAssetsDialog
 from .dialogs.organize_dialogs import MultiCopyDialog, TieEntityDialog
 from .dialogs.problems_dialog import ProblemsDialog
 from .dialogs.profiles_dialog import ProfilesDialog
@@ -211,8 +212,8 @@ class MainWindow(QMainWindow):
         self._build_docks()
         self._build_actions()
         self._set_icons()
-        self.material_browser.add_actions([self.act_ramp_assistant, self.act_world_style, None, self.act_import_texture,
-                                           self.act_texture_packs])
+        self.material_browser.add_actions([self.act_ramp_assistant, self.act_world_style, None, self.act_free_assets,
+                                           self.act_import_texture, self.act_texture_packs])
         self._build_menus()
         self._build_toolbars()
         self._build_statusbar()
@@ -442,6 +443,8 @@ class MainWindow(QMainWindow):
                                                "PNG, JPG, TGA oder BMP als eigenes Material übernehmen")
         self.act_texture_packs = self._action("Textur&pakete …", self.edit_texture_packs, None,
                                               "Eigene Ordner mit Materialien einbinden")
+        self.act_free_assets = self._action("&Freie Texturen und Himmel …", self.free_assets, None,
+                                            "Texturen und Himmel von Poly Haven (CC0) mit einem Klick laden")
 
         self.act_controls = self._action("&Steuerung", self.show_controls, "F1")
         self.act_about = self._action("Ü&ber Rampenschmiede", self.show_about)
@@ -484,7 +487,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("Te&xturen"))
         for a in (self.act_ramp_assistant, self.act_world_style, self.act_sky, self.act_skybox3d, self.act_ramp_clip, None,
-                  self.act_import_texture, self.act_texture_packs):
+                  self.act_free_assets, self.act_import_texture, self.act_texture_packs):
             m.addSeparator() if a is None else m.addAction(a)
 
         m = mb.addMenu(self.tr("&Testen"))
@@ -1343,6 +1346,13 @@ class MainWindow(QMainWindow):
             self.editor.set_current_material(names[-1])
             self.editor.status_message.emit(self.tr("{0} Textur(en) importiert, sie stehen unter „Eigene“").format(len(names)))
         return names
+
+    def free_assets(self) -> FreeAssetsDialog:
+        if getattr(self, "free_assets_dialog", None) is None:
+            self.free_assets_dialog = FreeAssetsDialog(self.editor, parent=self)
+        self.free_assets_dialog.show()
+        self.free_assets_dialog.raise_()
+        return self.free_assets_dialog
 
     def edit_texture_packs(self) -> bool:
         dlg = TexturePacksDialog(self.texture_packs(), self)
