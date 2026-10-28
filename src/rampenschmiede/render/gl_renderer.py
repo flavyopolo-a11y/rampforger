@@ -32,6 +32,8 @@ BACKGROUND_2D = (0.0, 0.0, 0.0)
 MAX_LIGHTS = 32
 #: Ansichtsmodi, in denen der Himmel gezeigt wird
 SKY_MODES = ("textured", "lit")
+#: Deckkraft der durchscheinenden Vorschau-Flächen von Werkzeugen
+GHOST_ALPHA = 0.6
 
 
 class ViewportRenderer:
@@ -162,6 +164,9 @@ class ViewportRenderer:
         self._version = arrays.version
 
     def _draw_dynamic_lines(self, data: np.ndarray) -> None:
+        self._draw_dynamic(data, moderngl.LINES)
+
+    def _draw_dynamic(self, data: np.ndarray, primitive: int) -> None:
         if len(data) == 0:
             return
         raw = data.astype("f4").tobytes()
@@ -171,15 +176,16 @@ class ViewportRenderer:
             self._dyn_vbo = self.ctx.buffer(reserve=len(raw) * 2, dynamic=True)
             self._dyn_vao = self.ctx.vertex_array(self.prog_lines, [(self._dyn_vbo, "3f 3f", "in_pos", "in_color")])
         self._dyn_vbo.write(raw)
-        self._dyn_vao.render(moderngl.LINES, vertices=len(data))
+        self._dyn_vao.render(primitive, vertices=len(data))
 
     # ---- 3D ------------------------------------------------------------------
     def draw_3d(self, fbo: moderngl.Framebuffer, cam: Camera3D, width: int, height: int,
                 mode: str = "shaded", extra_lines: np.ndarray | None = None,
                 pixel_size: tuple[int, int] | None = None, lights: LightSet | None = None,
-                sky: SkyImages | None = None) -> None:
+                sky: SkyImages | None = None, ghost: np.ndarray | None = None) -> None:
         """width/height in logischen Pixeln (für die Kamera), pixel_size in echten Pixeln.
-        mode "lit" ist die Licht-Vorschau (texturiert, beleuchtet von `lights`)."""
+        mode "lit" ist die Licht-Vorschau (texturiert, beleuchtet von `lights`).
+        `ghost`: durchscheinende Dreiecke eines Werkzeugs (Position, Farbe je Ecke)."""
         fbo.use()
         self.ctx.viewport = (0, 0, *(pixel_size or (width, height)))
         fbo.clear(*BACKGROUND_3D, 1.0, depth=1.0)
@@ -228,6 +234,15 @@ class ViewportRenderer:
             self.ctx.disable(moderngl.DEPTH_TEST)
             self._sel_vao.render(moderngl.LINES, vertices=self._sel_count)
             self.ctx.enable(moderngl.DEPTH_TEST)
+        if ghost is not None and len(ghost):
+            self.ctx.enable(moderngl.BLEND)
+            self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            fbo.depth_mask = False
+            self.prog_lines["u_override"].value = (0.0, 0.0, 0.0, -GHOST_ALPHA)
+            self._draw_dynamic(ghost, moderngl.TRIANGLES)
+            self.prog_lines["u_override"].value = (0.0, 0.0, 0.0, 0.0)
+            fbo.depth_mask = True
+            self.ctx.disable(moderngl.BLEND)
         if extra_lines is not None:
             self._draw_dynamic_lines(extra_lines)
         self.ctx.disable(moderngl.DEPTH_TEST)

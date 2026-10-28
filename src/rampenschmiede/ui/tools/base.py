@@ -60,6 +60,10 @@ class Tool:
     def lines_3d(self, vp: "Viewport") -> np.ndarray | None:
         return None
 
+    def tris_3d(self, vp: "Viewport") -> np.ndarray | None:
+        """Durchscheinende Vorschau-Flächen in 3D: Dreiecke als Zeilen (x, y, z, r, g, b)."""
+        return None
+
     def paint_2d(self, vp: "Viewport", p: QPainter) -> None: ...
     def paint_3d(self, vp: "Viewport", p: QPainter) -> None: ...
 

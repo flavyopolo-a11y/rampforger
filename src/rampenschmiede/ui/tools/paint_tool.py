@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from ..viewports.viewport import Viewport
 
 GHOST_COLOR = (1.0, 0.62, 0.2)
+GHOST_LIGHT = (0.3, 0.5, 0.81)
 
 
 class PaintTool(Tool):
@@ -42,7 +43,11 @@ class PaintTool(Tool):
         self.end: tuple[float, float] | None = None
         self.yaw = 0.0
         self.z = 0.0
-        self._cache: tuple[object, np.ndarray | None] | None = None
+        self._cache: tuple[object, np.ndarray | None, np.ndarray | None] | None = None
+        # Andere Vorlage oder Regler: Vorschau sofort neu zeichnen
+        changed = getattr(library, "template_changed", None)
+        if changed is not None:
+            changed.connect(editor.redraw_requested.emit)
 
     def deactivate(self) -> None:
         self.hover = self.start = self.end = None
@@ -69,28 +74,39 @@ class PaintTool(Tool):
         x, y, z = self.hover
         return t.key, values, Placement(snap(x), snap(y), snap(z), self.yaw)
 
-    def ghost(self) -> np.ndarray | None:
+    def _ghost_arrays(self) -> tuple[np.ndarray | None, np.ndarray | None]:
+        """(Kanten, Flächen) der Vorschau, solange sich die Vorlage nicht ändert zwischengespeichert."""
         plan = self.plan()
         if plan is None:
-            return None
+            return None, None
         key = (plan[0], tuple(sorted(plan[1].items())), plan[2])
         if self._cache is not None and self._cache[0] == key:
-            return self._cache[1]
+            return self._cache[1], self._cache[2]
         try:
             gen = generate(plan[0], plan[1], plan[2])
         except Exception:  # noqa: BLE001 - ungültige Zwischenwerte beim Ziehen: keine Vorschau
             gen = None
         rows: list[list[float]] = []
+        tris: list[list[float]] = []
         for faces in gen.face_sets if gen else []:
-            for poly in Solid(id=0, faces=tuple(faces)).polygons():
+            for face, poly in zip(faces, Solid(id=0, faces=tuple(faces)).polygons()):
                 if not poly:
                     continue
                 for k in range(len(poly)):
                     rows.append([*poly[k], *GHOST_COLOR])
                     rows.append([*poly[(k + 1) % len(poly)], *GHOST_COLOR])
-        arr = np.asarray(rows, dtype=np.float32).reshape(-1, 6) if rows else None
-        self._cache = (key, arr)
-        return arr
+                n = face.plane.normal
+                shade = 0.55 + 0.45 * max(0.0, n[0] * GHOST_LIGHT[0] + n[1] * GHOST_LIGHT[1] + n[2] * GHOST_LIGHT[2])
+                color = [c * shade for c in GHOST_COLOR]
+                for k in range(1, len(poly) - 1):
+                    tris += [[*poly[0], *color], [*poly[k], *color], [*poly[k + 1], *color]]
+        lines = np.asarray(rows, dtype=np.float32).reshape(-1, 6) if rows else None
+        faces_arr = np.asarray(tris, dtype=np.float32).reshape(-1, 6) if tris else None
+        self._cache = (key, lines, faces_arr)
+        return lines, faces_arr
+
+    def ghost(self) -> np.ndarray | None:
+        return self._ghost_arrays()[0]
 
     def place(self) -> int | None:
         plan = self.plan()
@@ -200,7 +216,13 @@ class PaintTool(Tool):
         return self.ghost()
 
     def lines_3d(self, vp: "Viewport") -> np.ndarray | None:
-        return self.ghost()
+        # In 3D zeigen die durchscheinenden Flächen die Form; die vielen Kanten einer Kurve
+        # würden sie nur zu einem orangen Klumpen machen
+        lines, faces = self._ghost_arrays()
+        return None if faces is not None else lines
+
+    def tris_3d(self, vp: "Viewport") -> np.ndarray | None:
+        return self._ghost_arrays()[1]
 
     def paint_2d(self, vp: "Viewport", p: QPainter) -> None:
         if self.start is None or self.end is None or vp.axes()[:2] != (0, 1):

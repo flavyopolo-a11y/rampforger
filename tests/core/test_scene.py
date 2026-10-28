@@ -54,7 +54,7 @@ def test_members_include_brushes_and_labels():
     doc, _, _, root, tele, ents = _doc()
     assert set(members(doc, [tele.id])) == {tele.id, *(s.id for s in doc.children(tele.id))}
     assert label(tele) == "trigger_teleport"
-    assert label(root).startswith("gerade")
+    assert label(root).startswith("Gerade Rampe")
 
 
 def test_kind_of_says_what_an_object_is():

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from .blocks import is_block_root, is_clip_member
 from .model import Entity, MapDocument, MapObject, Solid
+from .surf.catalog import CATALOG
 
 
 @dataclass(frozen=True)
@@ -53,10 +54,11 @@ def is_ramp_solid(solid: Solid) -> bool:
 
 def entity_folder(ent: Entity, has_brushes: bool) -> str:
     c = ent.classname.lower()
-    if is_block_root(ent):
-        return "rampen"
+    # Zonen und Kill-Zonen sind Bausteine, gehören aber zu den Triggern
     if c.startswith("trigger_"):
         return "trigger"
+    if is_block_root(ent):
+        return "rampen"
     if c.startswith("info_player_"):
         return "spawns"
     if c == "info_teleport_destination":
@@ -138,7 +140,8 @@ def label(obj: MapObject) -> str:
         name = obj.get("targetname")
         info = obj.extra.get("block")
         if isinstance(info, dict):
-            return f"{info.get('template', 'Rampe')} #{obj.id}"
+            template = CATALOG.get(str(info.get("template")))
+            return f"{template.name if template else info.get('template', 'Baustein')} #{obj.id}"
         if obj.classname.lower() in LIGHTS and not name:
             # Ohne Namen sehen alle Lichter gleich aus: Farbe und Helligkeit unterscheiden sie
             light = obj.get("_light").split()

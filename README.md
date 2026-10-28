@@ -66,7 +66,10 @@ Eine Form aus der Bibliothek in eine Ansicht ziehen setzt sie in der zuletzt ben
 **Rampen malen (Shift+R).** Vorlage links in der Bibliothek anklicken, Regler nach Wunsch stellen,
 dann in einer Ansicht vom Anfang zum Ende der Rampe ziehen. Die Vorschau hängt am Mauszeiger,
 beim Loslassen wird gebaut. Der Strich bestimmt Länge und Richtung, bei Kurven Radius und
-Richtung. Ein Klick ohne Ziehen setzt die Vorlage so ab, wie sie ist. Esc beendet das Malen.
+Richtung. Ein Klick ohne Ziehen setzt die Vorlage so ab, wie sie ist. Esc beendet das Malen. Jede Vorlage hat
+ein Bild: in der Bibliothek, groß über den Reglern (ändert sich sofort mit) und rechts in der
+Galerie des Malen-Werkzeugs, wo man auch direkt eine andere Rampe anklicken kann. In 3D schwebt
+die Rampe halbdurchsichtig dort, wo sie landen würde.
 
 **Wände malen (Shift+K).** In „Oben“ oder in 3D Punkte klicken: Daraus werden Wände, die an den
 Ecken auf Gehrung sauber aneinanderstoßen. Klick auf den ersten Punkt schließt den Raum, Enter

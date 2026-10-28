@@ -11,7 +11,7 @@ import random
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QMimeData, QSize, Qt, Signal
+from PySide6.QtCore import QMimeData, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QDrag
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QTreeWidget,
     QTreeWidgetItem,
+    QTreeWidgetItemIterator,
     QVBoxLayout,
     QWidget,
 )
@@ -70,6 +71,7 @@ from ..icons import icon
 from ..paths import prefabs_dir, textures_dir
 from ..tools.shape_tool import SHAPE_HINTS, SHAPES
 from ..widgets.material_field import MaterialField
+from ..widgets.template_preview import render, template_icon
 
 #: Symbol je Gruppe in der Bibliothek
 CATEGORY_ICONS = {"Rampen": "ramp", "Kurven": "curve", "Spezial": "halfpipe", "Bhop": "bhop", "Zonen": "flag",
@@ -92,7 +94,9 @@ MATERIAL_ICONS = {"wasser": "water", "lava": "water"}
 MIME_TEMPLATE = "application/x-rampenschmiede-vorlage"
 PREFAB_PREFIX = "prefab:"
 SHAPE_PREFIX = "shape:"
-TREE_ICON = 22
+TREE_ICON = 32
+#: Kantenlänge des Vorschaubilds über den Reglern
+PREVIEW_SIZE = 200
 OK_STYLE = "color: #3a3;"
 WARN_STYLE = "color: #d80; font-weight: bold;"
 
@@ -161,6 +165,8 @@ def _editor_for(p: Param, editor: EditorContext | None = None) -> tuple[QWidget,
 class LibraryPanel(QWidget):
     #: Ein Baustein wurde eingefügt (ID der Wurzel)
     inserted = Signal(int)
+    #: Gewählte Vorlage oder ihre Regler haben sich geändert (für Vorschauen anderswo)
+    template_changed = Signal()
 
     def __init__(self, editor: EditorContext, view_center: Callable[[], tuple[float, float, float]],
                  parent=None) -> None:
@@ -178,6 +184,8 @@ class LibraryPanel(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
         self.tree = _TemplateTree()
+        #: Vorlagen, deren Bild-Symbol noch gezeichnet wird (nach und nach, damit der Start schnell bleibt)
+        self._icon_queue: list[tuple[QTreeWidgetItem, str]] = []
         groups: dict[str, QTreeWidgetItem] = {}
         for t in CATALOG.values():
             g = groups.get(t.category)
@@ -190,6 +198,7 @@ class LibraryPanel(QWidget):
             item.setIcon(0, icon(MATERIAL_ICONS.get(t.key, CATEGORY_ICONS.get(t.category, "shape"))))
             item.setData(0, Qt.UserRole, t.key)
             item.setToolTip(0, self.tr(t.description))
+            self._icon_queue.append((item, t.key))
         nature = groups.get("Natur")
         if nature is not None:
             for key, (name, desc, _patterns) in NATURE_PROPS.items():
@@ -231,6 +240,12 @@ class LibraryPanel(QWidget):
 
         self.box = QGroupBox()
         box_lay = QVBoxLayout(self.box)
+        self.preview = QLabel()
+        self.preview.setAlignment(Qt.AlignCenter)
+        self.preview.setFixedHeight(PREVIEW_SIZE * 3 // 4)
+        self.preview.setStyleSheet("background: #22252b; border-radius: 4px;")
+        self.preview.setToolTip(self.tr("So sieht die Form mit den Reglern unten aus"))
+        box_lay.addWidget(self.preview)
         self.description = QLabel()
         self.description.setWordWrap(True)
         box_lay.addWidget(self.description)
@@ -275,6 +290,19 @@ class LibraryPanel(QWidget):
         first = self.tree.topLevelItem(0).child(0)
         self.tree.setCurrentItem(first)
         self._sync_from_selection()
+        # Der Zeitgeber gehört zum Panel und stirbt mit ihm (keine Symbole für gelöschte Einträge)
+        self._icon_timer = QTimer(self)
+        self._icon_timer.timeout.connect(self._draw_icons)
+        self._icon_timer.start(0)
+
+    def _draw_icons(self) -> None:
+        """Ein paar Vorlagen-Symbole zeichnen, dann der Oberfläche wieder Zeit geben."""
+        for _ in range(4):
+            if not self._icon_queue:
+                self._icon_timer.stop()
+                return
+            item, key = self._icon_queue.pop(0)
+            item.setIcon(0, template_icon(key, TREE_ICON * 2))
 
     # ---- Zustand ---------------------------------------------------------------------
     def current_key(self) -> str | None:
@@ -294,6 +322,24 @@ class LibraryPanel(QWidget):
     def _template_key(self) -> str | None:
         return self.current_key()
 
+    def select_template(self, key: str) -> None:
+        """Vorlage in der Liste wählen (wie ein Klick darauf, auch von außen, z. B. vom Malen-Werkzeug)."""
+        it = QTreeWidgetItemIterator(self.tree)
+        while it.value():
+            item = it.value()
+            if item.data(0, Qt.UserRole) == key:
+                if self.tree.currentItem() is not item:
+                    self.tree.setCurrentItem(item)
+                self.tree.scrollToItem(item)
+                self._template_clicked(item)
+                return
+            it += 1
+
+    def _set_preview(self, face_sets) -> None:
+        self.preview.setVisible(bool(face_sets))
+        if face_sets:
+            self.preview.setPixmap(render(face_sets, QSize(PREVIEW_SIZE, PREVIEW_SIZE * 3 // 4)))
+
     def _template_clicked(self, item: QTreeWidgetItem, _col: int = 0) -> None:
         """Vorlage angeklickt: gleich zum Malen bereit (Vorschau am Mauszeiger). Eine Form
         angeklickt: Formen-Werkzeug mit dieser Form, dann in einer Ansicht aufziehen."""
@@ -310,6 +356,11 @@ class LibraryPanel(QWidget):
         if "paint" in self.editor.tools:
             self.editor.set_selection(set())
             self.editor.set_tool("paint")
+            paint = self.editor.tools["paint"]
+            if getattr(paint, "hover", 1) is None:
+                # Gleich sichtbar machen, wo die Rampe landen würde (Mitte der Ansicht von oben)
+                paint.hover = self.view_center()  # type: ignore[attr-defined]
+            self.editor.redraw_requested.emit()
 
     def _tool_changed(self, name: str) -> None:
         """Formen-Werkzeug aktiv: die passende Form in der Liste markieren und zeigen."""
@@ -338,6 +389,7 @@ class LibraryPanel(QWidget):
     def _template_changed(self, *_args) -> None:
         if self.selected_block() is None:
             self._show_form()
+        self.template_changed.emit()
 
     def _sync_from_selection(self) -> None:
         if self._updating:
@@ -381,6 +433,7 @@ class LibraryPanel(QWidget):
                 w.blockSignals(False)
         key = self.current_key()
         self.insert_btn.setEnabled(template is not None or bool(key and key.startswith((PREFAB_PREFIX, SHAPE_PREFIX, NATURE_PREFIX))))
+        self._set_preview(None)
         if root is None and key and key.startswith(SHAPE_PREFIX):
             self._clear_form()
             shape = key[len(SHAPE_PREFIX):]
@@ -413,10 +466,9 @@ class LibraryPanel(QWidget):
             return
         self.description.setText(self.tr(template.description))
         self._build_form(template, values, at)
-        if root is not None:
-            self._show_angles(self._block_angles(root, template))
-        else:
-            self._show_angles(generate(template, values))
+        gen = self._block_angles(root, template) if root is not None else generate(template, values)
+        self._show_angles(gen)
+        self._set_preview(gen.face_sets)
 
     def _block_angles(self, root: Entity, template: Template) -> Generated:
         """Winkel aus den vorhandenen Brushes, ohne neu zu rechnen."""
@@ -505,7 +557,10 @@ class LibraryPanel(QWidget):
                 return
             # Nur die geänderten Regler merken, der Rest kommt weiter aus dem Map-Thema
             self.next_values.setdefault(template.key, {})[key] = values[key]
-            self._show_angles(generate(template, values))
+            gen = generate(template, values)
+            self._show_angles(gen)
+            self._set_preview(gen.face_sets)
+            self.template_changed.emit()
             return
         cmd, gen = change_block(self.editor.doc, root.id, values, at, merge_key=("baustein", root.id, key))
         self._updating = True
@@ -516,6 +571,7 @@ class LibraryPanel(QWidget):
         root = self.editor.doc.get(root.id)
         self._shown = ("block", root.id, block_info(root))
         self._show_angles(gen)
+        self._set_preview(gen.face_sets)
 
     def insert_values(self, template: Template) -> dict:
         """Werte fürs nächste Einfügen: Map-Thema, darüber die selbst gestellten Regler."""
