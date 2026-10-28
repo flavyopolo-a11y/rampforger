@@ -47,7 +47,7 @@ ihre Kopfzeile umstellen, die Trenner sind verschiebbar. Die Ansicht unter der M
 umrandet. Die 3D-Ansicht kennt die Modi Texturiert, Schattiert, Flach und Drahtgitter.
 
 **Werkzeuge.** Links stehen die Werkzeuge mit Symbol (Auswahl, Malen, Formen, Entity, Seiten,
-Schneiden, Loch, Ecken, Gelände, Streuen). Das aktive
+Schneiden, Loch, Ecken, Wände, Gelände, Streuen, Messen). Das aktive
 ist orange hinterlegt, oben rechts steht zusätzlich „Werkzeug: …“.
 
 | Kamera | |
@@ -67,6 +67,22 @@ Eine Form aus der Bibliothek in eine Ansicht ziehen setzt sie in der zuletzt ben
 dann in einer Ansicht vom Anfang zum Ende der Rampe ziehen. Die Vorschau hängt am Mauszeiger,
 beim Loslassen wird gebaut. Der Strich bestimmt Länge und Richtung, bei Kurven Radius und
 Richtung. Ein Klick ohne Ziehen setzt die Vorlage so ab, wie sie ist. Esc beendet das Malen.
+
+**Wände malen (Shift+K).** In „Oben“ oder in 3D Punkte klicken: Daraus werden Wände, die an den
+Ecken auf Gehrung sauber aneinanderstoßen. Klick auf den ersten Punkt schließt den Raum, Enter
+beendet. Höhe, Dicke und Unterkante rechts unter Werkzeug; in 3D setzt der erste Klick die
+Unterkante. Die Wände sind eine Gruppe.
+
+**Stützen unter Rampen.** Rampe auswählen, in der Bibliothek „Stützen bis zum Boden“ anhaken:
+Pfeiler im gewählten Abstand reichen bis zum nächsten Brush darunter und passen sich an, wenn die
+Rampe verschoben oder geändert wird.
+
+**Startzone auf dem Startblock.** Neue Maps beginnen mit einem Startblock, auf dem die Startzone
+sitzt. Zonen aus der Bibliothek setzen sich auf den Block unter dem Mauszeiger. Wird der Block
+verschoben oder größer gezogen, wandert die Zone mit.
+
+**In 3D direkt ziehen.** Ein Objekt in der 3D-Ansicht anfassen und ziehen schiebt es waagrecht am
+Raster, Shift kopiert. Hoch und runter über den blauen Pfeil.
 
 **Ecken (Shift+V).** Brush auswählen, Werkzeug „Ecken“: Weiße Griffe sind Ecken, gelbe die Mitten
 der Kanten. Ziehen verformt den Brush, eine Kantenmitte zieht beide Ecken. Strg+Klick oder ein

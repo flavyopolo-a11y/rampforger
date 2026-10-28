@@ -75,6 +75,14 @@ Vertex-Puffer, nur betroffene Zellen werden neu gebaut. Picking per Strahl gegen
 - `core/search.py`: Suchen und Ersetzen, Gehe zu ID.
 - `ui/dialogs/problems_dialog.py`, `ui/dialogs/find_dialog.py`, `ui/tools/measure_tool.py`.
 
+## Komfort
+
+- `core/attach.py`: Zonen auf ihrem Block (anpassen, folgen).
+- `core/pillars.py`: Stützen unter Rampen.
+- `core/geometry/walls.py` und `ui/tools/wall_tool.py`: Wände malen.
+- Nach jedem Befehl hängt `EditorContext.run` Folgeänderungen an denselben Undo-Schritt:
+  Stützen, Zonen, dann die Hülle des Startraums.
+
 ## Vorlagen-Bibliothek
 
 Alle gängigen Rampenarten als parametrische Vorlagen (gerade, Trapez, Pyramide, Kurve,

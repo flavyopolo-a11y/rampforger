@@ -21,7 +21,9 @@ def test_starter_room_per_game():
         assert spawns == expected
         assert any(isinstance(o, Entity) and o.classname == "light_environment" for o in objs)
         solids = [o for o in objs if isinstance(o, Solid)]
-        assert len(solids) == 6 and all(s.is_valid() for s in solids)
+        # Hülle (6), Startblock, Startzone
+        assert len(solids) == 8 and all(s.is_valid() for s in solids)
+        assert any(isinstance(o, Entity) and o.get("targetname") == "mod_zone_start" for o in objs)
 
 
 def test_starter_room_is_sealed_and_spawn_stands_inside():

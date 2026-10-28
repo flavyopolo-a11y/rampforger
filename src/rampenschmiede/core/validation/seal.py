@@ -123,6 +123,14 @@ def check_seal(doc: MapDocument, max_cells: int = MAX_CELLS) -> SealResult:
     cells = {}
     for eid, p in points:
         idx = tuple(int(math.floor(p[i] / cell)) - int(origin[i]) for i in range(3))
+        # Steht die Entity knapp über einem Boden, der ihre grobe Zelle belegt: Zelle darüber
+        for up in (1, 2):
+            if empty[idx] or idx[2] + up >= shape[2]:
+                break
+            above = (idx[0], idx[1], idx[2] + up)
+            if empty[above] and (idx[2] + up + int(origin[2])) * cell - p[2] < 64:
+                idx = above
+                break
         cells[eid] = idx
     targets = [idx for idx in cells.values() if empty[idx]]
     step = 0

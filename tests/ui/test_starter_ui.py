@@ -9,7 +9,7 @@ def test_new_map_starts_with_sealed_room(window, qtbot):
     window.act_starter.setChecked(True)
     window.file_new()
     doc = window.editor.doc
-    assert len([o for o in doc.objects() if isinstance(o, Solid)]) == 6
+    assert len([o for o in doc.objects() if isinstance(o, Solid)]) == 8  # Hülle, Startblock, Startzone
     classes = {o.classname for o in doc.objects() if isinstance(o, Entity)}
     # Ohne Spielprofil: alle Spawn-Arten
     assert {"info_player_start", "info_player_counterterrorist", "light_environment"} <= classes
