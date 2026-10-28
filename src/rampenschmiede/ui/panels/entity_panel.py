@@ -4,6 +4,7 @@ Ziele. Dazu die Ausgänge (I/O) zum Bearbeiten und die Eingänge, die andere Ent
 schicken."""
 from __future__ import annotations
 
+import dataclasses
 from typing import Callable
 
 from PySide6.QtCore import Qt, Signal
@@ -29,13 +30,14 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from ...core.commands import ReplaceObjects
 from ...core.entities.fgd import EntityCatalog, EntityClass, KeyDef, builtin_catalog, flag_bits
-from ...core.entities.io import entities_named, incoming, target_names
+from ...core.entities.io import entities_named, incoming, name_for_target, target_names
 from ...core.lights import LIGHT_CLASSES
 from ...core.model import Entity, Output
 from ...core.models.props import (
@@ -47,7 +49,7 @@ from ...core.models.props import (
     is_model_entity,
 )
 from ..editor import EditorContext
-from ..icons import ACTIVE
+from ..icons import ACTIVE, icon
 
 #: Breite der Beschriftungen; längere brechen um
 LABEL_WIDTH = 120
@@ -118,6 +120,10 @@ class EntityPanel(QWidget):
         self._ent_id: int | None = None
         self._updating = False
         self._editors: dict[str, Callable[[str], None]] = {}
+        #: Pipetten-Knöpfe der Ziel-Felder im Reiter Eigenschaften, nach Keyvalue
+        self.target_pipettes: dict[str, QToolButton] = {}
+        #: Knöpfe „Anhören …“ der Sound-Felder, nach Keyvalue
+        self.sound_buttons: dict[str, QPushButton] = {}
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -173,7 +179,11 @@ class EntityPanel(QWidget):
         self.out_delay.setSuffix(" s")
         self.out_once = QCheckBox(self.tr("Nur einmal auslösen"))
         form.addRow(self.tr("Ausgang"), self.out_name)
-        form.addRow(self.tr("Ziel"), self.out_target)
+        target_row = QHBoxLayout()
+        target_row.addWidget(self.out_target, 1)
+        self.out_pipette = self._pipette(self._output_target_changed)
+        target_row.addWidget(self.out_pipette)
+        form.addRow(self.tr("Ziel"), target_row)
         form.addRow(self.tr("Eingang"), self.out_input)
         form.addRow(self.tr("Parameter"), self.out_param)
         form.addRow(self.tr("Verzögerung"), self.out_delay)
@@ -236,6 +246,48 @@ class EntityPanel(QWidget):
             return
         self._run(ent.with_keyvalue(existing or key, value), self.tr("Eigenschaft ändern"))
 
+    # ---- Namen-Pipette -------------------------------------------------------------
+    def _pipette(self, change: Callable[[Entity, str], Entity]) -> QToolButton:
+        b = QToolButton()
+        b.setIcon(icon("pipette"))
+        b.setAutoRaise(True)
+        b.setToolTip(self.tr("Ziel in einer Ansicht anklicken (Namen-Pipette). Hat es noch keinen Namen, "
+                             "bekommt es einen."))
+        b.clicked.connect(lambda: self.pick_target(change))
+        return b
+
+    def pick_target(self, change: Callable[[Entity, str], Entity]) -> None:
+        """Nächster Klick in eine Ansicht trägt den Namen der getroffenen Entity ein."""
+        if self.entity() is None:
+            return
+        self.editor.start_pick(lambda obj: self._target_picked(obj, change),
+                               self.tr("Ziel-Entity in einer Ansicht anklicken (Esc bricht ab)"))
+
+    def _target_picked(self, obj, change: Callable[[Entity, str], Entity]) -> None:
+        ent = self.entity()
+        if ent is None:
+            return
+        if not isinstance(obj, Entity):
+            self.editor.status_message.emit(self.tr("Das ist ein Welt-Brush – nur Entities haben Namen"))
+            return
+        name, renamed = name_for_target(self.editor.doc, obj)
+        objs = []
+        if renamed is not None and renamed.id == ent.id:
+            ent = renamed
+        elif renamed is not None:
+            objs.append(renamed)
+        objs.append(change(ent, name))
+        self.editor.run(ReplaceObjects(objs, self.tr("Ziel wählen")))
+        self.editor.status_message.emit(self.tr("Ziel: {0}").format(name))
+
+    def _output_target_changed(self, ent: Entity, name: str) -> Entity:
+        i = self._current_output()
+        if not 0 <= i < len(ent.outputs):
+            return ent
+        outs = list(ent.outputs)
+        outs[i] = dataclasses.replace(outs[i], target=name)
+        return ent.replace(outputs=tuple(outs))
+
     # ---- Anzeige ------------------------------------------------------------------
     def show_entity(self, ent: Entity | None) -> None:
         changed = ent is None or ent.id != self._ent_id
@@ -263,6 +315,8 @@ class EntityPanel(QWidget):
             self._updating = False
 
     def _build_props(self, ent: Entity, cls: EntityClass | None) -> None:
+        self.target_pipettes = {}
+        self.sound_buttons = {}
         w = QWidget()
         form = QFormLayout(w)
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
@@ -392,6 +446,18 @@ class EntityPanel(QWidget):
         self.set_value("model", dlg.chosen())
         return True
 
+    def choose_sound(self, key: str, browser_cls=None) -> bool:
+        from ..dialogs.sound_browser import SoundBrowser
+
+        ent = self.entity()
+        if ent is None:
+            return False
+        dlg = (browser_cls or SoundBrowser)(self.editor.sounds(), ent.get(_existing_key(ent, key) or key), self)
+        if dlg.exec() != SoundBrowser.Accepted or not dlg.chosen():
+            return False
+        self.set_value(key, dlg.chosen())
+        return True
+
     def aim_at_camera(self) -> bool:
         """Spot oder Sonne in die Richtung drehen, in die die 3D-Kamera schaut."""
         ent = self.entity()
@@ -419,6 +485,19 @@ class EntityPanel(QWidget):
             row.addWidget(edit, 1)
             row.addWidget(pick)
             self.model_edit = edit
+            return w
+        if k.kind == "sound":
+            w = QWidget()
+            row = QHBoxLayout(w)
+            row.setContentsMargins(0, 0, 0, 0)
+            edit = QLineEdit(value)
+            edit.editingFinished.connect(lambda key=k.name, e=edit: self.set_value(key, e.text().strip()))
+            pick = QPushButton(self.tr("Anhören …"))
+            pick.setToolTip(self.tr("Sound aus dem Spiel wählen und vorher anhören"))
+            pick.clicked.connect(lambda _c=False, key=k.name: self.choose_sound(key))
+            row.addWidget(edit, 1)
+            row.addWidget(pick)
+            self.sound_buttons[k.name] = pick
             return w
         if k.name.lower() == "skin":
             ent = self.entity()
@@ -462,7 +541,13 @@ class EntityPanel(QWidget):
             combo.lineEdit().editingFinished.connect(
                 lambda key=k.name, c=combo: self.set_value(key, c.currentText().strip()))
             combo.activated.connect(lambda _, key=k.name, c=combo: self.set_value(key, c.currentText().strip()))
-            return combo
+            w = QWidget()
+            row = QHBoxLayout(w)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.addWidget(combo, 1)
+            row.addWidget(self._pipette(lambda e, name, key=k.name: e.with_keyvalue(_existing_key(e, key) or key, name)))
+            self.target_pipettes[k.name] = w.findChild(QToolButton)
+            return w
         edit = QLineEdit(value)
         if k.kind == "integer":
             edit.setValidator(QIntValidator())
@@ -554,7 +639,7 @@ class EntityPanel(QWidget):
         i = self._current_output()
         has = ent is not None and 0 <= i < len(ent.outputs)
         for w in (self.out_name, self.out_target, self.out_input, self.out_param, self.out_delay, self.out_once,
-                  self.out_copy, self.out_del):
+                  self.out_copy, self.out_del, self.out_pipette):
             w.setEnabled(has)
         if not has:
             return

@@ -68,3 +68,26 @@ def io_segments(doc: MapDocument, ids: Iterable[int]) -> list[tuple[Point, Point
                 seen.add((src.id, ent.id))
                 segs.append((b, a, IN_COLOR))
     return segs
+
+
+def unique_targetname(doc: MapDocument, base: str) -> str:
+    """Freier Entity-Name: `base`, sonst `base_2`, `base_3` …"""
+    used = {e.get("targetname").lower() for e in doc.entities()}
+    if base.lower() not in used:
+        return base
+    n = 2
+    while f"{base}_{n}".lower() in used:
+        n += 1
+    return f"{base}_{n}"
+
+
+def name_for_target(doc: MapDocument, ent: Entity) -> tuple[str, Entity | None]:
+    """Name, unter dem `ent` als Ziel eingetragen wird (Namen-Pipette). Hat die Entity noch
+    keinen, bekommt sie einen aus ihrer Klasse (`trigger_teleport` → `teleport_1`); dann ist
+    die umbenannte Entity der zweite Wert, sonst None."""
+    name = ent.get("targetname")
+    if name:
+        return name, None
+    base = ent.classname.lower().split("_", 1)[-1] or "ziel"
+    name = unique_targetname(doc, f"{base}_1")
+    return name, ent.with_keyvalue("targetname", name)

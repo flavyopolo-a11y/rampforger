@@ -1,9 +1,10 @@
 """Editor-Kontext: verbindet Dokument, Undo-Stapel, Auswahl und Werkzeuge mit der Oberfläche."""
 from __future__ import annotations
 
+import itertools
 import weakref
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Callable, Iterable
 
 import numpy as np
 from PySide6.QtCore import QObject, Signal
@@ -17,6 +18,8 @@ from ..core.entities.fgd import EntityCatalog, builtin_catalog, load_catalog
 from ..core.entities.io import io_segments
 from ..core.geometry import transform
 from ..core.geometry.transform import TransformError
+from ..core.instances import INSTANCE, InstanceCache, instance_bbox, placed_objects
+from ..core.instances import resolve as resolve_instance
 from ..core.lights import LightSet, collect_lights, gizmo_segments
 from ..core.materials import MaterialLibrary
 from ..core.materials.sizes import set_size_lookup
@@ -24,6 +27,7 @@ from ..core.mathutil import BBox, Point
 from ..core.model import (
     DEFAULT_MATERIAL,
     ChangeSet,
+    Entity,
     MapDocument,
     MapObject,
     owner_id,
@@ -33,7 +37,9 @@ from ..core.models.library import ModelLibrary
 from ..core.models.props import prop_bbox
 from ..core.organize import expand_groups
 from ..core.pillars import follow_pillars
+from ..core.sounds import SoundLibrary
 from ..core.templates.starter import grow_hull
+from ..core.tracks import PATH_COLOR, path_segments
 from ..render.scene_mesh import SceneMesh
 from ..render.sky import SkyCache, SkyImages
 from ..render.textures import TextureAtlas
@@ -69,8 +75,16 @@ def _use_model_bounds(editor: "EditorContext") -> None:
             if bb is not None:
                 return bb
         ed = ref()
+        if ed is not None and ent.classname.lower() == INSTANCE:
+            return instance_bbox(ent, ed.instance_content(ent))
         return prop_bbox(ent, ed.models) if ed is not None else None
     set_entity_bounds(bounds)
+
+
+#: Linienfarbe der Portale (hellblau, wie in Hammer)
+PORTAL_COLOR = (0.45, 0.75, 1.0)
+#: Linienfarbe der Pfade (path_track/path_corner)
+PATH_LINE = tuple(c / 255 for c in PATH_COLOR)
 
 
 class EditorContext(QObject):
@@ -96,6 +110,8 @@ class EditorContext(QObject):
     material_scope_changed = Signal(str)
     #: Ein Modell aus dem Modell-Browser wurde in eine Ansicht gezogen: (Modellname, Weltpunkt)
     model_dropped = Signal(str, object)
+    #: Namen-Pipette (o. Ä.) wartet auf einen Klick in eine Ansicht: True beim Start, False am Ende
+    picking_changed = Signal(bool)
 
     def __init__(self) -> None:
         super().__init__()
@@ -109,6 +125,7 @@ class EditorContext(QObject):
         #: Gilt eine Rampen-Textur für alle Rampen ("alle") oder nur eine ("einer")?
         self.material_scope = "alle"
         self.scene = SceneMesh(self.doc, self.atlas)
+        self.scene.instances = self.instance_objects
         self.selection: frozenset[int] = frozenset()
         self.file_path: Path | None = None
         #: Woher eine importierte Map stammt (VMF), solange sie nicht als Projekt gespeichert ist
@@ -120,9 +137,17 @@ class EditorContext(QObject):
         self.ignore_groups = False
         #: Leck-Spur aus der letzten .lin-Datei, als Linienpaare für die Ansichten
         self.leak_lines: np.ndarray | None = None
+        #: Portale aus der letzten .prt-Datei (Umrisse als Linienpaare)
+        self.portal_lines: np.ndarray | None = None
+        self.portal_count = 0
         self.leak_points: list[Point] = []
         self._entity_fgds: list[str] = []
         self._entity_catalog: EntityCatalog | None = None
+        #: Wartet ein Panel auf das nächste angeklickte Objekt (Namen-Pipette)?
+        self._picker: Callable[[MapObject], None] | None = None
+        self._io_cache: tuple[int, np.ndarray | None] | None = None
+        self._sounds: SoundLibrary | None = None
+        self.instance_cache = InstanceCache()
         self._lights: LightSet | None = None
         self.sky_cache = SkyCache()
         #: Kamera der zuletzt gezeichneten 3D-Ansicht (setzt die Ansicht selbst)
@@ -141,10 +166,12 @@ class EditorContext(QObject):
         self.doc = doc
         self.stack = CommandStack(doc)
         self.scene = SceneMesh(doc, self.atlas, self.models)
+        self.scene.instances = self.instance_objects
         self.file_path = path
         self.import_path = import_path
         self.selection = frozenset()
         self.leak_points, self.leak_lines = [], None
+        self.portal_lines, self.portal_count = None, 0
         self._lights = None
         self._hook_document()
         self.document_replaced.emit()
@@ -276,11 +303,16 @@ class EditorContext(QObject):
             self.redraw_requested.emit()
 
     def io_lines(self) -> np.ndarray | None:
-        """Verbindungslinien der gewählten Entities (Ausgänge grün, Eingänge orange)."""
+        """Verbindungslinien der gewählten Entities (Ausgänge grün, Eingänge orange) und
+        immer die Pfade aus path_track/path_corner (hellgrün, gestrichelt wirkt zu unruhig)."""
+        version = self.scene.version
+        if self._io_cache is not None and self._io_cache[0] == version:
+            return self._io_cache[1]
         segs = io_segments(self.doc, self.selection) if self.selection else []
-        if not segs:
-            return None
-        return np.asarray([[*p, *c] for a, b, c in segs for p in (a, b)], dtype=np.float32)
+        segs += [(a, b, PATH_LINE) for a, b in path_segments(self.doc)]
+        lines = np.asarray([[*p, *c] for a, b, c in segs for p in (a, b)], dtype=np.float32) if segs else None
+        self._io_cache = (version, lines)
+        return lines
 
     def light_lines(self) -> np.ndarray | None:
         """Reichweite, Kegel und Sonnenrichtung der gewählten Lichter."""
@@ -402,6 +434,82 @@ class EditorContext(QObject):
             color = np.tile(np.asarray(LEAK_COLOR, dtype=np.float32), (len(pairs), 1))
             self.leak_lines = np.hstack([pairs, color])
         self.redraw_requested.emit()
+
+    # ---- Instanzen --------------------------------------------------------------------
+    def map_dir(self) -> Path | None:
+        """Ordner der Map: Instanz-Dateien stehen relativ dazu."""
+        path = self.file_path or self.import_path
+        return path.parent if path is not None else None
+
+    def instance_file(self, ent: Entity) -> Path | None:
+        return resolve_instance(ent.get("file"), self.map_dir())
+
+    def instance_content(self, ent: Entity) -> MapDocument | None:
+        path = self.instance_file(ent)
+        return self.instance_cache.get(path) if path is not None else None
+
+    def instance_objects(self, ent: Entity) -> list[MapObject] | None:
+        """Inhalt einer func_instance an ihrer Stelle (für Anzeige und Auswahl)."""
+        content = self.instance_content(ent)
+        if content is None:
+            return None
+        return placed_objects(ent, content, itertools.count(1).__next__, fixup=False)
+
+    def reload_instances(self) -> bool:
+        """Instanz-Dateien neu lesen, wenn sich eine geändert hat (z. B. in einem zweiten Fenster
+        bearbeitet). True, wenn neu gezeichnet wird."""
+        changed = self.instance_cache.stale()
+        if changed:
+            self.instance_cache.forget()
+            self.scene.textures_changed()
+            self.redraw_requested.emit()
+        return changed
+
+    # ---- Sounds -----------------------------------------------------------------------
+    def sounds(self) -> SoundLibrary:
+        """Sounds des Spiels; nach einem Wechsel der Material-Bibliothek neu gelesen."""
+        if self._sounds is None or self._sounds.materials is not self.materials:
+            self._sounds = SoundLibrary(self.materials)
+        return self._sounds
+
+    # ---- Portale (vbsp .prt) ----------------------------------------------------------
+    def set_portals(self, polys: list[list[Point]]) -> None:
+        """Portale als Umrisse in allen Ansichten zeigen; leere Liste blendet sie aus. Wo viele
+        Portale dicht liegen, zerschneidet die Geometrie die Map stark (VIS wird langsam)."""
+        self.portal_count = len(polys)
+        if not polys:
+            self.portal_lines = None
+        else:
+            rows = []
+            for poly in polys:
+                for i, a in enumerate(poly):
+                    b = poly[(i + 1) % len(poly)]
+                    rows += [[*a, *PORTAL_COLOR], [*b, *PORTAL_COLOR]]
+            self.portal_lines = np.asarray(rows, dtype=np.float32)
+        self.redraw_requested.emit()
+
+    # ---- Objekt in einer Ansicht anklicken (Pipette) --------------------------------
+    @property
+    def picking(self) -> bool:
+        return self._picker is not None
+
+    def start_pick(self, callback: Callable[[MapObject], None], message: str) -> None:
+        """Der nächste Linksklick in eine Ansicht wählt kein Objekt aus, sondern gibt es an
+        `callback`. Esc oder ein zweiter Start bricht ab."""
+        self._picker = callback
+        self.status_message.emit(message)
+        self.picking_changed.emit(True)
+
+    def cancel_pick(self) -> None:
+        if self._picker is not None:
+            self._picker = None
+            self.picking_changed.emit(False)
+
+    def finish_pick(self, obj: MapObject) -> None:
+        callback, self._picker = self._picker, None
+        self.picking_changed.emit(False)
+        if callback is not None:
+            callback(obj)
 
     # ---- Werkzeuge ------------------------------------------------------------------
     def register_tool(self, tool: "Tool") -> None:

@@ -20,6 +20,7 @@ from ..core.compile import (
     resolve,
 )
 from ..core.cordon import CordonResult, active_cordon, apply_cordon
+from ..core.instances import collapse_instances
 from ..core.io.vmf import ExportResult, save_vmf
 from ..core.materials.authoring import pack_list, used_materials
 from ..core.model import MapDocument
@@ -44,6 +45,8 @@ class CompileController(QObject):
         self.export: ExportResult | None = None
         self.plan: CompilePlan | None = None
         self.last_result: CompileResult | None = None
+        #: Meldungen zu Instanzen aus dem letzten `build_doc`
+        self.instance_problems: list[str] = []
         self.finished.connect(self._on_finished)
         editor.document_replaced.connect(self._forget_export)
 
@@ -56,11 +59,14 @@ class CompileController(QObject):
         return map_name_for(path.stem if path else "unbenannt")
 
     def build_doc(self) -> tuple[MapDocument, CordonResult | None]:
-        """Was gebaut wird: die Map, oder bei aktivem Bereich nur dessen Inhalt samt Hülle."""
-        box = active_cordon(self.editor.doc)
+        """Was gebaut wird: die Map mit eingesetzten Instanzen, bei aktivem Bereich nur dessen
+        Inhalt samt Hülle. Meldungen zu Instanzen stehen danach in `instance_problems`."""
+        doc, self.instance_problems = collapse_instances(self.editor.doc, self.editor.map_dir(),
+                                                         self.editor.instance_cache)
+        box = active_cordon(doc)
         if box is None:
-            return self.editor.doc, None
-        res = apply_cordon(self.editor.doc, box)
+            return doc, None
+        res = apply_cordon(doc, box)
         return res.doc, res
 
     def prepare(self, profile: GameProfile, settings: CompileSettings, doc: MapDocument | None = None) -> CompilePlan:
@@ -88,6 +94,8 @@ class CompileController(QObject):
         self.started.emit(plan)
         for note in notes or ():
             self.line.emit(note)
+        for text in self.instance_problems:
+            self.line.emit(LogLine(text, Level.WARNING))
         if not plan.problems:
             try:
                 Path(plan.vmf_path).parent.mkdir(parents=True, exist_ok=True)
@@ -135,3 +143,11 @@ def load_pointfile(editor: EditorContext, path: Path) -> int:
     points = parse_pointfile(path.read_text(encoding="utf-8", errors="replace"))
     editor.set_leak_path(points)
     return len(points)
+
+
+def load_portalfile(editor: EditorContext, path: Path) -> int:
+    from ..core.compile import parse_portalfile
+
+    polys = parse_portalfile(path.read_text(encoding="utf-8", errors="replace"))
+    editor.set_portals(polys)
+    return len(polys)

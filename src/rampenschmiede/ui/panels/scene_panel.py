@@ -10,6 +10,7 @@ from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
+    QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -21,6 +22,7 @@ from ...core.model import Entity
 from ...core.scene import FOLDERS, SceneIndex, label, members
 from .. import icons
 from ..editor import EditorContext
+from .visgroup_panel import VisgroupPanel
 
 ID_ROLE = Qt.UserRole
 FOLDER_ROLE = Qt.UserRole + 1
@@ -51,7 +53,15 @@ class ScenePanel(QWidget):
         self.tree.itemClicked.connect(self._clicked)
         self.tree.itemDoubleClicked.connect(self._double_clicked)
         self.tree.itemSelectionChanged.connect(self._select)
-        lay.addWidget(self.tree)
+        self.visgroups = VisgroupPanel(editor)
+        split = QSplitter(Qt.Vertical)
+        split.addWidget(self.tree)
+        split.addWidget(self.visgroups)
+        split.setStretchFactor(0, 4)
+        split.setStretchFactor(1, 1)
+        split.setSizes([400, 110])
+        split.setChildrenCollapsible(False)
+        lay.addWidget(split, 1)
         self.hint = QLabel(self.tr("Auge: Ordner ein-/ausblenden · Doppelklick: hinspringen"))
         self.hint.setWordWrap(True)
         self.hint.setStyleSheet("color: #9aa0a6;")

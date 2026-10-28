@@ -9,10 +9,12 @@ Zell-Batching (nur betroffene Raumzellen neu hochladen) folgt in der Komfort-Eta
 from __future__ import annotations
 
 import colorsys
+import dataclasses
 import itertools
 import math
 import zlib
 from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
 
@@ -346,6 +348,8 @@ def build_displacement_mesh(solid: Solid, atlas: TextureAtlas | None = None) -> 
 
 
 STICKER_COLOR = (0.95, 0.55, 0.85)
+#: Umriss einer Instanz in 2D (hellblau-grau wie in Hammer)
+INSTANCE_COLOR_2D = (0.55, 0.75, 0.95)
 
 
 def _float(text: str, default: float) -> float:
@@ -381,8 +385,51 @@ def build_sticker_mesh(ent: Entity, atlas: TextureAtlas | None = None) -> Object
     return ObjectMesh(np.asarray(rows, dtype=np.float32), np.asarray(lines, dtype=np.float32), STICKER_COLOR)
 
 
+#: Liefert für eine func_instance die eingesetzten Objekte ihrer Datei (None: Datei fehlt)
+InstanceContent = Callable[[Entity], "list[MapObject] | None"]
+
+
+def build_instance_mesh(ent: Entity, content: list[MapObject], atlas: TextureAtlas | None,
+                        models: ModelLibrary | None) -> ObjectMesh | None:
+    """Inhalt einer Instanz als ein Mesh (Auswahl färbt alles), dazu das Kästchen am Ursprung."""
+    parents = {o.parent_id for o in content if isinstance(o, Solid) and o.parent_id is not None}
+    by_id = {o.id: o for o in content}
+    tris, lines, edges, lms = [], [], [], []
+    for obj in content:
+        if isinstance(obj, Entity) and obj.id in parents:
+            continue  # Brush-Entity: ihre Brushes zeigen sie
+        parent = by_id.get(obj.parent_id) if isinstance(obj, Solid) and obj.parent_id is not None else None
+        mesh = build_object_mesh(obj, atlas, block_part=is_block_root(parent), models=models)
+        if mesh is None:
+            continue
+        t = mesh.tris
+        if t.shape[1] < 14:
+            t = np.hstack([t, np.zeros((len(t), 14 - t.shape[1]), dtype=np.float32)])
+        tris.append(t)
+        lms.append(mesh.lightmap if mesh.lightmap is not None else np.zeros((len(t), 3), dtype=np.float32))
+        lines.append(mesh.lines)
+        edges.append(mesh.lines if mesh.edges3d is None else mesh.edges3d)
+    marker = build_object_mesh(dataclasses.replace(ent, classname="info_target"))
+    if marker is not None:
+        t = marker.tris
+        tris.append(np.hstack([t, np.zeros((len(t), 14 - t.shape[1]), dtype=np.float32)]))
+        lms.append(np.zeros((len(t), 3), dtype=np.float32))
+        lines.append(marker.lines)
+        edges.append(marker.lines)
+    if not tris:
+        return None
+    return ObjectMesh(np.concatenate(tris), np.concatenate(lines).astype(np.float32), INSTANCE_COLOR_2D,
+                      np.concatenate(edges).astype(np.float32), np.concatenate(lms))
+
+
 def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_part: bool = False,
-                      models: ModelLibrary | None = None) -> ObjectMesh | None:
+                      models: ModelLibrary | None = None, instances: InstanceContent | None = None) -> ObjectMesh | None:
+    if isinstance(obj, Entity) and instances is not None and obj.classname.lower() == "func_instance":
+        content = instances(obj)
+        if content:
+            mesh = build_instance_mesh(obj, content, atlas, models)
+            if mesh is not None:
+                return mesh
     if isinstance(obj, Entity) and models is not None and obj.get("model", "").lower().endswith(".mdl"):
         model = models.load(obj.get("model"))
         mesh = build_prop_mesh(obj, model, atlas) if model is not None else None
@@ -461,6 +508,8 @@ class SceneMesh:
         self.atlas = atlas
         #: Spielmodelle für Props (None: Props erscheinen als Kästchen)
         self.models = models
+        #: Inhalt von Instanzen (None: Instanzen erscheinen als Kästchen)
+        self.instances: InstanceContent | None = None
         self._atlas_generation = atlas.generation if atlas else 0
         self._cache: dict[int, tuple[MapObject, ObjectMesh | None]] = {}
         self._selection: frozenset[int] = frozenset()
@@ -498,7 +547,8 @@ class SceneMesh:
             return hit[1]
         parent_id = getattr(obj, "parent_id", None)
         parent = self.doc.get(parent_id) if parent_id is not None else None
-        mesh = build_object_mesh(obj, self.atlas, block_part=is_block_root(parent), models=self.models)
+        mesh = build_object_mesh(obj, self.atlas, block_part=is_block_root(parent), models=self.models,
+                                 instances=self.instances)
         self._cache[obj.id] = (obj, mesh)
         return mesh
 

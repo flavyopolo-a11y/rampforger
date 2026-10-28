@@ -180,6 +180,37 @@ Map nicht gibt, sind rot. *Eingänge* listet, wer diese Entity anspricht, Doppel
 Bei gewählten Entities zeigen Linien in den Ansichten ihre Verbindungen: grün zu den Zielen,
 orange von den Auslösern.
 
+**Namen-Pipette.** Neben jedem Ziel-Feld (Ziel eines Teleporters, Eltern-Entity, Ziel eines
+Ausgangs …) sitzt eine Pipette: anklicken, dann in einer Ansicht die Ziel-Entity anklicken. Ihr
+Name wird eingetragen; hat sie noch keinen, bekommt sie einen (z. B. `teleport_destination_1`).
+Esc bricht ab.
+
+**Pfad (Werkzeug „Pfad“, Shift+P).** Punkte in einer beliebigen Ansicht klicken: Es entsteht eine
+Kette aus `path_track` (oder `path_corner`), in der jeder Punkt auf den nächsten zeigt
+(`pfad_1` → `pfad_2` …). Klick auf den ersten Punkt macht einen Rundkurs, Enter beendet. Alle
+Pfade sind in den Ansichten als hellgrüne Linien zu sehen. Ein `func_tracktrain` fährt sie mit
+*Erstes Ziel* = `pfad_1` ab.
+
+**Entity-Bericht (Alt+E, Menü Bearbeiten).** Alle Entities als Tabelle mit Filter nach Text,
+Klasse und Art. Doppelklick springt hin, *Alle gefilterten auswählen* und *Markierte löschen*
+arbeiten auf der Liste.
+
+**Sounds (Menü Bearbeiten → Sounds anhören, oder *Anhören …* bei Sound-Feldern).** Alle Sounds
+des Spiels mit Suche und Ordnern; Doppelklick spielt ab, *Wählen* trägt den Namen ein (z. B. bei
+`ambient_generic`).
+
+**Sichtgruppen (unter dem Szenen-Baum).** Auswahl treffen und *Neue Sichtgruppe*: Das Häkchen
+blendet die ganze Gruppe aus und ein, Doppelklick wählt ihre Objekte. Ein Objekt kann in mehreren
+Gruppen sein. Die Gruppen kommen als Visgroups ins VMF und aus Hammer-Maps mit.
+
+**Instanzen (Menü Bearbeiten).** *Auswahl als Instanz speichern* schreibt die Auswahl in eine
+eigene Datei (.vmf oder .rsmap) und setzt an ihre Stelle eine `func_instance`. *Instanz einfügen*
+setzt eine solche Datei beliebig oft ein; drehen und verschieben wie jede Entity. Ändert man die
+Datei (*Instanz-Datei öffnen* bearbeitet sie in einem zweiten Fenster), ändern sich alle
+Instanzen, sobald man zurück ins Fenster kommt. Beim Kompilieren werden die Instanzen eingesetzt:
+Namen aus der Datei bekommen den Namen der Instanz vorne (`raum1-lampe`), Ersetzungen
+`replace01` = `$farbe 255 0 0` tauschen Variablen aus. Fehlt eine Datei, steht das im Log.
+
 **Licht.** In der 3D-Ansicht oben links *Licht-Vorschau* wählen: Die Map wird so beleuchtet, wie
 vrad rechnet (Helligkeit bei 100 Units, Abfall konstant/linear/quadratisch oder 50-%-/0-%-Abstand,
 Spot-Kegel innen/außen, Sonne mit Umgebungslicht), nur ohne Schatten und Lichtreflexe. Hat die Map
@@ -260,6 +291,8 @@ noch passt.
 „⚠ Leck: info_player_start ist nicht umschlossen“). Die Prüfung läuft nach jeder Änderung im
 Hintergrund, ohne zu kompilieren. Ein Klick darauf zeigt den Weg ins Freie als rote Linie und wählt
 die betroffene Entity aus. *Testen → Map mit Skybox umhüllen* legt eine dichte Hülle um alles.
+*Testen → Portal-Datei laden* zeigt die Portale von vbsp (.prt aus dem Kompilier-Ordner) als blaue
+Umrisse: Wo sie dicht liegen, zerschneidet die Geometrie die Map stark und VIS rechnet lange.
 Vor jedem Kompilieren läuft die Prüfung ebenfalls und warnt im Log.
 
 **Rampen-Bibliothek.** Das Panel *Bibliothek* (links) enthält alle Rampen und Spielelemente
