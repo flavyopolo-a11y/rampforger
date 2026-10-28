@@ -36,6 +36,9 @@ from ..core.materials.theme import SetTheme, Theme, apply_collision, apply_theme
 from ..core.model import Entity, MapDocument, MapObject
 from ..core.models.props import prop_problems
 from ..core.profiles import ProfileStore, detect_profiles
+from ..core.skybox3d import STYLE_BY_KEY as SKY3D_BY_KEY
+from ..core.skybox3d import STYLES as SKY3D_STYLES
+from ..core.skybox3d import pick_material, remove_command, skybox_command, skybox_ids
 from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
 from ..core.validation.problems import find_problems
 from ..core.validation.seal import check_seal
@@ -424,6 +427,9 @@ class MainWindow(QMainWindow):
         self.act_sky = self._action("&Himmel …", self.choose_sky, None,
                                     "Skybox der Map wählen; die 3D-Ansicht zeigt sie in „Texturiert“ und "
                                     "„Licht-Vorschau“")
+        self.act_skybox3d = self._action("&3D-Skybox …", self.skybox3d_dialog, None,
+                                         "Berge, Stadt oder Dünen am Horizont: legt einen 3D-Skybox-Raum mit "
+                                         "Kamera und Kulisse an")
         self.act_ramp_clip = self._action("&Playerclip auf Rampen", self.set_ramp_clip, None,
                                           "Glatte Playerclip-Hülle auf allen Rampen (empfohlen). Aus: Die Rampe "
                                           "selbst ist die Kollision.", checkable=True)
@@ -472,7 +478,7 @@ class MainWindow(QMainWindow):
             m.addAction(a)
 
         m = mb.addMenu(self.tr("Te&xturen"))
-        for a in (self.act_ramp_assistant, self.act_world_style, self.act_sky, self.act_ramp_clip, None,
+        for a in (self.act_ramp_assistant, self.act_world_style, self.act_sky, self.act_skybox3d, self.act_ramp_clip, None,
                   self.act_import_texture, self.act_texture_packs):
             m.addSeparator() if a is None else m.addAction(a)
 
@@ -1216,6 +1222,47 @@ class MainWindow(QMainWindow):
         self.library.refresh()
         self.tool_options.suggest_kit(style.key)
         self.editor.status_message.emit(self.tr("Welt-Stil „{0}“ angewendet").format(self.tr(style.name)))
+        return True
+
+    def skybox3d_dialog(self) -> bool:
+        has = bool(skybox_ids(self.editor.doc))
+        items = [f"{self.tr(st.name)}: {self.tr(st.description)}" for st in SKY3D_STYLES]
+        if has:
+            items.append(self.tr("Entfernen: 3D-Skybox aus der Map löschen"))
+        choice, ok = QInputDialog.getItem(
+            self, self.tr("3D-Skybox"),
+            self.tr("Was soll am Horizont stehen? Die Kulisse erscheint im Spiel 16-mal so groß hinter dem "
+                    "Himmel.") + ("\n" + self.tr("Die vorhandene 3D-Skybox wird ersetzt.") if has else ""),
+            items, 0, False)
+        if not ok:
+            return False
+        index = items.index(choice)
+        if index >= len(SKY3D_STYLES):
+            cmd = remove_command(self.editor.doc)
+            if cmd is not None:
+                self.editor.run(cmd)
+                self.editor.status_message.emit(self.tr("3D-Skybox entfernt"))
+            return cmd is not None
+        return self.make_skybox3d(SKY3D_STYLES[index].key)
+
+    def make_skybox3d(self, key: str) -> bool:
+        style = SKY3D_BY_KEY[key]
+        lib = self.editor.materials
+        try:
+            ground = (pick_material(lib, style.ground, style.ground_words)
+                      or wall_material(textures_dir(), style.ground_color)).upper()
+            detail = (pick_material(lib, style.detail, style.detail_words)
+                      or wall_material(textures_dir(), style.detail_color)).upper()
+        except OSError as exc:
+            QMessageBox.critical(self, APP_NAME, self.tr("Texturen konnten nicht gespeichert werden:\n{0}").format(exc))
+            return False
+        self.editor.refresh_materials()
+        cmd, objs = skybox_command(self.editor.doc, style, ground, detail)
+        self.editor.run(cmd)
+        self.editor.set_selection([o.id for o in objs])
+        self.editor.status_message.emit(self.tr(
+            "3D-Skybox „{0}“ angelegt und ausgewählt. Strg+E springt hin; im Spiel steht sie hinter dem Himmel."
+        ).format(self.tr(style.name)))
         return True
 
     def choose_sky(self) -> bool:

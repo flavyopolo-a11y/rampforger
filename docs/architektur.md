@@ -82,6 +82,15 @@ Vertex-Puffer, nur betroffene Zellen werden neu gebaut. Picking per Strahl gegen
 - `core/geometry/walls.py` und `ui/tools/wall_tool.py`: Wände malen.
 - Nach jedem Befehl hängt `EditorContext.run` Folgeänderungen an denselben Undo-Schritt:
   Stützen, Zonen, dann die Hülle des Startraums.
+- `core/cordon.py` und `ui/tools/cordon_tool.py`: Bereich in `doc.extra["cordon"]`;
+  `apply_cordon` liefert eine gefilterte Kopie mit Skybox-Hülle, die `CompileController.build_doc`
+  statt der Map exportiert und prüft.
+- `core/decals.py` und `ui/tools/sticker_tool.py`: Overlays und Decals. Der VMF-Writer vergibt
+  Seiten-IDs vorab und setzt bei Werkzeug-Overlays `sides` und `BasisOrigin` beim Export neu;
+  `render/scene_mesh.build_sticker_mesh` zeigt sie als Bild auf der Fläche.
+- `core/skybox3d.py`: 3D-Skybox (Raum, Kamera, Kulisse); alles mit `extra["skybox3d"]`, von
+  Hülle, Umhüllen und Cordon ausgenommen bzw. immer mitgenommen.
+- `ui/autosave.py`: automatische Sicherung, Kopie vor dem Speichern, Wiederherstellung.
 
 ## Vorlagen-Bibliothek
 
