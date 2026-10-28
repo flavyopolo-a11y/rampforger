@@ -374,18 +374,26 @@ DEFAULT_POST = [
 ]
 
 
-def _editor_nodes(e: EditorInfo, extra: dict[str, Any]) -> list[RawNode]:
+def _editor_nodes(e: EditorInfo, extra: dict[str, Any], groups: dict[int, int] | None = None) -> list[RawNode]:
     nodes: list[RawNode] = [["color", f"{e.color[0]} {e.color[1]} {e.color[2]}"]]
     for v in e.visgroup_ids:
         nodes.append(["visgroupid", str(v)])
     if e.group_id is not None:
-        nodes.append(["groupid", str(e.group_id)])
+        nodes.append(["groupid", str((groups or {}).get(e.group_id, e.group_id))])
     raw = extra.get("editor_raw")
     if raw:
         nodes += raw
     else:
         nodes += [["visgroupshown", "1"], ["visgroupautoshown", "1"]]
     return nodes
+
+
+def _group_block_id(node: Any) -> int | None:
+    if isinstance(node, list) and len(node) == 2 and node[0] == "group" and isinstance(node[1], list):
+        for child in node[1]:
+            if child[0] == "id" and isinstance(child[1], str):
+                return _int_or_none(child[1])
+    return None
 
 
 class _Writer:
@@ -401,6 +409,9 @@ class _Writer:
         # behalten alle Objekte ihre importierte ID (Kopien mit gleicher ID nicht),
         # dann bekommen neue Objekte freie Nummern.
         self.world_id = self.object_ids.take(doc.extra.get("world_id") or 1)
+        # Gruppen aus der importierten Datei behalten ihre Nummer und ihren group-Block
+        known_groups = {gid for node in doc.extra.get("world_blocks", ()) if (gid := _group_block_id(node)) is not None}
+        self.object_ids.used |= known_groups
         ordered = sorted(doc.objects(), key=lambda o: o.id)
         self._assigned: dict[int, int] = {}
         for o in ordered:
@@ -409,6 +420,11 @@ class _Writer:
         for o in ordered:
             if o.id not in self._assigned:
                 self._assigned[o.id] = self.object_ids.take(None)
+        # Neue Gruppen brauchen einen group-Block im world-Block; Hammer zählt sie mit den Objekten
+        self.groups: dict[int, int] = {g: g for g in known_groups}
+        for gid in sorted({g for o in ordered if (g := o.editor.group_id) is not None} - known_groups):
+            self.groups[gid] = self.object_ids.take(None)
+        self.new_groups = sorted(v for g, v in self.groups.items() if g not in known_groups)
         for s in doc.solids():
             for f in s.faces:
                 if f.vmf_id is not None:
@@ -457,7 +473,7 @@ class _Writer:
         self.raw(s.extra.get("raw", ()), depth + 1)
         self.w("editor", depth + 1)
         self.w("{", depth + 1)
-        self.raw(_editor_nodes(s.editor, s.extra), depth + 2)
+        self.raw(_editor_nodes(s.editor, s.extra, self.groups), depth + 2)
         self.w("}", depth + 1)
         self.w("}", depth)
 
@@ -482,6 +498,9 @@ class _Writer:
                 self.solid(s, 2)
                 self.w("}", 1)
         self.raw(self.doc.extra.get("world_blocks", ()), 1)
+        for gid in self.new_groups:
+            _write_raw(["group", [["id", str(gid)], ["editor", [["color", "0 100 0"], ["visgroupshown", "1"],
+                                                                 ["visgroupautoshown", "1"]]]]], self.out, 1)
         self.w("}", 0)
 
     def _hidden(self, o: MapObject) -> bool:
@@ -527,7 +546,7 @@ class _Writer:
         self.raw(e.extra.get("raw", ()), d)
         self.w("editor", d)
         self.w("{", d)
-        self.raw(_editor_nodes(e.editor, e.extra), d + 1)
+        self.raw(_editor_nodes(e.editor, e.extra, self.groups), d + 1)
         self.w("}", d)
         self.w("}", depth)
 

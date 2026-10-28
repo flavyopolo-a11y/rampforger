@@ -166,3 +166,69 @@ def stairs(mins: Point, maxs: Point, steps: int = 8, direction: Literal["+x", "-
         else:
             result += block((x0, a, z0), (x1, b, top), material)
     return result
+
+
+def _hull(points, material: str) -> tuple[Face, ...] | None:
+    from ..surf.hull import hull_faces
+
+    pts = list(dict.fromkeys((_int(p[0]), _int(p[1]), _int(p[2])) for p in points))
+    return hull_faces(pts, lambda _n, _loop: material)
+
+
+def spike(mins: Point, maxs: Point, sides: int = 4, material: str = DEFAULT_MATERIAL) -> list[tuple[Face, ...]]:
+    """Spitze (Kegel bzw. Pyramide): Grundfläche unten, Spitze oben in der Mitte."""
+    sides = max(3, sides)
+    ring = _ellipse(mins, maxs, 2, sides, 180.0 / sides if sides % 2 == 0 else 90.0, 360.0)[:-1]
+    apex = ((mins[0] + maxs[0]) / 2, (mins[1] + maxs[1]) / 2, maxs[2])
+    faces = _hull([(u, v, mins[2]) for u, v in ring] + [apex], material)
+    return [faces] if faces else []
+
+
+SPHERE_MAX_SIDES = 12
+
+
+def sphere(mins: Point, maxs: Point, sides: int = 8, material: str = DEFAULT_MATERIAL) -> list[tuple[Face, ...]]:
+    """Kugel (Ellipsoid) als ein konvexer Brush: `sides` Punkte je Breitenkreis, halb so viele Kreise.
+    Höchstens 12 Seiten: vbsp erlaubt 128 Seiten je Brush."""
+    sides = max(4, min(sides, SPHERE_MAX_SIDES))
+    rings = max(2, sides // 2)
+    c = [(mins[i] + maxs[i]) / 2 for i in range(3)]
+    r = [(maxs[i] - mins[i]) / 2 for i in range(3)]
+    pts = [(c[0], c[1], mins[2]), (c[0], c[1], maxs[2])]
+    for k in range(1, rings):
+        lat = math.pi * k / rings - math.pi / 2
+        for i in range(sides):
+            lon = 2 * math.pi * i / sides + math.pi / sides
+            pts.append((c[0] + r[0] * math.cos(lat) * math.cos(lon), c[1] + r[1] * math.cos(lat) * math.sin(lon),
+                        c[2] + r[2] * math.sin(lat)))
+    faces = _hull(pts, material)
+    return [faces] if faces else []
+
+
+def torus(mins: Point, maxs: Point, sides: int = 12, wall: int = 32, tube_sides: int = 8,
+          material: str = DEFAULT_MATERIAL) -> list[tuple[Face, ...]]:
+    """Ring mit rundem Querschnitt (Dicke `wall`), aus `sides` konvexen Segmenten."""
+    sides = max(3, sides)
+    tube_sides = max(3, tube_sides)
+    c = [(mins[i] + maxs[i]) / 2 for i in range(3)]
+    tube = max(1.0, min(wall / 2, (maxs[2] - mins[2]) / 2))
+    ru = (maxs[0] - mins[0]) / 2 - tube
+    rv = (maxs[1] - mins[1]) / 2 - tube
+    if ru <= 0 or rv <= 0:
+        return []
+
+    def section(a: float) -> list[Point]:
+        out = []
+        for j in range(tube_sides):
+            b = 2 * math.pi * j / tube_sides
+            out.append((c[0] + (ru + tube * math.cos(b)) * math.cos(a), c[1] + (rv + tube * math.cos(b)) * math.sin(a),
+                        c[2] + tube * math.sin(b)))
+        return out
+
+    result = []
+    for i in range(sides):
+        a0, a1 = 2 * math.pi * i / sides, 2 * math.pi * (i + 1) / sides
+        faces = _hull(section(a0) + section(a1), material)
+        if faces:
+            result.append(faces)
+    return result

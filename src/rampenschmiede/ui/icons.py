@@ -37,6 +37,9 @@ _SHAPES: dict[str, str] = {
     "scatter": '<path d="M7 20v-4M7 16l-3 0 3-6 3 6z" fill="currentColor" fill-opacity="0.25"/>'
                '<path d="M17 20v-5M17 15h-3.5L17 7l3.5 8z" fill="currentColor" fill-opacity="0.25"/>'
                '<circle cx="12" cy="5" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="20" cy="4" r="1"/>',
+    "vertex": '<path d="M5 18 L9 6 L19 9 L17 19 Z" fill="currentColor" fill-opacity="0.2"/>'
+              '<rect x="3" y="16" width="4" height="4" fill="currentColor"/><rect x="7" y="4" width="4" height="4"/>'
+              '<rect x="17" y="7" width="4" height="4"/><rect x="15" y="17" width="4" height="4"/>',
     "clip": '<path d="M4 6h10v14H4z" fill="currentColor" fill-opacity="0.25"/>'
             '<path d="M14 6h6v14h-6" stroke-dasharray="2 2"/><path d="M14 2.5v19"/>',
     "hole": '<path d="M3 4h18v16H3z" fill="currentColor" fill-opacity="0.25"/><path d="M8.5 8.5h7v7h-7z"/>',
@@ -52,6 +55,11 @@ _SHAPES: dict[str, str] = {
                       '<path d="M5 6v12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6"/>',
     "shape_arch": '<path d="M3 20V12a9 9 0 0 1 18 0v8h-4v-8a5 5 0 0 0-10 0v8z" fill="currentColor" fill-opacity="0.3"/>',
     "shape_stairs": '<path d="M3 20v-4h4.5v-4H12V8h4.5V4H21v16z" fill="currentColor" fill-opacity="0.3"/>',
+    "shape_spike": '<path d="M12 3 L20 19 L4 19 Z" fill="currentColor" fill-opacity="0.3"/><path d="M12 3 L12 19"/>',
+    "shape_sphere": '<circle cx="12" cy="12" r="8.5" fill="currentColor" fill-opacity="0.3"/>'
+                    '<ellipse cx="12" cy="12" rx="8.5" ry="3"/>',
+    "shape_torus": '<ellipse cx="12" cy="12" rx="9.5" ry="6" fill="currentColor" fill-opacity="0.3"/>'
+                   '<ellipse cx="12" cy="12" rx="4" ry="2"/>',
     # Datei und Bearbeiten
     "new": '<path d="M6 2.5h8l4 4v15H6z M14 2.5v4h4"/><path d="M12 11v7M8.5 14.5h7"/>',
     "open": '<path d="M3 6.5a1.5 1.5 0 0 1 1.5-1.5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7V18a1.5 1.5 0 0 1-1.5 1.5h-15'

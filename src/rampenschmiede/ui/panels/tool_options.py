@@ -57,6 +57,8 @@ class ToolOptionsPanel(QStackedWidget):
             self._add("face", self._face_page())
         if "terrain" in editor.tools:
             self._add("terrain", self._terrain_page())
+        if "vertex" in editor.tools:
+            self._add("vertex", self._vertex_page())
         editor.tool_changed.connect(self._on_tool)
 
     def _add(self, name: str, page: QWidget) -> None:
@@ -87,6 +89,20 @@ class ToolOptionsPanel(QStackedWidget):
             "Klick wählt aus, Strg+Klick ergänzt. Auswahl ziehen verschiebt sie, Shift+Ziehen kopiert. "
             "Ein zweiter Klick auf die Auswahl schaltet zwischen Skalier- und Drehgriffen um. "
             "Pfeiltasten verschieben um eine Rasterweite. Exakte Werte: Strg+M."
+        )))
+        lay.addStretch(1)
+        return w
+
+    # ---- Ecken -----------------------------------------------------------------------
+    def _vertex_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.addWidget(_hint(self.tr(
+            "Weiße Griffe sind Ecken, gelbe die Mitten der Kanten (ziehen bewegt beide Ecken), rot ist gewählt. "
+            "Strg+Klick ergänzt, ein Rahmen wählt mehrere Ecken. Pfeiltasten schieben um eine Rasterweite, "
+            "in 3D hebt Shift+Ziehen senkrecht.\n\n"
+            "Der Brush bleibt immer konvex: Was ihn hohl machen würde, wird abgelehnt. Fallen zwei Ecken "
+            "zusammen, verschmelzen sie, so entstehen Keile und Spitzen."
         )))
         lay.addStretch(1)
         return w
@@ -460,6 +476,9 @@ class ToolOptionsPanel(QStackedWidget):
             "cylinder": {"sides"},
             "arch": {"sides", "wall", "arc", "start"},
             "stairs": {"steps", "stairs_dir"},
+            "spike": {"sides"},
+            "sphere": {"sides"},
+            "torus": {"sides", "wall"},
         }
 
         def on_shape(key: str) -> None:
