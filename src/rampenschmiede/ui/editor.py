@@ -12,6 +12,7 @@ from ..core import cordon as cordon_mod
 from ..core.attach import follow_supports
 from ..core.blocks import clone_objects, transform_command
 from ..core.commands import AddObjects, Command, CommandStack, RemoveObjects, ReplaceObjects
+from ..core.decals import DECAL, OVERLAY, sticker_bbox
 from ..core.entities.fgd import EntityCatalog, builtin_catalog, load_catalog
 from ..core.entities.io import io_segments
 from ..core.geometry import transform
@@ -58,10 +59,15 @@ CORDON_OFF_COLOR = (0.5, 0.5, 0.55)
 
 
 def _use_model_bounds(editor: "EditorContext") -> None:
-    """Auswahl, Picking und Gizmos sehen Props so groß wie ihr Modell."""
+    """Auswahl, Picking und Gizmos sehen Props so groß wie ihr Modell, Aufkleber so groß
+    wie ihr Bild."""
     ref = weakref.ref(editor)
 
     def bounds(ent):
+        if ent.classname.lower() in (DECAL, OVERLAY):
+            bb = sticker_bbox(ent)
+            if bb is not None:
+                return bb
         ed = ref()
         return prop_bbox(ent, ed.models) if ed is not None else None
     set_entity_bounds(bounds)

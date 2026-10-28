@@ -81,6 +81,7 @@ from .tools.paint_tool import PaintTool
 from .tools.scatter_tool import ScatterTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
+from .tools.sticker_tool import StickerTool
 from .tools.terrain_tool import TerrainTool
 from .tools.vertex_tool import VertexTool
 from .tools.wall_tool import WallTool
@@ -89,7 +90,7 @@ from .viewports.viewport import MAP_SUFFIXES, dropped_maps
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
-TOOL_ORDER = ("select", "paint", "shape", "wall", "vertex", "terrain", "scatter", "entity", "face", "clip", "hole", "measure", "cordon")
+TOOL_ORDER = ("select", "paint", "shape", "wall", "vertex", "terrain", "scatter", "entity", "decal", "face", "clip", "hole", "measure", "cordon")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -137,6 +138,11 @@ CONTROLS_HELP = """
 <tr><td>Enter / zweiter Klick auf den letzten Punkt</td><td>fertig</td></tr>
 <tr><td>Rücktaste / Esc</td><td>letzten Punkt zurück / verwerfen</td></tr>
 </table>
+<h3>Aufkleber (Shift+T)</h3>
+<table>
+<tr><td>Klick in 3D auf eine Fläche</td><td>Overlay oder Decal mit dem Material aus dem Browser setzen</td></tr>
+<tr><td>Overlay / Decal</td><td>beliebige Größe und jedes Material / Bild aus decals/ in Originalgröße</td></tr>
+</table>
 <h3>Bereich / Cordon (Shift+O)</h3>
 <table>
 <tr><td>Rechteck ziehen in 2D</td><td>Bereich setzen: beim Kompilieren wird nur er gebaut</td></tr>
@@ -180,7 +186,7 @@ class MainWindow(QMainWindow):
         self.editor = EditorContext()
         for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor),
                      ClipTool(self.editor), HoleTool(self.editor), TerrainTool(self.editor), VertexTool(self.editor),
-                     MeasureTool(self.editor), WallTool(self.editor), CordonTool(self.editor)):
+                     MeasureTool(self.editor), WallTool(self.editor), CordonTool(self.editor), StickerTool(self.editor)):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")

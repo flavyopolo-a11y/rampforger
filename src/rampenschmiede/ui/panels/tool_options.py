@@ -61,6 +61,8 @@ class ToolOptionsPanel(QStackedWidget):
             self._add("vertex", self._vertex_page())
         if "wall" in editor.tools:
             self._add("wall", self._wall_page())
+        if "decal" in editor.tools:
+            self._add("decal", self._sticker_page())
         if "cordon" in editor.tools:
             self._add("cordon", self._cordon_page())
         editor.tool_changed.connect(self._on_tool)
@@ -94,6 +96,44 @@ class ToolOptionsPanel(QStackedWidget):
             "Ein zweiter Klick auf die Auswahl schaltet zwischen Skalier- und Drehgriffen um. "
             "Pfeiltasten verschieben um eine Rasterweite. Exakte Werte: Strg+M."
         )))
+        lay.addStretch(1)
+        return w
+
+    # ---- Aufkleber ----------------------------------------------------------------------
+    def _sticker_page(self) -> QWidget:
+        opts = self.editor.tools["decal"].options  # type: ignore[attr-defined]
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        row = QHBoxLayout()
+        group = QButtonGroup(w)
+        self.sticker_modes: dict[str, QPushButton] = {}
+        for key, label, tip in (("overlay", "Overlay", "Beliebige Größe, jedes Material (auch Wege, Schilder)"),
+                                ("decal", "Decal", "Bild aus decals/ in Originalgröße, z. B. Graffiti, Risse")):
+            b = QPushButton(self.tr(label))
+            b.setCheckable(True)
+            b.setChecked(opts.mode == key)
+            b.setToolTip(self.tr(tip))
+            b.clicked.connect(lambda _=False, k=key: (setattr(opts, "mode", k), size.setEnabled(k == "overlay")))
+            group.addButton(b)
+            row.addWidget(b)
+            self.sticker_modes[key] = b
+        lay.addLayout(row)
+        form = QFormLayout()
+        size = QSpinBox()
+        size.setRange(8, 4096)
+        size.setSingleStep(16)
+        size.setSuffix(" u")
+        size.setValue(opts.size)
+        size.setEnabled(opts.mode == "overlay")
+        size.setToolTip(self.tr("Längere Seite des Overlays; das Seitenverhältnis kommt vom Bild"))
+        size.valueChanged.connect(lambda v: setattr(opts, "size", v))
+        self.sticker_size = size
+        form.addRow(self.tr("Größe"), size)
+        lay.addLayout(form)
+        lay.addWidget(_hint(self.tr(
+            "Material im Material-Browser wählen (Suche „decals“ oder „overlays“) und in der 3D-Ansicht auf eine "
+            "Fläche klicken. Overlays über mehrere Brushes werden auf alle Flächen in derselben Ebene geklebt und "
+            "wandern beim Verschieben mit.")))
         lay.addStretch(1)
         return w
 

@@ -18,6 +18,7 @@ from typing import Any, Iterable
 
 from srctools.keyvalues import Keyvalues
 
+from ..decals import is_auto_overlay, overlay_sides
 from ..model import EditorInfo, Entity, Face, MapDocument, MapObject, Output, Solid, TexAxis
 
 RawNode = list  # [name, str | list[RawNode]]
@@ -430,6 +431,12 @@ class _Writer:
                 if f.vmf_id is not None:
                     self.side_ids.used.add(f.vmf_id)
         self._side_seen: set[int] = set()
+        # Seiten-IDs vorab vergeben: Overlays (Entities) nennen Seiten, die erst später oder
+        # in Brush-Entities geschrieben werden
+        self._face_side: dict[tuple[int, int], int] = {}
+        for s in sorted(doc.solids(), key=lambda s: s.id):
+            for i, f in enumerate(s.faces):
+                self._face_side[(s.id, i)] = self.side_id(f.vmf_id)
 
     def w(self, line: str, depth: int) -> None:
         self.out.append("\t" * depth + line + "\n")
@@ -455,11 +462,11 @@ class _Writer:
         self.w("solid", depth)
         self.w("{", depth)
         self.kv("id", str(vid), depth + 1)
-        for f in s.faces:
+        for i, f in enumerate(s.faces):
             self.w("side", depth + 1)
             self.w("{", depth + 1)
             d = depth + 2
-            self.kv("id", str(self.side_id(f.vmf_id)), d)
+            self.kv("id", str(self._face_side[(s.id, i)]), d)
             self.kv("plane", format_plane(f.points), d)
             self.kv("material", f.material, d)
             self.kv("uaxis", format_axis(f.uaxis), d)
@@ -506,6 +513,19 @@ class _Writer:
     def _hidden(self, o: MapObject) -> bool:
         return o.editor.hidden and not self.for_compile
 
+    def _overlay_keyvalues(self, e: Entity) -> tuple[tuple[str, str], ...]:
+        """Overlay aus dem Werkzeug: Basis am Ursprung, Seiten aus der aktuellen Geometrie."""
+        sides = " ".join(str(self._face_side[key]) for key in overlay_sides(self.doc, e) if key in self._face_side)
+        origin = e.get("origin")
+        out = []
+        for k, v in e.keyvalues:
+            if k == "sides":
+                v = sides
+            elif k == "BasisOrigin" and origin:
+                v = origin
+            out.append((k, v))
+        return tuple(out)
+
     def entity(self, e: Entity, depth: int) -> None:
         vid = self._assigned[e.id]
         self.result.entity_ids[vid] = e.id
@@ -515,7 +535,10 @@ class _Writer:
         d = depth + 1
         self.kv("id", str(vid), d)
         self.kv("classname", e.classname, d)
-        for k, v in e.keyvalues:
+        keyvalues = e.keyvalues
+        if is_auto_overlay(e):
+            keyvalues = self._overlay_keyvalues(e)
+        for k, v in keyvalues:
             self.kv(k, v, d)
         if e.outputs:
             # Trennzeichen wie in der importierten Datei. Bei geänderten Outputs gilt:

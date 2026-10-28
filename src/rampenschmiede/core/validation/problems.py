@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Callable, Iterable
 
 from ..blocks import MEMBER_KEY, is_block_root
 from ..commands import Command, MacroCommand, RemoveObjects, ReplaceObjects
+from ..decals import is_auto_overlay, overlay_sides
 from ..geometry.displacement import is_displacement_solid
 from ..geometry.vertex_edit import VertexError, off_grid, snap_to_grid
 from ..materials.apply import replace_material
@@ -288,6 +289,11 @@ def _entities(doc: MapDocument, catalog: "EntityCatalog | None") -> list[Problem
             if not exists(o.target):
                 out.append(Problem(WARNING, "Entities", f"{e.classname}: Ausgang {o.output} zielt auf „{o.target}“, "
                                    "das es nicht gibt", (e.id,)))
+    floating = [e.id for e in doc.entities() if is_auto_overlay(e) and not overlay_sides(doc, e)]
+    if floating:
+        out.append(Problem(WARNING, "Aufkleber", f"{len(floating)} Overlay{'s' if len(floating) > 1 else ''} ohne Fläche "
+                           "darunter: im Spiel unsichtbar. Auf eine Fläche schieben oder löschen", tuple(floating),
+                           fix=_remove(floating, "Overlays ohne Fläche löschen"), fix_label="Löschen"))
     if empty:
         out.append(Problem(WARNING, "Entities", f"{len(empty)} Brush-Entities ohne Brushes", tuple(empty),
                            fix=_remove(empty, "Leere Brush-Entities löschen"), fix_label="Löschen"))

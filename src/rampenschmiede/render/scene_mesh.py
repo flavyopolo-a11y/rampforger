@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core.blocks import is_block_root
+from ..core.decals import LIFT, OVERLAY, sticker_corners
 from ..core.geometry.displacement import DispSurface, is_displacement_solid, surfaces
 from ..core.lights import LIGHT_CLASSES, parse_color
 from ..core.model import (
@@ -31,7 +32,7 @@ from ..core.model import (
 )
 from ..core.models.library import LoadedModel, ModelLibrary
 from ..core.models.props import angle_matrix, entity_angles, entity_skin
-from .textures import TextureAtlas
+from .textures import CUTOUT_TRANSLUCENT, TextureAtlas
 
 # Werkzeug-Texturen bekommen feste, aus Hammer bekannte Farben.
 TOOL_COLORS = {
@@ -322,6 +323,42 @@ def build_displacement_mesh(solid: Solid, atlas: TextureAtlas | None = None) -> 
                       (c[0] / 255, c[1] / 255, c[2] / 255), np.concatenate(edges).astype(np.float32))
 
 
+STICKER_COLOR = (0.95, 0.55, 0.85)
+
+
+def _float(text: str, default: float) -> float:
+    try:
+        return float(text)
+    except ValueError:
+        return default
+
+
+def build_sticker_mesh(ent: Entity, atlas: TextureAtlas | None = None) -> ObjectMesh | None:
+    """Decal oder Overlay als Bild auf der Fläche (leicht angehoben), Ränder in 2D als Rahmen."""
+    q = sticker_corners(ent)
+    if q is None:
+        return None
+    n, pts = q
+    lifted = [tuple(p[k] + n[k] * LIFT for k in range(3)) for p in pts]
+    overlay = ent.classname.lower() == OVERLAY
+    material = ent.get("material") if overlay else ent.get("texture")
+    su, eu = (_float(ent.get("StartU"), 0.0), _float(ent.get("EndU"), 1.0)) if overlay else (0.0, 1.0)
+    sv, ev = (_float(ent.get("StartV"), 0.0), _float(ent.get("EndV"), 1.0)) if overlay else (1.0, 0.0)
+    uvs = [(su, sv), (su, ev), (eu, ev), (eu, sv)]
+    slot = atlas.slot(material) if atlas is not None and material else None
+    # Aufkleber sind fast immer durchsichtig: leere Pixel weglassen
+    layer = float(slot.layer + (slot.cutout or CUTOUT_TRANSLUCENT)) if slot is not None else 0.0
+    color = (1.0, 1.0, 1.0) if slot is not None else STICKER_COLOR
+    rows = []
+    for a, b, c in ((0, 1, 2), (0, 2, 3)):
+        for i in (a, b, c):
+            rows.append([*lifted[i], *n, *color, *uvs[i], layer])
+    lines = []
+    for i in range(4):
+        lines += [lifted[i], lifted[(i + 1) % 4]]
+    return ObjectMesh(np.asarray(rows, dtype=np.float32), np.asarray(lines, dtype=np.float32), STICKER_COLOR)
+
+
 def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_part: bool = False,
                       models: ModelLibrary | None = None) -> ObjectMesh | None:
     if isinstance(obj, Entity) and models is not None and obj.get("model", "").lower().endswith(".mdl"):
@@ -349,6 +386,9 @@ def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_p
         c = obj.editor.color
         edges = feature_edges(list(obj.faces), all_polys, hide_nodraw=block_part)
         return ObjectMesh(tris, lines, (c[0] / 255, c[1] / 255, c[2] / 255), edges)
+    sticker = build_sticker_mesh(obj, atlas)
+    if sticker is not None:
+        return sticker
     bbox = object_bbox(obj)
     if bbox is None:
         return None
