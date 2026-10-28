@@ -269,6 +269,11 @@ class CommandStack:
         self._clean_index = len(self._undo)
         self._changed()
 
+    def set_dirty(self) -> None:
+        """Als ungespeichert markieren (z. B. nach dem Öffnen einer Sicherung)."""
+        self._clean_index = None
+        self._changed()
+
     def subscribe(self, listener: Callable[[], None]) -> None:
         self._listeners.append(listener)
 
