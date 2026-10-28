@@ -172,6 +172,42 @@ class MacroCommand(Command):
         return cs
 
 
+class Deferred(Command):
+    """Schritte, die erst beim Ausführen gebaut werden, weil sie den Stand nach dem vorigen
+    Schritt brauchen (z. B. Kopien einfügen, dann drehen). Ein Undo-Schritt; Redo nimmt die
+    beim ersten Mal gebauten Commands."""
+
+    def __init__(self, steps: Sequence[Callable[[MapDocument], Command]], description: str) -> None:
+        self.steps = list(steps)
+        self.description = description
+        self.built: list[Command] | None = None
+
+    def do(self, doc: MapDocument) -> ChangeSet:
+        cs = ChangeSet()
+        if self.built is None:
+            built: list[Command] = []
+            try:
+                for step in self.steps:
+                    c = step(doc)
+                    cs.merge(c.do(doc))
+                    built.append(c)
+            except Exception:
+                for c in reversed(built):
+                    c.undo(doc)
+                raise
+            self.built = built
+        else:
+            for c in self.built:
+                cs.merge(c.do(doc))
+        return cs
+
+    def undo(self, doc: MapDocument) -> ChangeSet:
+        cs = ChangeSet()
+        for c in reversed(self.built or []):
+            cs.merge(c.undo(doc))
+        return cs
+
+
 class FollowUp(Command):
     """Ein Command samt Folgeänderungen, die automatisch danach passieren (z. B. die Hülle
     wächst mit). Ein Undo-Schritt; verschmilzt weiter wie das Haupt-Command."""
