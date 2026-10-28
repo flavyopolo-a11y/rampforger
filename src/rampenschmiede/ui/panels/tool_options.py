@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -13,6 +14,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QSpinBox,
     QStackedWidget,
@@ -23,11 +26,13 @@ from PySide6.QtWidgets import (
 
 from ...core.geometry.displacement import BRUSH_MODES
 from ...core.materials import texturing
+from ...core.models.scatter import KITS, KITS_BY_KEY, STYLE_KITS
 from ...core.terrain import POWER_LABELS
 from ..editor import EditorContext
 from ..icons import icon
 from ..tools.entity_tool import POINT_ENTITIES, EntityTool
 from ..tools.face_tool import FaceTool
+from ..tools.scatter_tool import FROM_BROWSER, ScatterTool
 from ..tools.shape_tool import SHAPE_HINTS, SHAPES, ShapeTool
 from ..tools.terrain_tool import MODE_HELP, MODE_LABELS, TerrainTool
 from ..widgets.scope_switch import ScopeSwitch
@@ -158,6 +163,117 @@ class ToolOptionsPanel(QStackedWidget):
         )))
         lay.addStretch(1)
         return w
+
+    # ---- Streuen -------------------------------------------------------------------------
+    def add_scatter_page(self) -> None:
+        """Erst nach dem Modell-Browser möglich (das Werkzeug braucht ihn)."""
+        if "scatter" in self.editor.tools and "scatter" not in self._pages:
+            self._add("scatter", self._scatter_page())
+
+    def _scatter_page(self) -> QWidget:
+        tool: ScatterTool = self.editor.tools["scatter"]  # type: ignore[assignment]
+        opts = tool.settings
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        form = QFormLayout()
+        self.scatter_source = QComboBox()
+        self.scatter_source.addItem(self.tr("Modell aus dem Modell-Browser"), FROM_BROWSER)
+        for kit in KITS:
+            self.scatter_source.addItem(self.tr("Kit: {0}").format(self.tr(kit.name)), kit.key)
+            self.scatter_source.setItemData(self.scatter_source.count() - 1, self.tr(kit.description), Qt.ToolTipRole)
+        self.scatter_source.setToolTip(self.tr("Welche Modelle gestreut werden. Kits nehmen passende Modelle "
+                                               "aus dem Spiel (CS:S und HL2)."))
+        form.addRow(self.tr("Modelle"), self.scatter_source)
+        lay.addLayout(form)
+        self.scatter_list = QListWidget()
+        self.scatter_list.setSelectionMode(QAbstractItemView.NoSelection)
+        self.scatter_list.setMaximumHeight(150)
+        self.scatter_list.setToolTip(self.tr("Haken weg: dieses Modell nicht streuen"))
+        lay.addWidget(self.scatter_list)
+        self.scatter_info = _hint("")
+        lay.addWidget(self.scatter_info)
+
+        form2 = QFormLayout()
+
+        def spin(value: float, lo: int, hi: int, step: int, suffix: str, attr: str, tip: str) -> QSpinBox:
+            sp = QSpinBox()
+            sp.setRange(lo, hi)
+            sp.setSingleStep(step)
+            sp.setSuffix(suffix)
+            sp.setValue(int(value))
+            sp.setToolTip(tip)
+            sp.valueChanged.connect(lambda v: setattr(opts, attr, type(getattr(opts, attr))(v)))
+            return sp
+
+        self.scatter_radius = spin(opts.radius, 32, 4096, 32, " u", "radius",
+                                   self.tr("Halbmesser des Streu-Kreises. Tasten [ und ]."))
+        form2.addRow(self.tr("Kreis"), self.scatter_radius)
+        form2.addRow(self.tr("Anzahl je Klick"), spin(opts.count, 1, 50, 1, "", "count",
+                                                      self.tr("So viele Props höchstens je Klick")))
+        form2.addRow(self.tr("Mindestabstand"), spin(opts.spacing, 0, 2048, 16, " u", "spacing",
+                                                     self.tr("Abstand zu anderen Props, damit nichts ineinander steht")))
+        form2.addRow(self.tr("Steilste Stelle"), spin(opts.max_slope, 0, 89, 5, "°", "max_slope",
+                                                      self.tr("Steilere Flächen (Wände, Surf-Rampen) bleiben frei")))
+        lay.addLayout(form2)
+        self.scatter_align = QCheckBox(self.tr("Am Hang ausrichten"))
+        self.scatter_align.setToolTip(self.tr("Props kippen mit dem Boden (gut für Felsen; Bäume besser aufrecht)"))
+        self.scatter_align.toggled.connect(lambda v: setattr(opts, "align", v))
+        lay.addWidget(self.scatter_align)
+        only = QCheckBox(self.tr("Nur auf Gelände"))
+        only.setToolTip(self.tr("Nur auf Displacements streuen, nicht auf Brushes"))
+        only.toggled.connect(lambda v: setattr(opts, "terrain_only", v))
+        lay.addWidget(only)
+        lay.addWidget(_hint(self.tr(
+            "In 3D oder von oben klicken bzw. ziehen. Shift entfernt die Props dieser Modelle im Kreis. "
+            "Ein Strich ist ein Rückgängig-Schritt.")))
+        lay.addStretch(1)
+
+        def refresh_list() -> None:
+            self.scatter_list.blockSignals(True)
+            self.scatter_list.clear()
+            if tool.source == FROM_BROWSER:
+                name = tool.browser.current_name()
+                self.scatter_info.setText(self.tr("Gestreut wird: {0}").format(name) if name
+                                          else self.tr("Im Modell-Browser (unten) ein Modell anklicken"))
+                self.scatter_list.hide()
+            else:
+                names = tool.kit_names()
+                for n in names:
+                    item = QListWidgetItem(n.removeprefix("models/"))
+                    item.setData(Qt.UserRole, n)
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setCheckState(Qt.Unchecked if n in tool.disabled else Qt.Checked)
+                    self.scatter_list.addItem(item)
+                self.scatter_list.setVisible(bool(names))
+                kit = KITS_BY_KEY[tool.source]
+                self.scatter_info.setText(
+                    self.tr("{0} Modelle im Spiel gefunden").format(len(names)) if names else
+                    self.tr("Kein passendes Modell gefunden. Ist ein Spielprofil gewählt?") if self.editor.models is None
+                    else self.tr("Im Spiel gibt es keine Modelle für „{0}“").format(self.tr(kit.name)))
+            self.scatter_list.blockSignals(False)
+            self.scatter_align.setChecked(opts.align)
+            self.scatter_radius.setValue(int(opts.radius))
+
+        def toggled(item: QListWidgetItem) -> None:
+            name = item.data(Qt.UserRole)
+            if item.checkState() == Qt.Checked:
+                tool.disabled.discard(name)
+            else:
+                tool.disabled.add(name)
+
+        self.scatter_list.itemChanged.connect(toggled)
+        self.scatter_source.currentIndexChanged.connect(lambda _: tool.set_source(self.scatter_source.currentData()))
+        tool.on_change = refresh_list
+        tool.browser.view.selectionModel().currentChanged.connect(lambda *_: refresh_list())
+        self.editor.tool_changed.connect(lambda name: name == "scatter" and refresh_list())
+        refresh_list()
+        return w
+
+    def suggest_kit(self, style_key: str) -> None:
+        """Nach einem Welt-Stil das passende Kit vorwählen."""
+        kit = STYLE_KITS.get(style_key)
+        if kit and "scatter" in self._pages:
+            self.scatter_source.setCurrentIndex(self.scatter_source.findData(kit))
 
     # ---- Seiten (Face-Editor) ------------------------------------------------------------
     def _face_page(self) -> QWidget:
