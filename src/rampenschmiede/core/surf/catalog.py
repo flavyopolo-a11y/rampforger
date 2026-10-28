@@ -131,6 +131,9 @@ class Template:
     #: Eigene Wurzel-Entity statt func_brush/func_detail: (Werte, Platzierung) -> (Klasse, Keyvalues).
     #: Solche Bausteine haben keine Playerclip-Kollision (Trigger, Bhop-Blöcke).
     entity: Callable[[dict, Placement], tuple[str, tuple[tuple[str, str], ...]]] | None = None
+    #: Welt-Brushes statt Baustein (Gelände: Displacements gehen nicht in func_detail). Nach dem
+    #: Einfügen gibt es keine Regler mehr, das Gelände-Werkzeug formt weiter.
+    world: bool = False
 
     def param(self, key: str) -> Param | None:
         return next((p for p in self.params if p.key == key), None)
@@ -631,3 +634,7 @@ def generate(template: Template | str, values: dict | None = None, at: Placement
     face_sets = hide_touching([p.faces for p in pieces], m.hidden)
     angles = surf_angles(face_sets, m.surf)
     return Generated(face_sets, angles, angle_warnings(angles) if t.check_angles else [])
+
+
+# Gelände-Vorlagen tragen sich selbst ein (eigenes Modul, braucht die Klassen oben)
+from . import terrain_templates as _terrain_templates  # noqa: E402,F401

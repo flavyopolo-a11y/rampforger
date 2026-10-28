@@ -46,6 +46,8 @@ class MaterialInfo:
     surfaceprop: str
     #: Durchsichtige Pixel: "alphatest" (hart ausgeschnitten), "translucent" (halb durchsichtig) oder ""
     transparency: str = ""
+    #: Zweite Textur von Überblend-Materialien (WorldVertexTransition, Displacements)
+    basetexture2: str | None = None
 
     @property
     def preview_texture(self) -> str | None:
@@ -68,7 +70,7 @@ class MaterialLibrary:
     fsys: FileSystemChain = field(default_factory=FileSystemChain)
     _names: list[str] | None = None
     _infos: dict[str, MaterialInfo | None] = field(default_factory=dict)
-    _images: dict[str, TextureImage | None] = field(default_factory=dict)
+    _images: dict[str | tuple, TextureImage | None] = field(default_factory=dict)
     _lock: threading.RLock = field(default_factory=threading.RLock)
     own_folders: list[str] = field(default_factory=list)
     _own: list[str] | None = None
@@ -154,7 +156,8 @@ class MaterialLibrary:
         transparency = ("alphatest" if mat.get("$alphatest", "0") not in ("0", "") else
                         "translucent" if mat.get("$translucent", "0") not in ("0", "") else "")
         return MaterialInfo(key, mat.shader.lower(), tex("$basetexture"), tex("%tooltexture"),
-                            translucent, keywords, mat.get("$surfaceprop", ""), transparency)
+                            translucent, keywords, mat.get("$surfaceprop", ""), transparency,
+                            tex("$basetexture2"))
 
     def texture(self, name: str) -> TextureImage | None:
         """Vorschaubild für ein Material (aus %tooltexture oder $basetexture). Threadsicher:
@@ -166,6 +169,17 @@ class MaterialLibrary:
             info = self.material(key)
             image = self._read_texture(info.preview_texture) if info and info.preview_texture else None
             self._images[key] = image
+            return image
+
+    def texture2(self, name: str) -> TextureImage | None:
+        """Zweite Textur eines Überblend-Materials ($basetexture2), None bei normalen Materialien."""
+        key = normalize(name)
+        with self._lock:
+            if (key, 2) in self._images:
+                return self._images[(key, 2)]
+            info = self.material(key)
+            image = self._read_texture(info.basetexture2) if info and info.basetexture2 else None
+            self._images[(key, 2)] = image
             return image
 
     def own_names(self) -> list[str]:

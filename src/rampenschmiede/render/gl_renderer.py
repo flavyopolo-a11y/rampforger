@@ -147,8 +147,8 @@ class ViewportRenderer:
             if vao is not None:
                 vao.release()
         self._faces_vbo, self._faces_vao = self._upload(
-            arrays.faces, self._faces_vbo, self.prog_faces, "3f 3f 3f 2f 1f 1f",
-            ("in_pos", "in_normal", "in_color", "in_uv", "in_layer", "in_selected"))
+            arrays.faces, self._faces_vbo, self.prog_faces, "3f 3f 3f 2f 1f 1f 1f 1f",
+            ("in_pos", "in_normal", "in_color", "in_uv", "in_layer", "in_layer2", "in_blend", "in_selected"))
         self._faces_count = len(arrays.faces)
         self._lines_vbo, self._lines_vao = self._upload(
             arrays.lines2d, self._lines_vbo, self.prog_lines, "3f 3f", ("in_pos", "in_color"))

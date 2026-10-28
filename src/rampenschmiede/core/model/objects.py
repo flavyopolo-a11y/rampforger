@@ -109,7 +109,14 @@ class Solid:
     def bbox(self) -> BBox | None:
         cache = self.__dict__.get("_bbox")
         if cache is None:
-            cache = BBox.from_points(self.vertices())
+            points = list(self.vertices())
+            if any(f.extra.get("raw") for f in self.faces):
+                from ..geometry.displacement import surfaces
+
+                # Gelände ragt über die Brush-Seiten hinaus
+                for surf in surfaces(self):
+                    points += [tuple(p) for p in surf.positions.tolist()]
+            cache = BBox.from_points(points)
             object.__setattr__(self, "_bbox", cache)
         return cache
 

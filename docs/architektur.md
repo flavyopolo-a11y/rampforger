@@ -52,6 +52,16 @@ Vertex-Puffer, nur betroffene Zellen werden neu gebaut. Picking per Strahl gegen
 - `ui/compile_controller.py` startet den Runner in einem Thread und reicht alles per Qt-Signal
   an Log-Panel und Fenster weiter.
 
+## Gelände und Detailing
+
+- `core/geometry/displacement.py`: `dispinfo` lesen und schreiben, Punkte wie vbsp ausrechnen,
+  Pinsel-Schritte, Nähte schließen, Strahl-Treffer. Alles mit numpy, ohne Qt.
+- `core/terrain.py`: Brushes umwandeln, Striche über mehrere Brushes, Nähte samt Nachbarn.
+- `core/surf/terrain_templates.py`: Gelände-Vorlagen (Welt-Brushes in Kacheln).
+- `core/models/scatter.py`: Detail-Kits als Namensmuster, Boden suchen, Props streuen.
+- `ui/tools/terrain_tool.py`, `ui/tools/scatter_tool.py`: die Werkzeuge, Optionen in
+  `ui/panels/tool_options.py`.
+
 ## Vorlagen-Bibliothek
 
 Alle gängigen Rampenarten als parametrische Vorlagen (gerade, Trapez, Pyramide, Kurve,
