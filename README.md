@@ -47,7 +47,7 @@ ihre Kopfzeile umstellen, die Trenner sind verschiebbar. Die Ansicht unter der M
 umrandet. Die 3D-Ansicht kennt die Modi Texturiert, Schattiert, Flach und Drahtgitter.
 
 **Werkzeuge.** Links stehen die Werkzeuge mit Symbol (Auswahl, Malen, Formen, Entity, Seiten,
-Schneiden, Loch). Das aktive
+Schneiden, Loch, Ecken, Gelände, Streuen). Das aktive
 ist orange hinterlegt, oben rechts steht zusätzlich „Werkzeug: …“.
 
 | Kamera | |
@@ -58,7 +58,7 @@ ist orange hinterlegt, oben rechts steht zusätzlich „Werkzeug: …“.
 | Mittlere Maustaste oder Leertaste + Ziehen | Ansicht verschieben |
 | Strg+E | alle Ansichten auf die Auswahl zentrieren |
 
-**Formen bauen (Shift+B).** Form wählen (Block, Keil, Zylinder, Bogen, Treppe): links in der
+**Formen bauen (Shift+B).** Form wählen (Block, Keil, Zylinder, Bogen, Treppe, Spitze, Kugel, Torus): links in der
 Bibliothek unter *Formen* oder rechts als Bild. In einer 2D-Ansicht einen Rahmen aufziehen, in einer zweiten Ansicht die Höhe anpassen, **Enter**.
 Schneller: in der 3D-Ansicht auf eine Fläche klicken, der Rahmen sitzt dann direkt darauf.
 Eine Form aus der Bibliothek in eine Ansicht ziehen setzt sie in der zuletzt benutzten Größe ab.
@@ -67,6 +67,25 @@ Eine Form aus der Bibliothek in eine Ansicht ziehen setzt sie in der zuletzt ben
 dann in einer Ansicht vom Anfang zum Ende der Rampe ziehen. Die Vorschau hängt am Mauszeiger,
 beim Loslassen wird gebaut. Der Strich bestimmt Länge und Richtung, bei Kurven Radius und
 Richtung. Ein Klick ohne Ziehen setzt die Vorlage so ab, wie sie ist. Esc beendet das Malen.
+
+**Ecken (Shift+V).** Brush auswählen, Werkzeug „Ecken“: Weiße Griffe sind Ecken, gelbe die Mitten
+der Kanten. Ziehen verformt den Brush, eine Kantenmitte zieht beide Ecken. Strg+Klick oder ein
+Rahmen wählt mehrere Ecken, Pfeiltasten schieben sie um eine Rasterweite, in 3D hebt Shift+Ziehen
+senkrecht. Der Brush bleibt konvex und ganzzahlig; was ihn hohl machen würde, wird abgelehnt.
+Fallen zwei Ecken zusammen, verschmelzen sie (so entstehen Keile und Spitzen).
+
+**Ordnen wie in Hammer (Menü Bearbeiten).**
+
+| Taste | |
+| --- | --- |
+| Strg+G / Strg+U | Gruppieren / Gruppe auflösen. Ein Klick auf ein Mitglied wählt die ganze Gruppe |
+| Strg+W | Gruppen ignorieren (einzelne Objekte wählen) |
+| Strg+T | An Entity binden: Brushes werden `func_detail`, Trigger, Tür …; Trigger bekommen die Trigger-Textur |
+| Strg+Shift+W | Zur Welt: Brushes aus ihrer Entity lösen |
+| Strg+Shift+V | Mehrfach kopieren: Anzahl, Versatz und Drehung je Kopie (Treppen, Säulenreihen, Wendel) |
+| Strg+B | Auswahl ans Raster legen |
+
+Gruppen bleiben im VMF als Hammer-Gruppen erhalten.
 
 **Schneiden (Shift+X), Loch (Shift+L), Aushöhlen (Strg+Shift+C).** Schneiden: Brushes auswählen,
 in einer 2D-Ansicht eine Linie ziehen; Tab wechselt, welche Seite bleibt (beide, hinten, vorne),
@@ -325,6 +344,9 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - Die Dicht-Prüfung arbeitet mit einem Raster (8 Units, bei großen Maps gröber). Spalte, die
   schmaler als eine Rasterzelle sind, findet nur vbsp.
 
+- Ecken-Werkzeug: Gelände-Brushes und Brushes in Rampen-Bausteinen lassen sich nicht direkt
+  verformen (Bausteine erst lösen). Kugeln haben höchstens 12 Seiten, weil vbsp nur 128 Seiten je
+  Brush erlaubt; ein Torus besteht aus einem Brush je Segment.
 - Gelände: Ecken verschieben, Unterteilen und Nähen über verschiedene Power-Stufen gibt es noch
   nicht (Nähte schließen nur zwischen gleich feinen Flächen). Displacements in geöffneten BSPs
   bleiben normale Brushes. Die Detail-Kits nennen Namensmuster von CS:S- und HL2-Modellen; welche

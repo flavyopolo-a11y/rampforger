@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
+from ..core import organize
 from ..core.blocks import clone_objects, is_block_root, upgrade_roots
 from ..core.commands import AddObjects, Command, MacroCommand
 from ..core.compile import CompileSettings, Level, LogLine
@@ -39,6 +40,7 @@ from ..core.validation.seal import describe as describe_seal
 from ..core.zones import collect_zones, momentum_zones, zone_problems
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
+from .dialogs.organize_dialogs import MultiCopyDialog, TieEntityDialog
 from .dialogs.profiles_dialog import ProfilesDialog
 from .dialogs.ramp_assistant import (
     PRESETS,
@@ -72,12 +74,13 @@ from .tools.scatter_tool import ScatterTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
 from .tools.terrain_tool import TerrainTool
+from .tools.vertex_tool import VertexTool
 from .viewports.layout import ViewportGrid
 from .viewports.viewport import MAP_SUFFIXES, dropped_maps
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
-TOOL_ORDER = ("select", "paint", "shape", "terrain", "scatter", "entity", "face", "clip", "hole")
+TOOL_ORDER = ("select", "paint", "shape", "vertex", "terrain", "scatter", "entity", "face", "clip", "hole")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -112,7 +115,18 @@ CONTROLS_HELP = """
 <tr><td>Strg+M</td><td>Transformieren mit exakten Zahlen</td></tr>
 <tr><td>Strg+L / Strg+I</td><td>Spiegeln horizontal / vertikal (bezogen auf die aktive 2D-Ansicht)</td></tr>
 <tr><td>H / Strg+H / U</td><td>Auswahl ausblenden / Rest ausblenden / alles einblenden</td></tr>
+<tr><td>Strg+G / Strg+U / Strg+W</td><td>Gruppieren / Gruppe auflösen / Gruppen ignorieren</td></tr>
+<tr><td>Strg+T / Strg+Shift+W</td><td>An Entity binden (func_detail, Trigger …) / zurück zur Welt</td></tr>
+<tr><td>Strg+Shift+V</td><td>Mehrfach kopieren mit Versatz und Drehung</td></tr>
+<tr><td>Strg+B</td><td>Auswahl ans Raster legen</td></tr>
 <tr><td>Enter / Esc</td><td>Form erstellen / Rahmen oder Auswahl verwerfen</td></tr>
+</table>
+<h3>Ecken (Shift+V)</h3>
+<table>
+<tr><td>Ecke oder Kantenmitte ziehen</td><td>Brush verformen; Kantenmitte zieht beide Ecken</td></tr>
+<tr><td>Strg + Klick / Rahmen ziehen</td><td>mehrere Ecken wählen</td></tr>
+<tr><td>Pfeiltasten (2D)</td><td>gewählte Ecken um eine Rasterweite schieben</td></tr>
+<tr><td><b>3D</b>: Shift + Ziehen</td><td>Ecke nach oben/unten</td></tr>
 </table>
 <h3>Gelände (Shift+G) und Streuen (Shift+D)</h3>
 <table>
@@ -140,7 +154,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.editor = EditorContext()
         for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor),
-                     ClipTool(self.editor), HoleTool(self.editor), TerrainTool(self.editor)):
+                     ClipTool(self.editor), HoleTool(self.editor), TerrainTool(self.editor), VertexTool(self.editor)):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")
@@ -287,6 +301,21 @@ class MainWindow(QMainWindow):
                                       "(Carve wie in Hammer)")
         self.act_flip_h = self._action("Spiegeln &horizontal", lambda: self._flip(0), "Ctrl+L")
         self.act_flip_v = self._action("Spiegeln &vertikal", lambda: self._flip(1), "Ctrl+I")
+        self.act_multi_copy = self._action("&Mehrfach kopieren …", self.multi_copy, "Ctrl+Shift+V",
+                                           "Auswahl mehrmals kopieren, jede Kopie weiter verschoben und gedreht "
+                                           "(Treppen, Säulenreihen, Wendel)")
+        self.act_snap_selection = self._action("Auswahl ans &Raster", self.snap_selection, "Ctrl+B",
+                                               "Schiebt die Auswahl so, dass ihre Ecke auf dem Raster liegt")
+        self.act_group = self._action("&Gruppieren", self.group_selection, "Ctrl+G",
+                                      "Auswahl zu einer Gruppe: ein Klick wählt dann alle Mitglieder")
+        self.act_ungroup = self._action("Gruppe a&uflösen", self.ungroup_selection, "Ctrl+U")
+        self.act_ignore_groups = self._action("Gruppen &ignorieren", self._toggle_ignore_groups, "Ctrl+W",
+                                              "Klick wählt einzelne Objekte statt ganzer Gruppen",
+                                              checkable=True)
+        self.act_tie = self._action("An &Entity binden …", self.tie_to_entity, "Ctrl+T",
+                                    "Ausgewählte Brushes zu func_detail, Trigger, Tür usw. machen")
+        self.act_to_world = self._action("Zur &Welt", self.move_to_world, "Ctrl+Shift+W",
+                                         "Brushes aus ihrer Entity lösen, sie werden wieder Welt-Brushes")
 
         self.act_grid_finer = self._action("Raster feiner", ed.grid_finer, "[")
         self.act_grid_coarser = self._action("Raster gröber", ed.grid_coarser, "]")
@@ -360,7 +389,9 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("&Bearbeiten"))
         for a in (self.act_undo, self.act_redo, None, self.act_cut, self.act_copy, self.act_paste, self.act_delete,
-                  None, self.act_select_all, None, self.act_carve, None, self.act_transform, self.act_flip_h, self.act_flip_v):
+                  None, self.act_select_all, None, self.act_group, self.act_ungroup, self.act_ignore_groups, None,
+                  self.act_tie, self.act_to_world, None, self.act_carve, None, self.act_transform, self.act_flip_h,
+                  self.act_flip_v, self.act_multi_copy, self.act_snap_selection):
             m.addSeparator() if a is None else m.addAction(a)
 
         m = mb.addMenu(self.tr("&Ansicht"))
@@ -814,6 +845,99 @@ class MainWindow(QMainWindow):
         self.editor.run(cmd)
         self.editor.status_message.emit(self.tr("Ausgehöhlt: {0} Brushes").format(len(ids)))
         return True
+
+    # ---- Ordnen -------------------------------------------------------------------
+    def _status(self, text: str) -> None:
+        self.editor.status_message.emit(text)
+
+    def group_selection(self) -> bool:
+        res = organize.group(self.editor.doc, self.editor.selected_objects())
+        if res is None:
+            self._status(self.tr("Zum Gruppieren mindestens zwei Objekte auswählen"))
+            return False
+        self.editor.run(res[0])
+        self._status(self.tr("Gruppe {0} erstellt").format(res[1]))
+        return True
+
+    def ungroup_selection(self) -> bool:
+        cmd = organize.ungroup(self.editor.doc, self.editor.selected_objects())
+        if cmd is None:
+            self._status(self.tr("In der Auswahl ist keine Gruppe"))
+            return False
+        return self.editor.run(cmd)
+
+    def _toggle_ignore_groups(self, on: bool) -> None:
+        self.editor.ignore_groups = bool(on)
+        self._status(self.tr("Gruppen werden ignoriert") if on else self.tr("Klick wählt ganze Gruppen"))
+
+    def _tie_classes(self) -> list[str]:
+        try:
+            return self.editor.entity_catalog.classnames("solid")
+        except Exception:  # Katalog fehlt: nur die häufigen Klassen
+            return []
+
+    def tie_to_entity(self, classname: str | None = None) -> bool:
+        if not self.editor.selection:
+            self._status(self.tr("Erst die Brushes auswählen, die zur Entity werden sollen"))
+            return False
+        if not classname:
+            dlg = TieEntityDialog(self._tie_classes(), parent=self)
+            if not dlg.exec() or not dlg.value():
+                return False
+            classname = dlg.value()
+        cat = self.editor.entity_catalog
+        cls = cat.get(classname) if cat is not None else None
+        try:
+            cmd, ent_id = organize.tie_to_entity(self.editor.doc, self.editor.selected_objects(), classname,
+                                                 cls.defaults() if cls is not None else ())
+        except organize.OrganizeError as exc:
+            self._status(str(exc))
+            return False
+        self.editor.run(cmd)
+        self.editor.set_selection([ent_id])
+        self._status(self.tr("Brushes sind jetzt {0}").format(classname))
+        return True
+
+    def move_to_world(self) -> bool:
+        try:
+            cmd, ids = organize.move_to_world(self.editor.doc, self.editor.selected_objects())
+        except organize.OrganizeError as exc:
+            self._status(str(exc))
+            return False
+        self.editor.run(cmd)
+        self.editor.set_selection(ids)
+        return True
+
+    def multi_copy(self, values: dict | None = None) -> bool:
+        bb = self.editor.selection_bbox()
+        if bb is None:
+            self._status(self.tr("Erst etwas auswählen, das kopiert werden soll"))
+            return False
+        if values is None:
+            dlg = MultiCopyDialog(tuple(b - a for a, b in zip(bb.mins, bb.maxs)), self)  # type: ignore[arg-type]
+            if not dlg.exec():
+                return False
+            values = dlg.values()
+        try:
+            cmd, ids = organize.multi_copy(self.editor.doc, self.editor.selected_objects(),
+                                           texture_lock=self.editor.texture_lock, **values)
+            ok = self.editor.run(cmd)
+        except Exception as exc:  # z. B. TransformError oder OrganizeError
+            self._status(str(exc))
+            return False
+        if ok:
+            self.editor.set_selection(ids)
+        return ok
+
+    def snap_selection(self) -> bool:
+        bb = self.editor.selection_bbox()
+        if bb is None:
+            return False
+        delta = organize.snap_delta(bb.mins, self.editor.grid)
+        if not any(abs(d) > 1e-9 for d in delta):
+            self._status(self.tr("Auswahl liegt schon auf dem Raster"))
+            return False
+        return self.editor.move_selection(delta)
 
     def edit_transform(self) -> None:
         if not self.editor.selection:

@@ -62,6 +62,13 @@ Vertex-Puffer, nur betroffene Zellen werden neu gebaut. Picking per Strahl gegen
 - `ui/tools/terrain_tool.py`, `ui/tools/scatter_tool.py`: die Werkzeuge, Optionen in
   `ui/panels/tool_options.py`.
 
+## Ordnen und Ecken
+
+- `core/geometry/vertex_edit.py`: Ecken und Kanten, Ecken verschieben (Hülle neu, Texturen erben).
+- `core/organize.py`: Gruppen, An Entity binden, Zur Welt, Mehrfach kopieren, Auswahl ans Raster.
+- `core/commands/base.py` `Deferred`: Undo-Schritt aus Teilen, die erst beim Ausführen gebaut werden.
+- `ui/tools/vertex_tool.py` (Shift+V), Dialoge in `ui/dialogs/organize_dialogs.py`.
+
 ## Vorlagen-Bibliothek
 
 Alle gängigen Rampenarten als parametrische Vorlagen (gerade, Trapez, Pyramide, Kurve,

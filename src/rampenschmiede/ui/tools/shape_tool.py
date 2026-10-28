@@ -28,6 +28,9 @@ SHAPES = {
     "cylinder": "Zylinder",
     "arch": "Bogen",
     "stairs": "Treppe",
+    "spike": "Spitze",
+    "sphere": "Kugel",
+    "torus": "Torus",
 }
 
 DRAFT_COLOR = (1.0, 1.0, 1.0)
@@ -37,6 +40,9 @@ SHAPE_HINTS = {
     "cylinder": "Säule mit einstellbarer Seitenzahl.",
     "arch": "Bogen oder Ring aus Segmenten, mit Wandstärke.",
     "stairs": "Treppe mit einstellbarer Stufenzahl.",
+    "spike": "Kegel oder Pyramide (3 bis 64 Seiten), Spitze oben.",
+    "sphere": "Kugel aus einem Brush. Mehr Seiten = runder (höchstens 12, mehr erlaubt vbsp nicht).",
+    "torus": "Ring mit rundem Querschnitt; Wandstärke = Dicke des Rings.",
 }
 
 
@@ -178,6 +184,12 @@ class ShapeTool(Tool):
             return primitives.cylinder(box.mins, box.maxs, o.sides, material=mat)
         if o.shape == "arch":
             return primitives.arch(box.mins, box.maxs, o.sides, o.wall, o.arc, o.start_angle, material=mat)
+        if o.shape == "spike":
+            return primitives.spike(box.mins, box.maxs, o.sides, material=mat)
+        if o.shape == "sphere":
+            return primitives.sphere(box.mins, box.maxs, o.sides, material=mat)
+        if o.shape == "torus":
+            return primitives.torus(box.mins, box.maxs, o.sides, o.wall, material=mat)
         if o.shape == "stairs":
             return primitives.stairs(box.mins, box.maxs, o.steps, o.stairs_direction, material=mat)  # type: ignore[arg-type]
         return primitives.block(box.mins, box.maxs, mat)

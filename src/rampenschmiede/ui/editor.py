@@ -28,6 +28,7 @@ from ..core.model import (
 )
 from ..core.models.library import ModelLibrary
 from ..core.models.props import prop_bbox
+from ..core.organize import expand_groups
 from ..core.templates.starter import grow_hull
 from ..render.scene_mesh import SceneMesh
 from ..render.sky import SkyCache, SkyImages
@@ -102,6 +103,8 @@ class EditorContext(QObject):
         self.tools: dict[str, "Tool"] = {}
         self.tool: "Tool | None" = None
         self.texture_lock = True
+        #: „Gruppen ignorieren“ (Strg+W): Klick wählt dann nur das Objekt, nicht die ganze Gruppe
+        self.ignore_groups = False
         #: Leck-Spur aus der letzten .lin-Datei, als Linienpaare für die Ansichten
         self.leak_lines: np.ndarray | None = None
         self.leak_points: list[Point] = []
@@ -245,6 +248,9 @@ class EditorContext(QObject):
 
     # ---- Auswahl ----------------------------------------------------------------
     def set_selection(self, ids: Iterable[int]) -> None:
+        if not self.ignore_groups:
+            ids = set(ids)
+            ids |= {i for i in expand_groups(self.doc, ids) - ids if self.selectable(self.doc.get(i))}
         sel = frozenset(i for i in ids if i in self.doc)
         if sel != self.selection:
             self.selection = sel
