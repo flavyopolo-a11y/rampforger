@@ -28,6 +28,8 @@ from ..core.model import (
     object_bbox,
     owner_id,
 )
+from ..core.models.library import LoadedModel, ModelLibrary
+from ..core.models.props import angle_matrix, entity_angles, entity_skin
 from .textures import TextureAtlas
 
 # Werkzeug-Texturen bekommen feste, aus Hammer bekannte Farben.
@@ -221,7 +223,55 @@ def feature_edges(faces: list[Face], polys: list, hide_nodraw: bool = False) -> 
     return np.asarray(out, dtype=np.float32).reshape(-1, 3)
 
 
-def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_part: bool = False) -> ObjectMesh | None:
+#: Farbe von Modell-Flächen ohne Textur und der Umrisse von Props in 2D
+PROP_COLOR = (0.78, 0.78, 0.76)
+PROP_COLOR_2D = (0.85, 0.45, 0.95)
+#: Mehr Kanten zeichnen die 2D-Ansichten je Prop nicht (sonst nur den Kasten)
+MAX_PROP_EDGES = 40_000
+
+
+def build_prop_mesh(ent: Entity, model: LoadedModel, atlas: TextureAtlas | None = None) -> ObjectMesh | None:
+    """Dreiecke eines Modells an der Position und Drehung der Entity, mit den Texturen seines Skins."""
+    geom = model.geometry
+    origin = ent.origin
+    if geom is None or not geom.triangle_count or origin is None:
+        return None
+    m = np.asarray(angle_matrix(*entity_angles(ent)), dtype=np.float32)
+    o = np.asarray(origin, dtype=np.float32)
+    idx = geom.triangles.reshape(-1)
+    rows = np.empty((len(idx), 12), dtype=np.float32)
+    rows[:, 0:3] = geom.positions[idx] @ m.T + o
+    rows[:, 3:6] = geom.normals[idx] @ m.T
+    rows[:, 6:9] = PROP_COLOR
+    rows[:, 9:11] = geom.uvs[idx]
+    materials = model.materials(entity_skin(ent))
+    layers = np.zeros(max(len(materials), int(geom.tri_material.max()) + 1), dtype=np.float32)
+    for i, name in enumerate(materials):
+        slot = atlas.slot(name) if atlas is not None and name else None
+        if slot is not None:
+            layers[i] = slot.shader_layer
+    rows[:, 11] = np.repeat(layers[geom.tri_material], 3)
+    edges = model.edges()
+    if len(edges) > MAX_PROP_EDGES * 2 or not len(edges):
+        bb = object_bbox(ent)
+        edges = _box_edges(bb.mins, bb.maxs) if bb is not None else np.zeros((0, 3), dtype=np.float32)
+    else:
+        edges = edges @ m.T + o
+    return ObjectMesh(rows, edges.astype(np.float32), PROP_COLOR_2D, np.zeros((0, 3), dtype=np.float32))
+
+
+def _box_edges(lo, hi) -> np.ndarray:
+    polys = [(n, [tuple(lo[i] if c[i] == 0 else hi[i] for i in range(3)) for c in corners]) for n, corners in _BOX_FACES]
+    return _polygons_to_arrays(polys, [(0, 0, 0)] * len(polys))[1]
+
+
+def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_part: bool = False,
+                      models: ModelLibrary | None = None) -> ObjectMesh | None:
+    if isinstance(obj, Entity) and models is not None and obj.get("model", "").lower().endswith(".mdl"):
+        model = models.load(obj.get("model"))
+        mesh = build_prop_mesh(obj, model, atlas) if model is not None else None
+        if mesh is not None:
+            return mesh
     if isinstance(obj, Solid):
         polys, colors, textures, sky = [], [], [], []
         all_polys = obj.polygons()
@@ -232,7 +282,7 @@ def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_p
                 polys.append((face.plane.normal, poly))
                 colors.append(material_color(face.material))
                 slot = atlas.slot(face.material) if atlas is not None else None
-                textures.append((face, slot.layer, (slot.width, slot.height)) if slot else None)
+                textures.append((face, slot.shader_layer, (slot.width, slot.height)) if slot else None)
                 sky.append(face.material.upper() == SKYBOX)
         tris, lines = _polygons_to_arrays(polys, colors, textures, sky)
         c = obj.editor.color
@@ -263,9 +313,12 @@ class SceneArrays:
 
 
 class SceneMesh:
-    def __init__(self, doc: MapDocument, atlas: TextureAtlas | None = None) -> None:
+    def __init__(self, doc: MapDocument, atlas: TextureAtlas | None = None,
+                 models: ModelLibrary | None = None) -> None:
         self.doc = doc
         self.atlas = atlas
+        #: Spielmodelle für Props (None: Props erscheinen als Kästchen)
+        self.models = models
         self._atlas_generation = atlas.generation if atlas else 0
         self._cache: dict[int, tuple[MapObject, ObjectMesh | None]] = {}
         self._selection: frozenset[int] = frozenset()
@@ -286,6 +339,11 @@ class SceneMesh:
             self._selection = ids
             self.version = next(_versions)
 
+    def set_models(self, models: ModelLibrary | None) -> None:
+        if models is not self.models:
+            self.models = models
+            self.textures_changed()
+
     def textures_changed(self) -> None:
         """Nach einem Wechsel der Material-Bibliothek alle Meshes neu bauen."""
         self._cache.clear()
@@ -298,7 +356,7 @@ class SceneMesh:
             return hit[1]
         parent_id = getattr(obj, "parent_id", None)
         parent = self.doc.get(parent_id) if parent_id is not None else None
-        mesh = build_object_mesh(obj, self.atlas, block_part=is_block_root(parent))
+        mesh = build_object_mesh(obj, self.atlas, block_part=is_block_root(parent), models=self.models)
         self._cache[obj.id] = (obj, mesh)
         return mesh
 

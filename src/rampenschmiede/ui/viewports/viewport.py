@@ -23,6 +23,7 @@ from ...render.gl_renderer import SKY_MODES, ViewportRenderer
 from ..editor import EditorContext
 from ..panels.library_panel import MIME_TEMPLATE
 from ..panels.material_browser import MIME_MATERIAL
+from ..panels.model_browser import MIME_MODEL
 
 VIEW_TITLES = {
     "3d": "3D",
@@ -185,11 +186,12 @@ class Viewport(QOpenGLWidget):
     # ---- Vorlagen hineinziehen ---------------------------------------------------------
     def dragEnterEvent(self, e) -> None:
         mime = e.mimeData()
-        if mime.hasFormat(MIME_TEMPLATE) or mime.hasFormat(MIME_MATERIAL) or dropped_maps(mime):
+        if (mime.hasFormat(MIME_TEMPLATE) or mime.hasFormat(MIME_MATERIAL) or mime.hasFormat(MIME_MODEL)
+                or dropped_maps(mime)):
             e.acceptProposedAction()
 
     def dragMoveEvent(self, e) -> None:
-        if e.mimeData().hasFormat(MIME_TEMPLATE) or dropped_maps(e.mimeData()):
+        if e.mimeData().hasFormat(MIME_TEMPLATE) or e.mimeData().hasFormat(MIME_MODEL) or dropped_maps(e.mimeData()):
             e.acceptProposedAction()
         elif e.mimeData().hasFormat(MIME_MATERIAL):
             # Material nur dort annehmen, wo eine Fläche unter der Maus ist (3D)
@@ -227,6 +229,11 @@ class Viewport(QOpenGLWidget):
             material = bytes(e.mimeData().data(MIME_MATERIAL)).decode("utf-8")
             if self.drop_material(e.position(), material):
                 e.acceptProposedAction()
+            return
+        if e.mimeData().hasFormat(MIME_MODEL):
+            e.acceptProposedAction()
+            name = bytes(e.mimeData().data(MIME_MODEL)).decode("utf-8")
+            self.editor.model_dropped.emit(name, self.drop_point(e.position()))
             return
         if not e.mimeData().hasFormat(MIME_TEMPLATE):
             return

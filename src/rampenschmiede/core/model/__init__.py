@@ -1,4 +1,4 @@
-from .document import ChangeSet, EditorState, MapDocument, object_bbox, owner_id
+from .document import ChangeSet, EditorState, MapDocument, object_bbox, owner_id, set_entity_bounds
 from .objects import (
     DEFAULT_MATERIAL,
     EditorInfo,
@@ -17,6 +17,7 @@ __all__ = [
     "MapDocument",
     "object_bbox",
     "owner_id",
+    "set_entity_bounds",
     "DEFAULT_MATERIAL",
     "EditorInfo",
     "Entity",
