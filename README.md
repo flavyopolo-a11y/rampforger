@@ -296,6 +296,20 @@ Trigger, Spawns, Teleport-Ziele, Lichter, Props, Brush-Entities, Sonstiges. Das 
 einen ganzen Ordner oder ein einzelnes Objekt aus und wieder ein (rückgängig machbar). Klick
 wählt aus, Doppelklick springt hin. Als Rampe zählt jeder Brush mit einer Fläche steiler als 44°.
 
+**Probleme suchen (Alt+P).** Wie „Check for Problems“ in Hammer, plus Surf-Prüfungen: kaputte
+und doppelte Brushes, fehlende Texturen und Modelle (nur mit Spielprofil), Teleporter ohne Ziel
+oder ohne Spieler-Flag, I/O auf Namen, die es nicht gibt, Brush-Entities ohne Brushes, fehlende
+oder steckende Spawns, Zonen, Engine-Grenzen (±16384, 8192 Brushes, 2048 Entities), Lecks,
+Rampen unter 45,6° (darauf bleibt man stehen) und Rampen-Brushes mit Kommazahl-Ecken
+(Rampbug-Gefahr). Klick auf eine Zeile wählt die Objekte aus und zeigt sie, „Reparieren“ behebt,
+was sich sicher beheben lässt (ein Undo-Schritt).
+
+**Suchen und Ersetzen (Strg+F), Gehe zu ID (Strg+Shift+G), Messen (Shift+M).** Entities nach
+Klasse, Name oder Wert suchen und umbenennen (I/O-Ziele werden mit umbenannt), Texturen mit
+Platzhaltern (`concrete/*`) in der Map oder nur in der Auswahl ersetzen. Gehe zu ID nimmt die
+Nummer aus dem Kompilier-Log oder aus Hammer, oder einen Namen. Messen zeigt Länge, Versatz je
+Achse und Steigung; in 2D ziehen, in 3D zwei Punkte anklicken.
+
 **Kompilieren und testen (F9).** Beim ersten Start sucht Rampenschmiede CS:S und Momentum Mod
 in allen Steam-Bibliotheken und legt dafür Spielprofile an (Menü *Testen → Spielprofile*, dort
 lässt sich alles von Hand anpassen). F9 öffnet den Dialog: Spiel und Qualität wählen, fertig.

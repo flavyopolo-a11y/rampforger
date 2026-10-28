@@ -69,6 +69,12 @@ Vertex-Puffer, nur betroffene Zellen werden neu gebaut. Picking per Strahl gegen
 - `core/commands/base.py` `Deferred`: Undo-Schritt aus Teilen, die erst beim Ausführen gebaut werden.
 - `ui/tools/vertex_tool.py` (Shift+V), Dialoge in `ui/dialogs/organize_dialogs.py`.
 
+## Prüfen und Suchen
+
+- `core/validation/problems.py`: alle Prüfungen von „Probleme suchen“, je mit Objekten und Reparatur.
+- `core/search.py`: Suchen und Ersetzen, Gehe zu ID.
+- `ui/dialogs/problems_dialog.py`, `ui/dialogs/find_dialog.py`, `ui/tools/measure_tool.py`.
+
 ## Vorlagen-Bibliothek
 
 Alle gängigen Rampenarten als parametrische Vorlagen (gerade, Trapez, Pyramide, Kurve,
