@@ -24,6 +24,8 @@ def _center_color(widget, qtbot):
     widget.show()
     qtbot.waitExposed(widget)
     img = widget.grabFramebuffer()
+    if widget.ctx is None:
+        pytest.skip("kein OpenGL 3.3 verfügbar")
     return img.pixelColor(img.width() // 2, img.height() // 2)
 
 
