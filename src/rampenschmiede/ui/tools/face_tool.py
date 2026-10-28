@@ -19,11 +19,10 @@ from PySide6.QtCore import QObject, QPointF, Qt, Signal
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 
 from ...core.blocks import block_info, change_block, is_clip_member
-from ...core.geometry.brush import ray_intersect_solid
 from ...core.materials.apply import FaceRef, edit_faces, fitted_block, replace_material
 from ...core.materials.texturing import scale_by, shift_by
 from ...core.model import Face, Solid
-from .base import Tool, _ray_box, _visible
+from .base import Tool, _ray_box, _visible, hit_solid_face
 
 if TYPE_CHECKING:
     from ..viewports.viewport import Viewport
@@ -103,7 +102,7 @@ class FaceTool(Tool):
     def pick(self, origin: np.ndarray, direction: np.ndarray) -> FaceRef | None:
         o = tuple(float(c) for c in origin)
         d = tuple(float(c) for c in direction)
-        best: tuple[float, Solid] | None = None
+        best: tuple[float, Solid, int | None] | None = None
         for s in self.editor.doc.solids():
             if is_clip_member(s) or not _visible(self.editor, s):
                 continue
@@ -113,12 +112,14 @@ class FaceTool(Tool):
             t = _ray_box(origin, direction, bb)
             if t is None or (best is not None and t >= best[0]):
                 continue
-            t = ray_intersect_solid(s, o, d)  # type: ignore[arg-type]
-            if t is not None and (best is None or t < best[0]):
-                best = (t, s)
+            hit = hit_solid_face(s, o, d)
+            if hit is not None and (best is None or hit[0] < best[0]):
+                best = (hit[0], s, hit[1])
         if best is None:
             return None
-        t, s = best
+        t, s, known = best
+        if known is not None:
+            return (s.id, known)
         hit = tuple(o[k] + d[k] * t for k in range(3))
         index, dist = -1, 1e30
         for i, f in enumerate(s.faces):

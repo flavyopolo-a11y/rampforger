@@ -21,12 +21,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...core.geometry.displacement import BRUSH_MODES
 from ...core.materials import texturing
+from ...core.terrain import POWER_LABELS
 from ..editor import EditorContext
 from ..icons import icon
 from ..tools.entity_tool import POINT_ENTITIES, EntityTool
 from ..tools.face_tool import FaceTool
 from ..tools.shape_tool import SHAPE_HINTS, SHAPES, ShapeTool
+from ..tools.terrain_tool import MODE_HELP, MODE_LABELS, TerrainTool
 from ..widgets.scope_switch import ScopeSwitch
 
 
@@ -47,6 +50,8 @@ class ToolOptionsPanel(QStackedWidget):
         self._add("entity", self._entity_page())
         if "face" in editor.tools:
             self._add("face", self._face_page())
+        if "terrain" in editor.tools:
+            self._add("terrain", self._terrain_page())
         editor.tool_changed.connect(self._on_tool)
 
     def _add(self, name: str, page: QWidget) -> None:
@@ -77,6 +82,79 @@ class ToolOptionsPanel(QStackedWidget):
             "Klick wählt aus, Strg+Klick ergänzt. Auswahl ziehen verschiebt sie, Shift+Ziehen kopiert. "
             "Ein zweiter Klick auf die Auswahl schaltet zwischen Skalier- und Drehgriffen um. "
             "Pfeiltasten verschieben um eine Rasterweite. Exakte Werte: Strg+M."
+        )))
+        lay.addStretch(1)
+        return w
+
+    # ---- Gelände ---------------------------------------------------------------------
+    def _terrain_page(self) -> QWidget:
+        tool: TerrainTool = self.editor.tools["terrain"]  # type: ignore[assignment]
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        grid = QGridLayout()
+        grid.setSpacing(4)
+        group = QButtonGroup(w)
+        group.setExclusive(True)
+        self.terrain_modes: dict[str, QToolButton] = {}
+        for i, mode in enumerate(BRUSH_MODES):
+            b = QToolButton()
+            b.setText(self.tr(MODE_LABELS[mode]))
+            b.setCheckable(True)
+            b.setMinimumWidth(80)
+            b.setToolTip(self.tr(MODE_HELP[mode]))
+            b.clicked.connect(lambda _=False, m=mode: tool.set_mode(m))
+            group.addButton(b)
+            grid.addWidget(b, i // 3, i % 3)
+            self.terrain_modes[mode] = b
+        self.terrain_modes[tool.mode].setChecked(True)
+        lay.addLayout(grid)
+        form = QFormLayout()
+        self.terrain_radius = QSpinBox()
+        self.terrain_radius.setRange(8, 2048)
+        self.terrain_radius.setSingleStep(16)
+        self.terrain_radius.setSuffix(" u")
+        self.terrain_radius.setValue(int(tool.radius))
+        self.terrain_radius.setToolTip(self.tr("Halbmesser des Pinsels. Tasten [ und ] ändern ihn beim Malen."))
+        self.terrain_radius.valueChanged.connect(lambda v: setattr(tool, "radius", float(v)))
+        form.addRow(self.tr("Größe"), self.terrain_radius)
+        self.terrain_strength = QSpinBox()
+        self.terrain_strength.setRange(1, 255)
+        self.terrain_strength.setValue(int(tool.strength))
+        self.terrain_strength.setToolTip(self.tr(
+            "Wie stark ein Abdruck wirkt: Units beim Heben und Senken, Stufen von 255 beim Textur-Malen"))
+        self.terrain_strength.valueChanged.connect(lambda v: setattr(tool, "strength", float(v)))
+        form.addRow(self.tr("Stärke"), self.terrain_strength)
+        lay.addLayout(form)
+        tool.on_change = lambda: self.terrain_radius.setValue(int(tool.radius))
+
+        box = QHBoxLayout()
+        power = QComboBox()
+        for p, label in POWER_LABELS.items():
+            power.addItem(self.tr(label), p)
+        power.setCurrentIndex(list(POWER_LABELS).index(tool.power))
+        power.setToolTip(self.tr("Wie fein das neue Gelände ist. 8 × 8 reicht meist; feiner kostet Leistung."))
+        power.currentIndexChanged.connect(lambda _: setattr(tool, "power", power.currentData()))
+        make = QPushButton(self.tr("Zu Gelände machen"))
+        make.setToolTip(self.tr("Die Oberseite der ausgewählten Brushes wird formbares Gelände (Displacement)"))
+        make.clicked.connect(tool.convert_selection)
+        box.addWidget(make, 1)
+        box.addWidget(power)
+        lay.addLayout(box)
+        row = QHBoxLayout()
+        sew = QPushButton(self.tr("Nähte schließen"))
+        sew.setToolTip(self.tr("Lücken zwischen benachbarten Gelände-Flächen schließen (passiert nach jedem Strich "
+                               "von selbst)"))
+        sew.clicked.connect(tool.sew)
+        flat = QPushButton(self.tr("Gelände entfernen"))
+        flat.setToolTip(self.tr("Die ausgewählten Brushes werden wieder normale Brushes"))
+        flat.clicked.connect(tool.flatten_selection)
+        row.addWidget(sew)
+        row.addWidget(flat)
+        lay.addLayout(row)
+        lay.addWidget(_hint(self.tr(
+            "In 3D über das Gelände ziehen, oder in 2D von oben. Shift kehrt um (Heben ↔ Senken). "
+            "Textur malen braucht ein Überblend-Material mit zwei Texturen, z. B. nature/blendgrassgravel001a. "
+            "Fertige Hügel, Berge und Felsen gibt es links in der Bibliothek unter „Gelände“."
         )))
         lay.addStretch(1)
         return w

@@ -8,6 +8,7 @@ from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent, QPainter
 
 from ...core.geometry.brush import ray_intersect_solid
+from ...core.geometry.displacement import is_displacement_solid, solid_ray_face, surfaces
 from ...core.mathutil import BBox
 from ...core.model import Entity, MapObject, Solid, object_bbox, owner_id
 
@@ -131,6 +132,20 @@ def _ray_box(origin: np.ndarray, direction: np.ndarray, bb: BBox) -> float | Non
     return max(t0, 0.0)
 
 
+def hit_solid_face(solid: Solid, origin, direction) -> tuple[float, int | None] | None:
+    """(Abstand, Seite) bis zum Brush. Gelände-Brushes trifft man nur auf ihrer sichtbaren
+    Displacement-Fläche (die übrigen Seiten gibt es im Spiel nicht); die Seite ist dann bekannt."""
+    if is_displacement_solid(solid) and surfaces(solid):
+        return solid_ray_face(solid, origin, direction)
+    t = ray_intersect_solid(solid, origin, direction)
+    return (t, None) if t is not None else None
+
+
+def hit_solid(solid: Solid, origin, direction) -> float | None:
+    hit = hit_solid_face(solid, origin, direction)
+    return hit[0] if hit is not None else None
+
+
 def pick_3d(editor: "EditorContext", origin: np.ndarray, direction: np.ndarray,
             roots: bool = True) -> tuple[MapObject, float] | None:
     best: tuple[MapObject, float] | None = None
@@ -147,7 +162,7 @@ def pick_3d(editor: "EditorContext", origin: np.ndarray, direction: np.ndarray,
         if t is None or (best is not None and t >= best[1]):
             continue
         if isinstance(obj, Solid):
-            t = ray_intersect_solid(obj, o, d)
+            t = hit_solid(obj, o, d)
             if t is None:
                 continue
         elif obj.id in brush_entities:

@@ -421,6 +421,11 @@ class Viewport(QOpenGLWidget):
         if e.type() == QEvent.ShortcutOverride and self._mouselook and e.key() in FLY_KEYS:
             e.accept()
             return True
+        # Tasten, die das Werkzeug selbst braucht (Gelände: [ und ] für die Pinselgröße statt Raster)
+        if e.type() == QEvent.ShortcutOverride and not self._mouselook and self.editor.tool is not None \
+                and not (e.modifiers() & Qt.ControlModifier) and self.editor.tool.wants_key(e.key()):
+            e.accept()
+            return True
         return super().event(e)
 
     def keyPressEvent(self, e: QKeyEvent) -> None:

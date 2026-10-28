@@ -70,12 +70,13 @@ from .tools.face_tool import FaceTool
 from .tools.paint_tool import PaintTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
+from .tools.terrain_tool import TerrainTool
 from .viewports.layout import ViewportGrid
 from .viewports.viewport import MAP_SUFFIXES, dropped_maps
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
-TOOL_ORDER = ("select", "paint", "shape", "entity", "face", "clip", "hole")
+TOOL_ORDER = ("select", "paint", "shape", "terrain", "entity", "face", "clip", "hole")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -103,7 +104,7 @@ CONTROLS_HELP = """
 </table>
 <h3>Bearbeiten</h3>
 <table>
-<tr><td>[ und ]</td><td>Raster feiner / gröber</td></tr>
+<tr><td>[ und ]</td><td>Raster feiner / gröber (im Gelände-Werkzeug: Pinsel kleiner / größer)</td></tr>
 <tr><td>Pfeiltasten (2D)</td><td>Auswahl um eine Rasterweite verschieben</td></tr>
 <tr><td>Shift + Ziehen</td><td>Auswahl kopieren</td></tr>
 <tr><td>Zweiter Klick auf Auswahl</td><td>Dreh- statt Skaliergriffe</td></tr>
@@ -111,6 +112,11 @@ CONTROLS_HELP = """
 <tr><td>Strg+L / Strg+I</td><td>Spiegeln horizontal / vertikal (bezogen auf die aktive 2D-Ansicht)</td></tr>
 <tr><td>H / Strg+H / U</td><td>Auswahl ausblenden / Rest ausblenden / alles einblenden</td></tr>
 <tr><td>Enter / Esc</td><td>Form erstellen / Rahmen oder Auswahl verwerfen</td></tr>
+</table>
+<h3>Gelände (Shift+G)</h3>
+<table>
+<tr><td>Ziehen über Gelände</td><td>formen mit der gewählten Pinsel-Art</td></tr>
+<tr><td>Shift + Ziehen</td><td>umgekehrt: Senken statt Heben, Textur weg statt malen</td></tr>
 </table>
 <h3>Bibliothek</h3>
 <table>
@@ -132,7 +138,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.editor = EditorContext()
         for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor),
-                     ClipTool(self.editor), HoleTool(self.editor)):
+                     ClipTool(self.editor), HoleTool(self.editor), TerrainTool(self.editor)):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")

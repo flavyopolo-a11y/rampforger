@@ -49,6 +49,6 @@ def test_new_library_rebuilds_meshes(atlas, tmp_path):
     doc = MapDocument()
     doc._insert([block("LOSE/BLAU", doc)])
     scene = SceneMesh(doc, atlas)
-    assert scene.arrays().faces.shape[1] == 13 and scene.arrays().faces[0, 11] == 1.0
+    assert scene.arrays().faces.shape[1] == 15 and scene.arrays().faces[0, 11] == 1.0
     atlas.set_library(None)
     assert scene.arrays().faces[0, 11] == 0.0
