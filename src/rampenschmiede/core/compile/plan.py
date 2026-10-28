@@ -81,6 +81,10 @@ class CompilePlan:
     def pointfile_path(self) -> str:
         return str(Path(self.vmf_path).with_suffix(".lin"))
 
+    @property
+    def portalfile_path(self) -> str:
+        return str(Path(self.vmf_path).with_suffix(".prt"))
+
 
 def _quote(arg: str) -> str:
     if sys.platform == "win32":

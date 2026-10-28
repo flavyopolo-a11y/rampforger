@@ -117,3 +117,32 @@ def parse_pointfile(text: str) -> list[tuple[float, float, float]]:
             except ValueError:
                 continue
     return points
+
+
+def parse_portalfile(text: str) -> list[list[tuple[float, float, float]]]:
+    """Portale aus einer .prt-Datei von vbsp (PRT1): je Portal die Ecken des Vielecks.
+    Zeilen: `PRT1`, Zahl der Blätter, Zahl der Portale, dann je Portal
+    `<Ecken> <Blatt> <Blatt> (x y z) (x y z) …`."""
+    polys = []
+    lines = text.splitlines()
+    if not lines or not lines[0].strip().upper().startswith("PRT1"):
+        raise ValueError("Keine Portal-Datei (PRT1)")
+    for line in lines[3:]:
+        if "(" not in line:
+            continue
+        head, _, rest = line.partition("(")
+        try:
+            count = int(head.split()[0])
+        except (ValueError, IndexError):
+            continue
+        pts = []
+        for chunk in ("(" + rest).split("(")[1:]:
+            vals = chunk.split(")")[0].split()
+            if len(vals) == 3:
+                try:
+                    pts.append((float(vals[0]), float(vals[1]), float(vals[2])))
+                except ValueError:
+                    break
+        if len(pts) == count and count >= 3:
+            polys.append(pts)
+    return polys

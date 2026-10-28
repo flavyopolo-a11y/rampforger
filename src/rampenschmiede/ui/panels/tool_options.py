@@ -68,6 +68,8 @@ class ToolOptionsPanel(QStackedWidget):
             self._add("vertex", self._vertex_page())
         if "wall" in editor.tools:
             self._add("wall", self._wall_page())
+        if "path" in editor.tools:
+            self._add("path", self._path_page())
         if "decal" in editor.tools:
             self._add("decal", self._sticker_page())
         if "cordon" in editor.tools:
@@ -231,6 +233,48 @@ class ToolOptionsPanel(QStackedWidget):
             "Klick auf den ersten Punkt schließt den Raum, Enter oder ein zweiter Klick auf den letzten "
             "Punkt beendet. Rücktaste nimmt den letzten Punkt zurück, Esc verwirft. "
             "Material: das aktuelle aus dem Material-Browser."
+        )))
+        lay.addStretch(1)
+        return w
+
+    # ---- Pfad ------------------------------------------------------------------------
+    def _path_page(self) -> QWidget:
+        opts = self.editor.tools["path"].options  # type: ignore[attr-defined]
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        form = QFormLayout()
+        self.path_class = QComboBox()
+        self.path_class.addItem(self.tr("path_track (Züge, Plattformen)"), "path_track")
+        self.path_class.addItem(self.tr("path_corner (NPCs, func_train)"), "path_corner")
+        self.path_class.currentIndexChanged.connect(
+            lambda _i: setattr(opts, "classname", self.path_class.currentData()))
+        form.addRow(self.tr("Art"), self.path_class)
+        self.path_name = QLineEdit(opts.base)
+        self.path_name.setToolTip(self.tr("Die Punkte heißen <Name>_1, <Name>_2 …"))
+        self.path_name.textChanged.connect(lambda t: setattr(opts, "base", t.strip() or "pfad"))
+        form.addRow(self.tr("Name"), self.path_name)
+        self.path_height = QSpinBox()
+        self.path_height.setRange(-16384, 16384)
+        self.path_height.setSingleStep(16)
+        self.path_height.setSuffix(" u")
+        self.path_height.setValue(opts.height)
+        self.path_height.setToolTip(self.tr("In 3D: Abstand über der angeklickten Fläche. In „Oben“: Höhe des "
+                                            "ersten Punkts"))
+        self.path_height.valueChanged.connect(lambda v: setattr(opts, "height", v))
+        form.addRow(self.tr("Höhe"), self.path_height)
+        self.path_speed = QSpinBox()
+        self.path_speed.setRange(0, 10000)
+        self.path_speed.setSingleStep(50)
+        self.path_speed.setSpecialValueText(self.tr("vom Zug"))
+        self.path_speed.setValue(opts.speed)
+        self.path_speed.valueChanged.connect(lambda v: setattr(opts, "speed", v))
+        form.addRow(self.tr("Tempo"), self.path_speed)
+        lay.addLayout(form)
+        lay.addWidget(_hint(self.tr(
+            "Punkte in einer beliebigen Ansicht klicken. Jeder Punkt zeigt auf den nächsten, die Namen "
+            "stimmen automatisch. Klick auf den ersten Punkt macht einen Rundkurs, Enter oder ein zweiter "
+            "Klick auf den letzten Punkt beendet, Rücktaste nimmt zurück, Esc verwirft. Einen Zug "
+            "(func_tracktrain) lässt man dann mit „Erstes Ziel“ = <Name>_1 fahren."
         )))
         lay.addStretch(1)
         return w

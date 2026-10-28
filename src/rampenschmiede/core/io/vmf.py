@@ -20,6 +20,9 @@ from srctools.keyvalues import Keyvalues
 
 from ..decals import is_auto_overlay, overlay_sides
 from ..model import EditorInfo, Entity, Face, MapDocument, MapObject, Output, Solid, TexAxis
+from ..visgroups import KEY as VISGROUPS_KEY
+from ..visgroups import raw_node as visgroup_node
+from ..visgroups import visgroups
 
 RawNode = list  # [name, str | list[RawNode]]
 
@@ -592,6 +595,9 @@ class _Writer:
                 self.world()
             elif item == ENTITIES_MARK:
                 self.entities()
+            elif isinstance(item, list) and item and item[0] == "visgroups" and VISGROUPS_KEY in self.doc.extra:
+                # In der Rampenschmiede angelegte oder geänderte Sichtgruppen
+                _write_raw(visgroup_node(visgroups(self.doc)), self.out, 0)
             else:
                 _write_raw(item, self.out, 0)
         self.result.text = "".join(self.out)

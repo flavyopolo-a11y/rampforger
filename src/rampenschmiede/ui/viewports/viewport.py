@@ -24,6 +24,7 @@ from ..editor import EditorContext
 from ..panels.library_panel import MIME_TEMPLATE
 from ..panels.material_browser import MIME_MATERIAL
 from ..panels.model_browser import MIME_MODEL
+from ..tools.base import pick_2d, pick_3d
 
 VIEW_TITLES = {
     "3d": "3D",
@@ -70,6 +71,7 @@ class Viewport(QOpenGLWidget):
 
         editor.redraw_requested.connect(self.update)
         editor.document_replaced.connect(self._load_camera)
+        editor.picking_changed.connect(lambda on: self.setCursor(Qt.PointingHandCursor) if on else self.unsetCursor())
         self._load_camera()
 
     # ---- Ansichtstyp -------------------------------------------------------------
@@ -127,7 +129,8 @@ class Viewport(QOpenGLWidget):
                 # Zuletzt gezeichnete 3D-Kamera, z. B. zum Ausrichten von Lichtern
                 self.editor.camera3d = self.cam3d
                 extra = _join_lines(tool.lines_3d(self) if tool else None, self.editor.leak_lines,
-                                    self.editor.io_lines(), self.editor.light_lines(), self.editor.cordon_lines())
+                                    self.editor.io_lines(), self.editor.light_lines(), self.editor.cordon_lines(),
+                                    self.editor.portal_lines)
                 lit = self.render_mode == "lit"
                 sky = self.editor.sky_images() if self.render_mode in SKY_MODES else None
                 self.renderer.draw_3d(fbo, self.cam3d, w, h, self.render_mode, extra, pixels,
@@ -135,7 +138,8 @@ class Viewport(QOpenGLWidget):
                                       tool.tris_3d(self) if tool else None)
             else:
                 extra = _join_lines(tool.lines_2d(self) if tool else None, self.editor.leak_lines,
-                                    self.editor.io_lines(), self.editor.light_lines(), self.editor.cordon_lines())
+                                    self.editor.io_lines(), self.editor.light_lines(), self.editor.cordon_lines(),
+                                    self.editor.portal_lines)
                 self.renderer.draw_2d(fbo, self.cam2d, w, h, self.editor.grid, extra, pixels)
             self.ctx.disable(moderngl.DEPTH_TEST)
         finally:
@@ -284,11 +288,28 @@ class Viewport(QOpenGLWidget):
             self._pan_last = e.position()
             self.setCursor(Qt.ClosedHandCursor)
             return
+        if e.button() == Qt.LeftButton and self.editor.picking:
+            self._finish_pick(e.position())
+            return
         if e.button() == Qt.LeftButton and self.editor.tool:
             if self.is_3d:
                 self.editor.tool.press_3d(self, e)
             else:
                 self.editor.tool.press_2d(self, e)
+
+    def _finish_pick(self, pos: QPointF) -> None:
+        """Pipette: Objekt unter der Maus an das wartende Panel geben (Entities bevorzugt,
+        ein Brush einer Brush-Entity zählt als die Entity)."""
+        if self.is_3d:
+            origin, direction = self.ray(pos)
+            hit = pick_3d(self.editor, origin, direction)
+            obj = hit[0] if hit else None
+        else:
+            obj = pick_2d(self.editor, self, pos)
+        if obj is None:
+            self.editor.status_message.emit(self.tr("Dort ist nichts – noch einmal klicken oder Esc"))
+            return
+        self.editor.finish_pick(obj)
 
     def mouseMoveEvent(self, e: QMouseEvent) -> None:
         if self._mouselook:
@@ -432,6 +453,9 @@ class Viewport(QOpenGLWidget):
     def keyPressEvent(self, e: QKeyEvent) -> None:
         self._shift = bool(e.modifiers() & Qt.ShiftModifier)
         key = e.key()
+        if key == Qt.Key_Escape and self.editor.picking:
+            self.editor.cancel_pick()
+            return
         if e.isAutoRepeat() and key in FLY_KEYS:
             return
         if self.is_3d and key == Qt.Key_Z and not e.modifiers():

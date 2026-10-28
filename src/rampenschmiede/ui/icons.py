@@ -101,6 +101,18 @@ _SHAPES: dict[str, str] = {
     "palette": '<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 1.6-2.1-.5-1.3.3-2.4 1.7-2.4H18a3 3 0 0 0 3-3'
                'C21 7.2 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.3" fill="currentColor"/>'
                '<circle cx="10.5" cy="7" r="1.3" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.3" fill="currentColor"/>',
+    "pipette": '<path d="M14.5 4.5l5 5M12.5 6.5l5 5L8 21H3v-5z" fill="currentColor" fill-opacity="0.2"/>'
+               '<path d="M16 3l5 5-2 2-5-5z" fill="currentColor"/>',
+    "path": '<circle cx="5" cy="18" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="19" cy="16" r="2"/>'
+            '<path d="M6.3 16.3 L10.8 8.7 M13.6 8.3 L17.8 14.4" stroke-dasharray="2 1.6"/>',
+    "sound": '<path d="M4 9.5h4l5-4.5v14l-5-4.5H4z" fill="currentColor" fill-opacity="0.25"/>'
+             '<path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>',
+    "instance": '<path d="M4 8h12v12H4z"/><path d="M8 4h12v12" stroke-dasharray="2.2 1.8"/>',
+    "visgroup": '<path d="M3.5 8.5 L12 4 L20.5 8.5 L12 13 Z" fill="currentColor" fill-opacity="0.25"/>'
+                '<path d="M3.5 12.5 L12 17 L20.5 12.5M3.5 16.5 L12 21 L20.5 16.5"/>',
+    "report": '<path d="M5 3h14v18H5z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/>',
+    "play": '<path d="M7 4.5 L19 12 L7 19.5 Z" fill="currentColor" fill-opacity="0.3"/>',
+    "stop": '<path d="M6 6h12v12H6z" fill="currentColor" fill-opacity="0.3"/>',
     "eye": '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     "eye_off": '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" stroke-opacity="0.45"/>'
                '<path d="M4 20 L20 4"/>',

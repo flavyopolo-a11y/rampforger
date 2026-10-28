@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QSettings, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QProcess, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,9 +30,12 @@ from PySide6.QtWidgets import (
 from .. import __version__
 from ..core import organize, search
 from ..core.blocks import clone_objects, is_block_root, upgrade_roots
-from ..core.commands import AddObjects, Command, MacroCommand
+from ..core.commands import AddObjects, Command, MacroCommand, RemoveObjects
 from ..core.compile import CompileSettings, Level, LogLine
 from ..core.cutting import carve_with, hollow
+from ..core.entities.io import unique_targetname
+from ..core.geometry.transform import translate
+from ..core.instances import INSTANCE
 from ..core.io import bsp, rsmap, vmf
 from ..core.materials import MaterialLibrary
 from ..core.materials.authoring import import_image, ramp_material, wall_material
@@ -48,8 +53,9 @@ from ..core.validation.seal import check_seal
 from ..core.validation.seal import describe as describe_seal
 from ..core.zones import collect_zones, momentum_zones, zone_problems
 from .autosave import DEFAULT_MINUTES, Autosaver, backup_before_save, backups_dir, latest_autosave
-from .compile_controller import CompileController, load_pointfile
+from .compile_controller import CompileController, load_pointfile, load_portalfile
 from .dialogs.compile_dialog import CompileDialog
+from .dialogs.entity_report import EntityReport
 from .dialogs.find_dialog import FindDialog
 from .dialogs.free_assets import FreeAssetsDialog
 from .dialogs.organize_dialogs import MultiCopyDialog, TieEntityDialog
@@ -64,6 +70,7 @@ from .dialogs.ramp_assistant import (
     to_hex,
 )
 from .dialogs.sky_dialog import SkyDialog
+from .dialogs.sound_browser import SoundBrowser
 from .dialogs.stats_dialog import StatsDialog
 from .dialogs.surf_wizard import SurfWizard
 from .dialogs.texture_packs import TexturePacksDialog
@@ -86,6 +93,7 @@ from .tools.entity_tool import EntityTool
 from .tools.face_tool import FaceTool
 from .tools.measure_tool import MeasureTool
 from .tools.paint_tool import PaintTool
+from .tools.path_tool import PathTool
 from .tools.scatter_tool import ScatterTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
@@ -98,7 +106,7 @@ from .viewports.viewport import MAP_SUFFIXES, dropped_maps
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
-TOOL_ORDER = ("select", "paint", "shape", "wall", "vertex", "terrain", "scatter", "entity", "decal", "face", "clip", "hole", "measure", "cordon")
+TOOL_ORDER = ("select", "paint", "shape", "wall", "vertex", "terrain", "scatter", "entity", "path", "decal", "face", "clip", "hole", "measure", "cordon")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -200,7 +208,8 @@ class MainWindow(QMainWindow):
         self.editor = EditorContext()
         for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor),
                      ClipTool(self.editor), HoleTool(self.editor), TerrainTool(self.editor), VertexTool(self.editor),
-                     MeasureTool(self.editor), WallTool(self.editor), CordonTool(self.editor), StickerTool(self.editor)):
+                     MeasureTool(self.editor), WallTool(self.editor), CordonTool(self.editor), StickerTool(self.editor),
+                     PathTool(self.editor)):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")
@@ -379,6 +388,18 @@ class MainWindow(QMainWindow):
         self.act_flip_v = self._action("Spiegeln &vertikal", lambda: self._flip(1), "Ctrl+I")
         self.act_find = self._action("&Suchen und Ersetzen …", self.show_find, "Ctrl+F",
                                      "Entities nach Klasse, Name oder Wert suchen; Texturen ersetzen")
+        self.act_sounds = self._action("&Sounds anhören …", self.show_sounds, None,
+                                       "Alle Sounds des Spiels durchsuchen und abspielen")
+        self.act_instance_insert = self._action("&Instanz einfügen …", lambda: self.insert_instance(), None,
+                                                "Eine andere Map-Datei (.vmf, .rsmap) als func_instance einsetzen; "
+                                                "Änderungen an der Datei erscheinen überall")
+        self.act_instance_save = self._action("Auswahl als Instanz &speichern …", lambda: self.save_as_instance(), None,
+                                              "Die Auswahl in eine eigene Datei schreiben und hier durch eine "
+                                              "Instanz ersetzen (z. B. Startraum, Checkpoint)")
+        self.act_instance_open = self._action("Instanz-Datei ö&ffnen", self.open_instance_file, None,
+                                              "Die Datei der gewählten Instanz in einem zweiten Fenster bearbeiten")
+        self.act_entity_report = self._action("&Entity-Bericht …", self.show_entity_report, "Alt+E",
+                                              "Alle Entities als Liste: filtern, hinspringen, auswählen, löschen")
         self.act_goto = self._action("&Gehe zu ID …", self.goto_dialog, "Ctrl+Shift+G",
                                      "Objekt über seine Nummer (wie im Kompilier-Log oder in Hammer) oder "
                                      "seinen Namen finden")
@@ -440,6 +461,10 @@ class MainWindow(QMainWindow):
         self.act_load_pointfile = self._action("Leck-Spur &laden …", self.open_pointfile, None,
                                                "Eine .lin-Datei von vbsp anzeigen")
         self.act_clear_leak = self._action("Leck-Spur &ausblenden", lambda: self.editor.set_leak_path([]))
+        self.act_load_portals = self._action("P&ortal-Datei laden …", self.open_portalfile, None,
+                                             "Die Portale von vbsp (.prt) als blaue Umrisse zeigen: wo viele liegen, "
+                                             "rechnet VIS lange")
+        self.act_clear_portals = self._action("Portale aus&blenden", lambda: self.editor.set_portals([]))
         self.act_problems = self._action("&Probleme suchen …", self.show_problems, "Alt+P",
                                          "Kaputte Brushes, fehlende Texturen und Modelle, Teleporter ohne Ziel, "
                                          "Spawns, Zonen, Engine-Grenzen, zu flache Rampen und Rampbug-Gefahr")
@@ -496,8 +521,8 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("&Bearbeiten"))
         for a in (self.act_undo, self.act_redo, None, self.act_cut, self.act_copy, self.act_paste, self.act_delete,
-                  None, self.act_select_all, self.act_find, self.act_goto, None, self.act_group, self.act_ungroup, self.act_ignore_groups, None,
-                  self.act_tie, self.act_to_world, None, self.act_carve, self.act_hollow, None, self.act_transform,
+                  None, self.act_select_all, self.act_find, self.act_goto, self.act_entity_report, self.act_sounds, None, self.act_group, self.act_ungroup, self.act_ignore_groups, None,
+                  self.act_tie, self.act_to_world, None, self.act_carve, self.act_hollow, None, self.act_instance_insert, self.act_instance_save, self.act_instance_open, None, self.act_transform,
                   self.act_flip_h, self.act_flip_v, self.act_multi_copy, self.act_snap_selection):
             m.addSeparator() if a is None else m.addAction(a)
         sub = m.addMenu(self.tr("&Ausrichten"))
@@ -537,7 +562,7 @@ class MainWindow(QMainWindow):
         for a in (self.act_compile, self.act_compile_again, self.act_compile_cancel, None,
                   self.act_problems, self.act_check_seal, self.act_stats, self.act_enclose, None,
                   self.act_cordon, self.act_cordon_selection, self.act_cordon_clear, None,
-                  self.act_load_pointfile, self.act_clear_leak, None, self.act_profiles):
+                  self.act_load_pointfile, self.act_clear_leak, self.act_load_portals, self.act_clear_portals, None, self.act_profiles):
             m.addSeparator() if a is None else m.addAction(a)
         m.addAction(self.log_dock.toggleViewAction())
 
@@ -1163,6 +1188,103 @@ class MainWindow(QMainWindow):
         return find_problems(ed.doc, ed.materials if game else None, ed.models if game else None, catalog,
                              self.seal.check_now())
 
+    def show_sounds(self) -> SoundBrowser:
+        dlg = SoundBrowser(self.editor.sounds(), "", self, choose=False)
+        dlg.setAttribute(Qt.WA_DeleteOnClose)
+        dlg.show()
+        return dlg
+
+    # ---- Instanzen ----------------------------------------------------------------------
+    def _instance_ref(self, path: Path) -> str:
+        """Dateiverweis für `file`: relativ zur Map, wenn sie gespeichert ist."""
+        base = self.editor.map_dir()
+        if base is not None:
+            try:
+                return os.path.relpath(path, base).replace("\\", "/")
+            except ValueError:  # anderes Laufwerk
+                pass
+        return str(path).replace("\\", "/")
+
+    def insert_instance(self, path: str | None = None) -> int | None:
+        if path is None:
+            start = str(self.editor.map_dir() or self.settings.value("last_dir", ""))
+            path, _ = QFileDialog.getOpenFileName(self, self.tr("Instanz einfügen"), start,
+                                                  self.tr("Maps (*.vmf *.rsmap)"))
+            if not path:
+                return None
+        ed = self.editor
+        x, y, z = (ed.snap(c) for c in self._insert_point())
+        ent = Entity(id=ed.doc.new_id(), classname=INSTANCE, keyvalues=(
+            ("targetname", unique_targetname(ed.doc, "instanz_1")), ("file", self._instance_ref(Path(path))),
+            ("origin", f"{x:g} {y:g} {z:g}"), ("angles", "0 0 0"), ("fixup_style", "0")))
+        ed.run(AddObjects([ent], self.tr("Instanz einfügen")))
+        ed.set_selection([ent.id])
+        if ed.instance_objects(ent) is None:
+            ed.status_message.emit(self.tr("Instanz-Datei nicht gefunden: {0}").format(path))
+        return ent.id
+
+    def save_as_instance(self, path: str | None = None) -> int | None:
+        ed = self.editor
+        bb = ed.selection_bbox()
+        if bb is None:
+            ed.status_message.emit(self.tr("Erst auswählen, was in die Instanz soll"))
+            return None
+        if path is None:
+            start = str((ed.map_dir() or Path(self.settings.value("last_dir", str(Path.home())))) / "instanz.vmf")
+            path, _ = QFileDialog.getSaveFileName(self, self.tr("Auswahl als Instanz speichern"), start,
+                                                  self.tr("Hammer-Map (*.vmf);;Rampenschmiede-Projekt (*.rsmap)"))
+            if not path:
+                return None
+        target = Path(path)
+        if target.suffix.lower() not in (".vmf", ".rsmap"):
+            target = target.with_suffix(".vmf")
+        # Ursprung: Mitte unten auf dem Raster, damit sich die Instanz gut setzen und drehen lässt
+        center = tuple(float(ed.snap((bb.mins[i] + bb.maxs[i]) / 2)) for i in range(2)) + (float(ed.snap(bb.mins[2])),)
+        ids = set(ed.selection)
+        objs = [o for i in ids if (o := ed.doc.get(i)) is not None] + [s for s in ed.doc.attached(ids) if s.id not in ids]
+        content = MapDocument()
+        content.reserve_ids_above(max(o.id for o in objs))
+        content._insert([translate(o, (-center[0], -center[1], -center[2])) for o in objs])
+        try:
+            if target.suffix.lower() == ".vmf":
+                vmf.save_vmf(content, target)
+            else:
+                rsmap.save(content, target)
+        except OSError as exc:
+            QMessageBox.critical(self, APP_NAME, self.tr("Speichern fehlgeschlagen:\n{0}").format(exc))
+            return None
+        ed.instance_cache.forget()
+        ent = Entity(id=ed.doc.new_id(), classname=INSTANCE, keyvalues=(
+            ("targetname", unique_targetname(ed.doc, target.stem)), ("file", self._instance_ref(target)),
+            ("origin", " ".join(f"{c:g}" for c in center)), ("angles", "0 0 0"), ("fixup_style", "0")))
+        ed.run(MacroCommand([RemoveObjects(sorted(ids)), AddObjects([ent])], self.tr("Als Instanz speichern")))
+        ed.set_selection([ent.id])
+        ed.status_message.emit(self.tr("Instanz gespeichert: {0}").format(target))
+        return ent.id
+
+    def open_instance_file(self) -> bool:
+        ents = [o for o in self.editor.selected_objects() if isinstance(o, Entity) and o.classname.lower() == INSTANCE]
+        path = self.editor.instance_file(ents[0]) if ents else None
+        if path is None:
+            self.editor.status_message.emit(self.tr("Erst eine Instanz mit vorhandener Datei auswählen"))
+            return False
+        args = [str(path)] if getattr(sys, "frozen", False) else ["-m", "rampenschmiede", str(path)]
+        return QProcess.startDetached(sys.executable, args)[0]
+
+    def changeEvent(self, e) -> None:
+        # Zurück im Fenster: Instanz-Dateien, die woanders geändert wurden, neu zeigen
+        if e.type() == QEvent.ActivationChange and self.isActiveWindow():
+            self.editor.reload_instances()
+        super().changeEvent(e)
+
+    def show_entity_report(self) -> EntityReport:
+        if getattr(self, "entity_report", None) is None:
+            self.entity_report = EntityReport(self)
+        self.entity_report.refresh()
+        self.entity_report.show()
+        self.entity_report.raise_()
+        return self.entity_report
+
     def show_find(self) -> FindDialog:
         if getattr(self, "find_dialog", None) is None:
             self.find_dialog = FindDialog(self)
@@ -1594,6 +1716,20 @@ class MainWindow(QMainWindow):
         self.act_compile_again.setEnabled(True)
         if result.ok:
             self.statusBar().showMessage(self.tr("Kompilieren fertig ({0:.1f} s)").format(result.seconds), 5000)
+
+    def open_portalfile(self, path: str | None = None) -> int:
+        if path is None:
+            start = self.compiler.plan.portalfile_path if self.compiler.plan else self.settings.value("last_dir", "")
+            path, _ = QFileDialog.getOpenFileName(self, self.tr("Portal-Datei laden"), start, "Portale (*.prt)")
+        if not path:
+            return 0
+        try:
+            n = load_portalfile(self.editor, Path(path))
+        except (OSError, ValueError) as exc:
+            QMessageBox.critical(self, APP_NAME, str(exc))
+            return 0
+        self.statusBar().showMessage(self.tr("{0} Portale geladen").format(n), 5000)
+        return n
 
     def open_pointfile(self) -> None:
         start = str(self.compiler.plan.pointfile_path) if self.compiler.plan else self.settings.value("last_dir", "")
