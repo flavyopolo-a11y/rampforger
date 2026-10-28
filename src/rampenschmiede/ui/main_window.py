@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 from PySide6.QtCore import QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
@@ -29,7 +30,7 @@ from ..core import organize, search
 from ..core.blocks import clone_objects, is_block_root, upgrade_roots
 from ..core.commands import AddObjects, Command, MacroCommand
 from ..core.compile import CompileSettings, Level, LogLine
-from ..core.cutting import carve_with
+from ..core.cutting import carve_with, hollow
 from ..core.io import bsp, rsmap, vmf
 from ..core.materials import MaterialLibrary
 from ..core.materials.authoring import import_image, ramp_material, wall_material
@@ -63,6 +64,7 @@ from .dialogs.ramp_assistant import (
     to_hex,
 )
 from .dialogs.sky_dialog import SkyDialog
+from .dialogs.stats_dialog import StatsDialog
 from .dialogs.surf_wizard import SurfWizard
 from .dialogs.texture_packs import TexturePacksDialog
 from .dialogs.transform_dialog import TransformDialog
@@ -112,6 +114,10 @@ MAX_RECENT = 8
 #: Steigt, wenn neue Panels dazukommen: Alte gespeicherte Anordnungen werden dann verworfen
 LAYOUT_VERSION = 6
 DOCK_MIN_WIDTH = 340
+#: Tempo der 3D-Kamera beim Fliegen (Units pro Sekunde)
+CAMERA_SPEEDS = ((250, "Langsam"), (600, "Normal"), (1200, "Schnell"), (2500, "Sehr schnell"))
+#: Gemerkte Kameras in `doc.extra`
+CAMERAS_KEY = "kameras"
 #: Bildgröße der Stile im Stil-Knopf oben
 STYLE_THUMB = QSize(150, 96)
 
@@ -355,6 +361,20 @@ class MainWindow(QMainWindow):
         self.act_carve = self._action("Mit Auswahl a&ushöhlen", self.carve_selection, "Ctrl+Shift+C",
                                       "Die ausgewählten Brushes schneiden sich aus allen anderen Brushes heraus "
                                       "(Carve wie in Hammer)")
+        self.act_hollow = self._action("&Hohl machen …", lambda: self.hollow_selection(), "Ctrl+Shift+H",
+                                       "Aus jedem ausgewählten Brush werden Wände mit der gewählten Stärke "
+                                       "(Make Hollow wie in Hammer)")
+        self.align_actions: list[QAction | None] = []
+        for axis, (lo, hi) in enumerate((("Links (−X)", "Rechts (+X)"), ("Vorne (−Y)", "Hinten (+Y)"),
+                                         ("Unten (−Z)", "Oben (+Z)"))):
+            self.align_actions += [
+                self._action(lo, lambda _c=False, a=axis: self.align_selection(a, "min")),
+                self._action(hi, lambda _c=False, a=axis: self.align_selection(a, "max")),
+                self._action("Mitte " + "XYZ"[axis], lambda _c=False, a=axis: self.align_selection(a, "mitte")),
+                None]
+        self.distribute_actions = [
+            self._action(f"Entlang {'XYZ'[axis]}", lambda _c=False, a=axis: self.distribute_selection(a))
+            for axis in range(3)]
         self.act_flip_h = self._action("Spiegeln &horizontal", lambda: self._flip(0), "Ctrl+L")
         self.act_flip_v = self._action("Spiegeln &vertikal", lambda: self._flip(1), "Ctrl+I")
         self.act_find = self._action("&Suchen und Ersetzen …", self.show_find, "Ctrl+F",
@@ -388,6 +408,15 @@ class MainWindow(QMainWindow):
         self.act_unhide = self._action("Alles einblenden",
                                        lambda: ed.set_hidden([o.id for o in ed.doc.objects()], False), "U")
         self.act_reset_layout = self._action("Layout zurücksetzen", self.reset_layout)
+        self.speed_group = QActionGroup(self)
+        self.speed_actions: dict[int, QAction] = {}
+        for speed, label in CAMERA_SPEEDS:
+            a = self._action(label, lambda _c=False, v=speed: self.set_camera_speed(v), checkable=True)
+            self.speed_group.addAction(a)
+            self.speed_actions[speed] = a
+        self.act_camera_save = self._action("Kamera &merken", self.save_camera, "Ctrl+Shift+K",
+                                            "Die aktuelle 3D-Ansicht merken; im Menü Kameras springt man zurück")
+        self.act_camera_clear = self._action("Gemerkte Kameras löschen", self.clear_cameras)
         self.act_expert = self._action("Experten-Modus", self.set_expert, "Ctrl+Shift+X",
                                        "Zeigt alle Einstellungen. Im Einfach-Modus bleiben Bausteine und "
                                        "Assistenten im Vordergrund.", checkable=True)
@@ -443,6 +472,8 @@ class MainWindow(QMainWindow):
                                                "PNG, JPG, TGA oder BMP als eigenes Material übernehmen")
         self.act_texture_packs = self._action("Textur&pakete …", self.edit_texture_packs, None,
                                               "Eigene Ordner mit Materialien einbinden")
+        self.act_stats = self._action("Map-&Statistik …", self.show_stats, None,
+                                      "Brushes, Entities, Overlays … und wie nah die Map an den Grenzen von Source ist")
         self.act_free_assets = self._action("&Freie Texturen und Himmel …", self.free_assets, None,
                                             "Texturen und Himmel von Poly Haven (CC0) mit einem Klick laden")
 
@@ -466,14 +497,26 @@ class MainWindow(QMainWindow):
         m = mb.addMenu(self.tr("&Bearbeiten"))
         for a in (self.act_undo, self.act_redo, None, self.act_cut, self.act_copy, self.act_paste, self.act_delete,
                   None, self.act_select_all, self.act_find, self.act_goto, None, self.act_group, self.act_ungroup, self.act_ignore_groups, None,
-                  self.act_tie, self.act_to_world, None, self.act_carve, None, self.act_transform, self.act_flip_h,
-                  self.act_flip_v, self.act_multi_copy, self.act_snap_selection):
+                  self.act_tie, self.act_to_world, None, self.act_carve, self.act_hollow, None, self.act_transform,
+                  self.act_flip_h, self.act_flip_v, self.act_multi_copy, self.act_snap_selection):
             m.addSeparator() if a is None else m.addAction(a)
+        sub = m.addMenu(self.tr("&Ausrichten"))
+        for a in self.align_actions[:-1]:
+            sub.addSeparator() if a is None else sub.addAction(a)
+        sub = m.addMenu(self.tr("Gleichmäßig &verteilen"))
+        for a in self.distribute_actions:
+            sub.addAction(a)
 
         m = mb.addMenu(self.tr("&Ansicht"))
         for a in (self.act_grid_finer, self.act_grid_coarser, None, self.act_center, None, self.act_hide,
                   self.act_hide_others, self.act_unhide, None, self.act_expert, self.act_reset_layout):
             m.addSeparator() if a is None else m.addAction(a)
+        m.addSeparator()
+        sub = m.addMenu(self.tr("Kamera-&Tempo"))
+        for a in self.speed_actions.values():
+            sub.addAction(a)
+        self.cameras_menu = m.addMenu(self.tr("&Kameras"))
+        self.cameras_menu.aboutToShow.connect(self._fill_cameras_menu)
         m.addSeparator()
         m.addAction(self.tool_dock.toggleViewAction())
         m.addAction(self.sel_dock.toggleViewAction())
@@ -492,7 +535,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("&Testen"))
         for a in (self.act_compile, self.act_compile_again, self.act_compile_cancel, None,
-                  self.act_problems, self.act_check_seal, self.act_enclose, None,
+                  self.act_problems, self.act_check_seal, self.act_stats, self.act_enclose, None,
                   self.act_cordon, self.act_cordon_selection, self.act_cordon_clear, None,
                   self.act_load_pointfile, self.act_clear_leak, None, self.act_profiles):
             m.addSeparator() if a is None else m.addAction(a)
@@ -1011,6 +1054,103 @@ class MainWindow(QMainWindow):
         self.editor.run(cmd)
         self.editor.status_message.emit(self.tr("Ausgehöhlt: {0} Brushes").format(len(ids)))
         return True
+
+    def show_stats(self) -> StatsDialog:
+        dlg = StatsDialog(self.editor.doc, self)
+        dlg.show()
+        return dlg
+
+    # ---- Kamera ----------------------------------------------------------------------
+    def views_3d(self) -> list:
+        return [v for v in self.grid_view.viewports() if v.is_3d]
+
+    def set_camera_speed(self, speed: int) -> None:
+        for v in self.views_3d():
+            v.cam3d.speed = float(speed)
+        self.settings.setValue("camera_speed", speed)
+        if speed in self.speed_actions:
+            self.speed_actions[speed].setChecked(True)
+
+    def cameras(self) -> list[dict]:
+        return list(self.editor.doc.extra.get(CAMERAS_KEY, []))
+
+    def save_camera(self) -> int:
+        views = self.views_3d()
+        if not views:
+            return 0
+        cam = views[0].cam3d
+        entry = {"pos": [round(float(c), 1) for c in cam.position], "yaw": round(cam.yaw, 2),
+                 "pitch": round(cam.pitch, 2)}
+        cams = self.cameras() + [entry]
+        self.editor.doc.extra[CAMERAS_KEY] = cams
+        self.editor.stack.set_dirty()
+        self.editor.status_message.emit(self.tr("Kamera {0} gemerkt").format(len(cams)))
+        return len(cams)
+
+    def goto_camera(self, index: int) -> bool:
+        cams = self.cameras()
+        if not 0 <= index < len(cams):
+            return False
+        c = cams[index]
+        for v in self.views_3d():
+            v.cam3d.position = np.array(c["pos"], dtype=float)
+            v.cam3d.yaw, v.cam3d.pitch = float(c["yaw"]), float(c["pitch"])
+            v.update()
+        return True
+
+    def clear_cameras(self) -> None:
+        if self.editor.doc.extra.pop(CAMERAS_KEY, None) is not None:
+            self.editor.stack.set_dirty()
+
+    def _fill_cameras_menu(self) -> None:
+        m = self.cameras_menu
+        m.clear()
+        m.addAction(self.act_camera_save)
+        cams = self.cameras()
+        if cams:
+            m.addSeparator()
+            for i, c in enumerate(cams):
+                pos = " ".join(f"{v:.0f}" for v in c["pos"])
+                m.addAction(self.tr("Kamera {0}  ({1})").format(i + 1, pos), lambda i=i: self.goto_camera(i))
+            m.addSeparator()
+            m.addAction(self.act_camera_clear)
+
+    def hollow_selection(self, thickness: int | None = None) -> bool:
+        ed = self.editor
+        if not ed.selection:
+            ed.status_message.emit(self.tr("Erst die Brushes auswählen, die hohl werden sollen"))
+            return False
+        if thickness is None:
+            last = int(self.settings.value("hollow_thickness", 32))
+            value, ok = QInputDialog.getInt(
+                self, self.tr("Hohl machen"),
+                self.tr("Wandstärke in Units (positiv: Wände nach innen, negativ: nach außen)"), last, -1024, 1024, 8)
+            if not ok or value == 0:
+                return False
+            self.settings.setValue("hollow_thickness", value)
+            thickness = value
+        cmd, ids = hollow(ed.doc, ed.selection, thickness)
+        if cmd is None:
+            ed.status_message.emit(self.tr("Nichts hohl gemacht: Bausteine erst lösen, Brushes dicker als die Wand"))
+            return False
+        ed.run(cmd)
+        ed.set_selection(ids)
+        ed.status_message.emit(self.tr("Hohl gemacht: {0} Wände").format(len(ids)))
+        return True
+
+    def align_selection(self, axis: int, mode: str) -> bool:
+        cmd = organize.align(self.editor.doc, self.editor.selected_objects(), axis, mode, self.editor.texture_lock)
+        if cmd is None:
+            self.editor.status_message.emit(self.tr("Zum Ausrichten mindestens zwei Objekte auswählen"))
+            return False
+        return self.editor.run(cmd)
+
+    def distribute_selection(self, axis: int) -> bool:
+        cmd = organize.distribute(self.editor.doc, self.editor.selected_objects(), axis, self.editor.texture_lock)
+        if cmd is None:
+            self.editor.status_message.emit(self.tr("Zum Verteilen mindestens drei Objekte auswählen"))
+            return False
+        return self.editor.run(cmd)
 
     # ---- Probleme ------------------------------------------------------------------
     def find_problems(self):
@@ -1563,6 +1703,11 @@ class MainWindow(QMainWindow):
             self.grid_view.restore_state(json.loads(self.settings.value("viewports", "{}")))
         except (TypeError, ValueError):
             pass
+        try:
+            speed = int(self.settings.value("camera_speed", 600))
+        except (TypeError, ValueError):
+            speed = 600
+        self.set_camera_speed(speed if speed in self.speed_actions else 600)
 
     def closeEvent(self, e: QCloseEvent) -> None:
         if not self._confirm_discard():

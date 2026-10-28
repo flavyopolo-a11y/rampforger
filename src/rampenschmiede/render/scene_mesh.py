@@ -92,6 +92,8 @@ class ObjectMesh:
     color2d: tuple[float, float, float]
     #: Kanten für die 3D-Ansicht (ohne Knicke in fast ebenen Flächen), (k, 3); None = wie `lines`
     edges3d: np.ndarray | None = None
+    #: Lightmap-Koordinaten je Ecke (n, 3): s, t in Luxeln und die Skalierung (0 = keine Lightmap)
+    lightmap: np.ndarray | None = None
     _variants: dict | None = None
 
     def edges_3d(self) -> np.ndarray:
@@ -113,9 +115,10 @@ class ObjectMesh:
         if hit is None:
             flag = np.full((len(self.tris), 1), 1.0 if selected else 0.0, dtype=np.float32)
             color = np.asarray(SELECT_COLOR_2D if selected else self.color2d, dtype=np.float32)
-            blend = np.zeros((len(self.tris), FACE_COLUMNS - 1 - self.tris.shape[1]), dtype=np.float32)
+            blend = np.zeros((len(self.tris), LIGHTMAP_COLUMN - 1 - self.tris.shape[1]), dtype=np.float32)
+            lm = self.lightmap if self.lightmap is not None else np.zeros((len(self.tris), 3), dtype=np.float32)
             hit = (
-                np.hstack([self.tris, blend, flag]),
+                np.hstack([self.tris, blend, flag, lm]),
                 np.hstack([self.lines, np.tile(color, (len(self.lines), 1))]),
             )
             self._variants[selected] = hit
@@ -152,6 +155,19 @@ def _uv(face: Face, p, size: tuple[int, int]) -> tuple[float, float]:
     return tu / size[0], tv / size[1]
 
 
+def lightmap_coords(face: Face, points: np.ndarray) -> np.ndarray:
+    """Lightmap-Koordinaten wie bei vbsp: Punkt · Einheits-Texturachse / lightmapscale, in Luxeln.
+    (n, 3) mit der Skalierung als dritter Spalte."""
+    scale = float(face.lightmapscale or 16)
+    out = np.empty((len(points), 3), dtype=np.float32)
+    for k, axis in enumerate((face.uaxis, face.vaxis)):
+        a = np.asarray((axis.x, axis.y, axis.z), dtype=np.float64)
+        a /= np.linalg.norm(a) or 1.0
+        out[:, k] = np.asarray(points, dtype=np.float64) @ a / scale
+    out[:, 2] = scale
+    return out
+
+
 def _polygons_to_arrays(polys: list[tuple[tuple[float, float, float], list]], colors: list,
                         textures: list | None = None, sky: list[bool] | None = None) -> tuple[np.ndarray, np.ndarray]:
     """textures: je Polygon (Face, Ebene, (Breite, Höhe)) oder None. sky: je Polygon, ob es eine
@@ -180,7 +196,11 @@ def _polygons_to_arrays(polys: list[tuple[tuple[float, float, float], list]], co
 
 
 #: Spalten je Vertex im GPU-Puffer der Flächen
-FACE_COLUMNS = 15
+FACE_COLUMNS = 18
+#: Ab dieser Spalte stehen die Lightmap-Koordinaten (s, t, Skalierung)
+LIGHTMAP_COLUMN = 15
+#: Materialien ohne Lightmap (vbsp backt dort keine)
+NO_LIGHTMAP = ("TOOLS/", "SKYBOX/")
 #: Kanten zwischen Seiten, die weniger als so viel Grad abknicken, zeichnet die 3D-Ansicht nicht
 SOFT_EDGE_DEG = 12.0
 _SOFT_COS = math.cos(math.radians(SOFT_EDGE_DEG))
@@ -296,7 +316,7 @@ def build_displacement_mesh(solid: Solid, atlas: TextureAtlas | None = None) -> 
     surfs = surfaces(solid)
     if not surfs:
         return None
-    tris, lines, edges = [], [], []
+    tris, lines, edges, lms = [], [], [], []
     for surf in surfs:
         face = solid.faces[surf.face_index]
         idx = surf.triangles().reshape(-1)
@@ -316,11 +336,13 @@ def build_displacement_mesh(solid: Solid, atlas: TextureAtlas | None = None) -> 
                 rows[:, 12] = slot2.layer
                 rows[:, 13] = surf.disp.alphas[idx] / 255.0
         tris.append(rows)
+        lms.append(lightmap_coords(face, surf.base[idx]))
         lines.append(_grid_lines(surf))
         edges.append(_border_lines(surf))
     c = solid.editor.color
     return ObjectMesh(np.concatenate(tris), np.concatenate(lines).astype(np.float32),
-                      (c[0] / 255, c[1] / 255, c[2] / 255), np.concatenate(edges).astype(np.float32))
+                      (c[0] / 255, c[1] / 255, c[2] / 255), np.concatenate(edges).astype(np.float32),
+                      np.concatenate(lms))
 
 
 STICKER_COLOR = (0.95, 0.55, 0.85)
@@ -371,7 +393,7 @@ def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_p
         if mesh is not None:
             return mesh
     if isinstance(obj, Solid):
-        polys, colors, textures, sky = [], [], [], []
+        polys, colors, textures, sky, lm_faces = [], [], [], [], []
         all_polys = obj.polygons()
         for face, poly in zip(obj.faces, all_polys):
             # Unsichtbare Seiten von Rampen liegen fast alle innen (Nähte zwischen Segmenten) und
@@ -382,10 +404,12 @@ def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_p
                 slot = atlas.slot(face.material) if atlas is not None else None
                 textures.append((face, slot.shader_layer, (slot.width, slot.height)) if slot else None)
                 sky.append(face.material.upper() == SKYBOX)
+                lm_faces.append(face)
         tris, lines = _polygons_to_arrays(polys, colors, textures, sky)
         c = obj.editor.color
         edges = feature_edges(list(obj.faces), all_polys, hide_nodraw=block_part)
-        return ObjectMesh(tris, lines, (c[0] / 255, c[1] / 255, c[2] / 255), edges)
+        return ObjectMesh(tris, lines, (c[0] / 255, c[1] / 255, c[2] / 255), edges,
+                          _brush_lightmap(lm_faces, polys, len(tris)))
     sticker = build_sticker_mesh(obj, atlas)
     if sticker is not None:
         return sticker
@@ -402,11 +426,27 @@ def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_p
     return ObjectMesh(tris, lines, color)
 
 
+def _brush_lightmap(faces: list[Face], polys: list, count: int) -> np.ndarray:
+    """Lightmap-Spalten passend zu den Dreiecken von `_polygons_to_arrays` (Fächer je Polygon)."""
+    out = np.zeros((count, 3), dtype=np.float32)
+    row = 0
+    for face, (_n, poly) in zip(faces, polys):
+        n = 3 * (len(poly) - 2)
+        if n <= 0:
+            continue
+        if not face.material.upper().startswith(NO_LIGHTMAP):
+            fan = [poly[j] for i in range(1, len(poly) - 1) for j in (0, i, i + 1)]
+            out[row:row + n] = lightmap_coords(face, np.asarray(fan))
+        row += n
+    return out
+
+
 @dataclass
 class SceneArrays:
     """Zusammengefügte Arrays für die GPU."""
 
-    #: (n, 15): Position, Normale, Farbe, UV, Textur-Ebene, zweite Ebene, Überblendung, ausgewählt (0/1)
+    #: (n, 18): Position, Normale, Farbe, UV, Textur-Ebene, zweite Ebene, Überblendung, ausgewählt (0/1),
+    #: Lightmap s, t, Skalierung
     faces: np.ndarray
     lines2d: np.ndarray     # (m, 6): Position, Farbe
     lines_sel: np.ndarray   # (k, 6): Kanten der Auswahl für die 3D-Ansicht

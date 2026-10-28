@@ -33,7 +33,7 @@ VIEW_TITLES = {
 }
 
 RENDER_MODES = {"textured": "Texturiert", "lit": "Licht-Vorschau", "shaded": "Schattiert", "flat": "Flach",
-                "wireframe": "Drahtgitter"}
+                "lightmap": "Lightmap-Raster", "wireframe": "Drahtgitter"}
 
 FLY_KEYS = {Qt.Key_W, Qt.Key_A, Qt.Key_S, Qt.Key_D, Qt.Key_Q, Qt.Key_E}
 

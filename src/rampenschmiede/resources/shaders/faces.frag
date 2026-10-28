@@ -28,8 +28,31 @@ flat in float v_layer;
 flat in float v_layer2;
 in float v_blend;
 in float v_selected;
+// Lightmap-Raster (Hammer: "3D Lightmap Grid"): s, t in Luxeln, Skalierung (0 = keine Lightmap)
+uniform float u_lightmap;
+in vec3 v_lightmap;
 out vec4 f_color;
 //SKY
+
+vec3 lightmap_grid(vec3 n) {
+    float scale = v_lightmap.z;
+    if (scale < 0.5) {
+        return vec3(0.22);  // Werkzeug-Texturen, Modelle, Entities: keine Lightmap
+    }
+    // Farbe nach Skalierung: fein (teuer) rot, Standard 16 grau, grob blau
+    float k = clamp(log2(scale / 16.0) / 3.0, -1.0, 1.0);
+    vec3 tint = k < 0.0 ? mix(vec3(0.62), vec3(0.95, 0.35, 0.25), -k) : mix(vec3(0.62), vec3(0.3, 0.55, 0.95), k);
+    vec2 cell = floor(v_lightmap.xy);
+    float checker = mod(cell.x + cell.y, 2.0);
+    // Feine Linien an den Luxel-Grenzen, unabhängig vom Abstand gleich dick
+    vec2 f = abs(fract(v_lightmap.xy) - 0.5) / max(fwidth(v_lightmap.xy), vec2(1e-4));
+    float line = 1.0 - smoothstep(0.0, 1.0, min(0.5 / max(fwidth(v_lightmap.x), 1e-4) - f.x,
+                                                   0.5 / max(fwidth(v_lightmap.y), 1e-4) - f.y));
+    // Sind die Luxel nur noch ein paar Pixel groß, Linien und Schachbrett ausblenden (sonst Moiré)
+    float dense = smoothstep(0.15, 0.4, max(fwidth(v_lightmap.x), fwidth(v_lightmap.y)));
+    float shade = 0.7 + 0.3 * max(dot(n, u_light_dir), 0.0);
+    return tint * shade * mix((0.86 + 0.14 * checker) * (1.0 - 0.35 * line), 0.93, dense);
+}
 
 float falloff(int i, float d) {
     vec4 at = u_lattn[i];
@@ -87,6 +110,10 @@ void main() {
         return;
     }
     vec3 n = normalize(v_normal);
+    if (u_lightmap > 0.5) {
+        f_color = vec4(mix(lightmap_grid(n), vec3(1.0, 0.25, 0.2), v_selected * 0.35), 1.0);
+        return;
+    }
     // Zwei feste Lichter, damit jede Seite eines Würfels unterscheidbar bleibt.
     float key = max(dot(n, u_light_dir), 0.0);
     float fill = max(dot(n, normalize(vec3(-0.6, -0.3, 0.2))), 0.0);
