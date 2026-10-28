@@ -19,12 +19,14 @@ from typing import Callable, Iterable, Sequence
 
 from .commands import Command, ReplaceObjects, SwapObjects
 from .model import EditorInfo, Entity, MapDocument, MapObject, Solid, owner_id
-from .surf.catalog import CATALOG, ORIGIN, Generated, Placement, generate
+from .surf.catalog import CATALOG, ORIGIN, TRIGGER, Generated, Placement, generate
+from .surf.hull import hull_faces
 
 BLOCK_KEY = "block"
 MEMBER_KEY = "block_of"
 PLAYERCLIP = "TOOLS/TOOLSPLAYERCLIP"
 CLIP_COLOR = (200, 90, 220)
+TRIGGER_COLOR = (230, 160, 40)
 
 
 def block_info(obj: MapObject | None) -> dict | None:
@@ -86,7 +88,23 @@ def build_block(doc: MapDocument, template: str, values: dict | None = None, at:
     if t.world:
         if color is None:
             color = (120, 200, 90)
-        return [Solid(id=doc.new_id(), faces=faces, editor=EditorInfo(color=color)) for faces in gen.face_sets], gen
+        world: list[MapObject] = [Solid(id=doc.new_id(), faces=faces, editor=EditorInfo(color=color))
+                                  for faces in gen.face_sets]
+        triggers = t.triggers(v, at) if t.triggers is not None else []
+        if not triggers:
+            return world, gen
+        # Trigger als Brush-Entity daneben; alles eine Gruppe, damit es zusammen wandert
+        from .organize import new_group_id
+
+        gid = new_group_id(doc)
+        objs: list[MapObject] = [o.replace(editor=dataclasses.replace(o.editor, group_id=gid)) for o in world]
+        for classname, kvs, points in triggers:
+            faces = hull_faces(points, lambda _n, _loop: TRIGGER)
+            if not faces:
+                continue
+            ent = Entity(id=doc.new_id(), classname=classname, keyvalues=kvs, editor=EditorInfo(group_id=gid))
+            objs += [ent, Solid(id=doc.new_id(), faces=faces, parent_id=ent.id, editor=EditorInfo(color=TRIGGER_COLOR))]
+        return objs, gen
     info = {"template": template, "values": v, "placement": [at.x, at.y, at.z, at.yaw]}
     collision = v.get("kollision", "clip") if t.entity is None else "none"
     root = _root_entity(root_id if root_id is not None else doc.new_id(), collision, info, root_editor)
@@ -145,7 +163,25 @@ def insert_block(doc: MapDocument, template: str, values: dict | None = None,
         x, y = round(at.x + math.cos(a) * dist), round(at.y + math.sin(a) * dist)
         objs.append(Entity(id=doc.new_id(), classname="info_teleport_destination", keyvalues=(
             ("targetname", values["ziel"]), ("origin", f"{x} {y} {round(at.z)}"), ("angles", f"0 {at.yaw:g} 0"))))
+    if template == "killzone":
+        v = CATALOG[template].values(values)
+        if v["art"] == "zurueck" and not any(e.get("targetname") == v["ziel"] for e in doc.entities()):
+            objs.append(Entity(id=doc.new_id(), classname="info_teleport_destination", keyvalues=(
+                ("targetname", v["ziel"]), ("origin", _start_point(doc, at)), ("angles", "0 90 0"))))
     return objs, gen
+
+
+def _start_point(doc: MapDocument, at: Placement) -> str:
+    """Wohin „zurück zum Start“ führt: Mitte der Startzone, sonst der erste Spawn, sonst `at`."""
+    for e in doc.entities():
+        if e.get("targetname") == "mod_zone_start":
+            bb = doc.bbox([e.id])
+            if bb is not None:
+                return f"{round(bb.center[0])} {round(bb.center[1])} {round(bb.mins[2]) + 8}"
+    for e in doc.entities():
+        if e.classname.startswith("info_player_") and e.origin is not None:
+            return " ".join(str(round(c)) for c in e.origin)
+    return f"{round(at.x)} {round(at.y)} {round(at.z) + 64}"
 
 
 def rebuild(doc: MapDocument, root: Entity, values: dict | None = None,

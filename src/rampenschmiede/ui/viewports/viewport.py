@@ -131,7 +131,8 @@ class Viewport(QOpenGLWidget):
                 lit = self.render_mode == "lit"
                 sky = self.editor.sky_images() if self.render_mode in SKY_MODES else None
                 self.renderer.draw_3d(fbo, self.cam3d, w, h, self.render_mode, extra, pixels,
-                                      self.editor.lights() if lit else None, sky)
+                                      self.editor.lights() if lit else None, sky,
+                                      tool.tris_3d(self) if tool else None)
             else:
                 extra = _join_lines(tool.lines_2d(self) if tool else None, self.editor.leak_lines,
                                     self.editor.io_lines(), self.editor.light_lines(), self.editor.cordon_lines())

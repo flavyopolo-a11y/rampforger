@@ -1,7 +1,7 @@
 """Werkzeug-Optionen: zeigt passende Einstellungen für das aktive Werkzeug."""
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from ...core.geometry.displacement import BRUSH_MODES
 from ...core.materials import texturing
 from ...core.models.scatter import KITS, KITS_BY_KEY, STYLE_KITS
+from ...core.surf.catalog import CATALOG
 from ...core.terrain import POWER_LABELS
 from ..editor import EditorContext
 from ..icons import icon
@@ -36,6 +37,12 @@ from ..tools.scatter_tool import FROM_BROWSER, ScatterTool
 from ..tools.shape_tool import SHAPE_HINTS, SHAPES, ShapeTool
 from ..tools.terrain_tool import MODE_HELP, MODE_LABELS, TerrainTool
 from ..widgets.scope_switch import ScopeSwitch
+from ..widgets.template_preview import render, template_faces, template_icon
+from .library_panel import CATEGORY_ICONS
+
+#: Bildgröße in der Vorlagen-Galerie des Malen-Werkzeugs und der großen Vorschau
+PAINT_ICON = 64
+PAINT_PREVIEW = (240, 170)
 
 
 def _hint(text: str) -> QLabel:
@@ -320,6 +327,95 @@ class ToolOptionsPanel(QStackedWidget):
         """Erst nach dem Modell-Browser möglich (das Werkzeug braucht ihn)."""
         if "scatter" in self.editor.tools and "scatter" not in self._pages:
             self._add("scatter", self._scatter_page())
+
+    def add_paint_page(self, library) -> None:
+        """Erst nach der Bibliothek möglich (das Malen-Werkzeug malt deren Vorlagen)."""
+        if "paint" in self.editor.tools and "paint" not in self._pages:
+            self._add("paint", self._paint_page(library))
+
+    def _paint_page(self, library) -> QWidget:
+        """Malen: alle Vorlagen als Bilder zum Anklicken, darunter die gewählte groß."""
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        category = QComboBox()
+        category.addItem(self.tr("Alle"), "")
+        for cat in dict.fromkeys(t.category for t in CATALOG.values()):
+            category.addItem(icon(CATEGORY_ICONS.get(cat, "shape")), self.tr(cat), cat)
+        gallery = QListWidget()
+        gallery.setViewMode(QListWidget.IconMode)
+        gallery.setIconSize(QSize(PAINT_ICON, PAINT_ICON))
+        gallery.setGridSize(QSize(PAINT_ICON + 24, PAINT_ICON + 30))
+        gallery.setResizeMode(QListWidget.Adjust)
+        gallery.setMovement(QListWidget.Static)
+        gallery.setWordWrap(True)
+        gallery.setMinimumHeight(PAINT_ICON * 2 + 70)
+        items: dict[str, QListWidgetItem] = {}
+        for t in CATALOG.values():
+            item = QListWidgetItem(self.tr(t.name))
+            item.setData(Qt.UserRole, t.key)
+            item.setToolTip(self.tr(t.description))
+            item.setIcon(icon(CATEGORY_ICONS.get(t.category, "shape")))
+            gallery.addItem(item)
+            items[t.key] = item
+        self.paint_gallery = gallery
+        self.paint_preview = QLabel()
+        self.paint_preview.setAlignment(Qt.AlignCenter)
+        self.paint_preview.setStyleSheet("background: #22252b; border-radius: 4px;")
+        self.paint_preview.setFixedHeight(PAINT_PREVIEW[1])
+        self.paint_name = QLabel()
+        self.paint_name.setStyleSheet("font-weight: bold;")
+        self.paint_name.setWordWrap(True)
+        pending = list(items.items())
+        timer = QTimer(w)
+
+        def draw_icons() -> None:
+            # Bilder nach und nach zeichnen, damit der Start nicht wartet
+            for _ in range(4):
+                if not pending:
+                    timer.stop()
+                    return
+                key, item = pending.pop(0)
+                item.setIcon(template_icon(key, PAINT_ICON * 2))
+
+        def filter_category() -> None:
+            cat = category.currentData()
+            for key, item in items.items():
+                item.setHidden(bool(cat) and CATALOG[key].category != cat)
+
+        def picked(item: QListWidgetItem) -> None:
+            library.select_template(item.data(Qt.UserRole))
+
+        def sync() -> None:
+            t = library.current_template()
+            gallery.blockSignals(True)
+            gallery.setCurrentItem(items.get(t.key) if t else None)
+            gallery.blockSignals(False)
+            if t is None:
+                self.paint_name.setText(self.tr("Keine Vorlage gewählt"))
+                self.paint_preview.clear()
+                return
+            if t.key in items:
+                gallery.scrollToItem(items[t.key])
+            self.paint_name.setText(self.tr(t.name))
+            faces = template_faces(t, library.insert_values(t))
+            self.paint_preview.setPixmap(render(faces, QSize(*PAINT_PREVIEW)))
+
+        category.currentIndexChanged.connect(filter_category)
+        gallery.itemClicked.connect(picked)
+        library.template_changed.connect(sync)
+        self.editor.tool_changed.connect(lambda name: sync() if name == "paint" else None)
+        timer.timeout.connect(draw_icons)
+        timer.start(0)
+        sync()
+        lay.addWidget(category)
+        lay.addWidget(gallery, 1)
+        lay.addWidget(self.paint_name)
+        lay.addWidget(self.paint_preview)
+        lay.addWidget(_hint(self.tr(
+            "Vorlage anklicken, dann in einer Ansicht vom Anfang zum Ende der Rampe ziehen. Ein Klick setzt sie so ab, "
+            "wie sie ist. Länge, Höhe, Winkel und Material stellst du links in der Bibliothek ein; das Bild zeigt "
+            "sofort, wie die Rampe aussieht. Esc beendet das Malen.")))
+        return w
 
     def _scatter_page(self) -> QWidget:
         tool: ScatterTool = self.editor.tools["scatter"]  # type: ignore[assignment]

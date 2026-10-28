@@ -259,6 +259,7 @@ class MainWindow(QMainWindow):
         self.library = LibraryPanel(self.editor, self._insert_point)
         self.lib_dock.setWidget(_scrollable(self.library))
         self.editor.register_tool(PaintTool(self.editor, self.library))
+        self.tool_options.add_paint_page(self.library)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_dock)
         self.scene_dock = QDockWidget(self.tr("Szene"), self)
         self.scene_dock.setObjectName("dock_scene")
@@ -597,6 +598,10 @@ class MainWindow(QMainWindow):
         self.mode_label.setText(self.tr("Werkzeug: {0}").format(self.tr(tool.label)))
         self.mode_label.setToolTip(self.tr(tool.hint))
         self.statusBar().showMessage(self.tr(tool.hint), 6000)
+        if name == "paint":
+            # Beim Malen gehören die Regler der Vorlage nach vorne, nicht der Szenen-Baum
+            self.lib_dock.show()
+            self.lib_dock.raise_()
 
     def active_viewport(self):
         for vp in self.grid_view.viewports():

@@ -134,6 +134,9 @@ class Template:
     #: Welt-Brushes statt Baustein (Gelände: Displacements gehen nicht in func_detail). Nach dem
     #: Einfügen gibt es keine Regler mehr, das Gelände-Werkzeug formt weiter.
     world: bool = False
+    #: Nur bei Welt-Vorlagen: Trigger, die als eigene Brush-Entity dazukommen (Wasser, Lava):
+    #: (Werte, Platzierung) -> [(Klasse, Keyvalues, Eckpunkte)]
+    triggers: Callable[[dict, Placement], list[tuple[str, tuple[tuple[str, str], ...], list]]] | None = None
 
     def param(self, key: str) -> Param | None:
         return next((p for p in self.params if p.key == key), None)
@@ -637,4 +640,5 @@ def generate(template: Template | str, values: dict | None = None, at: Placement
 
 
 # Gelände-Vorlagen tragen sich selbst ein (eigenes Modul, braucht die Klassen oben)
+from . import nature_templates as _nature_templates  # noqa: E402,F401
 from . import terrain_templates as _terrain_templates  # noqa: E402,F401

@@ -132,6 +132,8 @@ def _ground(doc: MapDocument, own: set[int], x: float, y: float, below: float) -
         bb = s.bbox()
         if bb is None or bb.maxs[2] > below + 1e-6 or not (bb.mins[0] <= x <= bb.maxs[0] and bb.mins[1] <= y <= bb.maxs[1]):
             continue
+        if any("WATER" in f.material.upper() for f in s.faces):
+            continue  # Stützen stehen auf dem Grund, nicht auf dem Wasser
         if any(f.material.upper() in ("TOOLS/TOOLSTRIGGER", "TOOLS/TOOLSSKYBOX") for f in s.faces) and bb.maxs[2] > bb.mins[2] + 64:
             continue  # Trigger und Skybox-Wände tragen nichts; ein Skybox-Boden schon (dünn)
         parent = doc.get(s.parent_id) if s.parent_id is not None else None

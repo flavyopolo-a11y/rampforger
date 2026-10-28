@@ -91,6 +91,10 @@ Vertex-Puffer, nur betroffene Zellen werden neu gebaut. Picking per Strahl gegen
 - `core/skybox3d.py`: 3D-Skybox (Raum, Kamera, Kulisse); alles mit `extra["skybox3d"]`, von
   Hülle, Umhüllen und Cordon ausgenommen bzw. immer mitgenommen.
 - `ui/autosave.py`: automatische Sicherung, Kopie vor dem Speichern, Wiederherstellung.
+- `core/surf/nature_templates.py`: Wasser, Lava (Welt-Vorlagen mit `Template.triggers`, die
+  `build_block` als gruppierte Brush-Entity anlegt) und Kill-Zone; die Bibliothek löst die
+  Material-Platzhalter beim Einfügen auf (Wasser aus dem Spiel, erzeugte Lava-Textur) und setzt
+  einzelne Natur-Props über die Muster der Detail-Kits.
 
 ## Vorlagen-Bibliothek
 
