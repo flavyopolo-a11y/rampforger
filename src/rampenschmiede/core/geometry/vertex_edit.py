@@ -61,10 +61,11 @@ def _tex_ok(face: Face, normal) -> bool:
     return along(face.uaxis) < 0.95 and along(face.vaxis) < 0.95
 
 
-def move_vertices(solid: Solid, moves: Mapping[IPoint, IPoint]) -> Solid:
-    """Brush mit verschobenen Ecken. `moves`: alte Ecke → neue Lage (ganze Units)."""
+def move_vertices(solid: Solid, moves: Mapping[IPoint, IPoint], rebuild: bool = False) -> Solid:
+    """Brush mit verschobenen Ecken. `moves`: alte Ecke → neue Lage (ganze Units).
+    `rebuild` baut auch ohne Verschiebung neu, z. B. um Kommazahl-Ecken aufs Raster zu legen."""
     old = vertices(solid)
-    if not moves:
+    if not moves and not rebuild:
         return solid
     target = {v: _ip(moves.get(v, v)) for v in old}
     new_pts = list(dict.fromkeys(target.values()))
@@ -124,10 +125,21 @@ def _same_plane(face: Face, n, d) -> bool:
             and abs(pl.normal[2] - nn[2]) < 1e-6 and abs(pl.dist - d / length) < 1e-4)
 
 
+def off_grid(solid: Solid, tolerance: float = 0.01) -> bool:
+    """Liegt eine Ecke nicht auf ganzen Units?"""
+    return any(abs(c - round(c)) > tolerance for p in solid.vertices() for c in p)
+
+
+def snap_to_grid(solid: Solid) -> Solid:
+    """Alle Ecken auf ganze Units runden und den Brush daraus neu bauen (gegen Rampbugs)."""
+    return move_vertices(solid, {}, rebuild=True)
+
+
 def move_selected(solid: Solid, picked: Iterable[IPoint], delta: IPoint) -> Solid:
     """Die gewählten Ecken um `delta` verschieben."""
     d = _ip(delta)
     return move_vertices(solid, {v: (v[0] + d[0], v[1] + d[1], v[2] + d[2]) for v in picked})
 
 
-__all__ = ["Edge", "VertexError", "edges", "midpoint", "move_selected", "move_vertices", "vertices"]
+__all__ = ["Edge", "VertexError", "edges", "midpoint", "move_selected", "move_vertices", "off_grid", "snap_to_grid",
+           "vertices"]

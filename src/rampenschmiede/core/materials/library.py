@@ -98,6 +98,11 @@ class MaterialLibrary:
                 self.own_folders.append(str(folder))
                 self.forget()
 
+    @property
+    def has_game(self) -> bool:
+        """Hängt ein Spiel dahinter (nicht nur eigene Ordner)? Nur dann lässt sich sagen, was fehlt."""
+        return len(self.fsys.systems) > len(self.own_folders)
+
     def forget(self) -> None:
         with self._lock:
             self._names = None
