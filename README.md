@@ -135,6 +135,9 @@ Fallen zwei Ecken zusammen, verschmelzen sie (so entstehen Keile und Spitzen).
 | Strg+Shift+W | Zur Welt: Brushes aus ihrer Entity lösen |
 | Strg+Shift+V | Mehrfach kopieren: Anzahl, Versatz und Drehung je Kopie (Treppen, Säulenreihen, Wendel) |
 | Strg+B | Auswahl ans Raster legen |
+| Strg+Shift+H | Hohl machen: aus jedem Brush werden Wände mit der eingegebenen Stärke (positiv nach innen, negativ nach außen) |
+| Ausrichten | Alle Objekte an die linke, rechte, vordere, hintere, untere oder obere Kante der Auswahl oder an ihre Mitte schieben |
+| Gleichmäßig verteilen | Ab drei Objekten: das erste und letzte bleiben, die anderen bekommen gleiche Abstände |
 
 Gruppen bleiben im VMF als Hammer-Gruppen erhalten.
 
@@ -164,6 +167,9 @@ Neue Entities bekommen die Standardwerte ihrer Klasse.
 „Licht“, „Trigger“ …), darunter Position und Größe zum Eintippen. Wer in den Ansichten etwas
 anklickt, sieht es links in der Szenen-Liste markiert (der Ordner klappt auf). Bei Rampen bleibt
 die Bibliothek vorn, weil dort ihre Regler stehen.
+Ist nichts ausgewählt, stehen hier die **Map-Eigenschaften** (wie *Map Properties* in Hammer):
+Titel der Map, Himmel, Detail-Material für Gras und Steine, kalte Welt (Atemwolken) und maximale
+Prop-Bildschirmgröße. Jede Änderung lässt sich mit Strg+Z zurücknehmen.
 
 **Entity-Eigenschaften (Panel „Auswahl“).** Klasse wählen oder tippen, darunter drei Reiter:
 *Eigenschaften* mit passenden Feldern (Auswahllisten, Häkchen, Farbwähler mit Helligkeit für
@@ -234,6 +240,21 @@ Ragt etwas aus ihr heraus oder kommt ihr näher als 512 Units, wird sie im selbe
 F9 kompiliert also sofort ohne Leck. Die sechs Hüllen-Brushes sind normale Brushes: verschieben,
 vergrößern oder löschen. *Datei → Neu (leer)* startet ohne Inhalt, *Datei → Neue Maps mit
 Startraum* schaltet den Startraum ab.
+
+**Lightmap-Raster.** In der 3D-Ansicht oben links *Lightmap-Raster* wählen: Jedes Kästchen ist ein
+Lichtpunkt der Lightmap. Rot heißt fein (scharfe Schatten, kostet Speicher und Kompilierzeit), grau
+ist der Standard 16, blau grob (spart Speicher, gut für weit entfernte Flächen). Dunkel bleiben
+Flächen ohne Lightmap (Werkzeug-Texturen, Himmel, Modelle). Ändern lässt sich die Skalierung im
+Seiten-Werkzeug unter *Lightmap-Skalierung*.
+
+**Kamera (Menü Ansicht).** *Kamera-Tempo* stellt ein, wie schnell man mit WASD durch die 3D-Ansicht
+fliegt (Langsam bis Sehr schnell, wird gemerkt). *Kameras → Kamera merken* (Strg+Shift+K) speichert
+die aktuelle Position mit der Map; ein Klick auf einen Eintrag springt wieder dorthin.
+
+**Map-Statistik (Menü Testen).** Zählt Brushes, Brush-Seiten, Entities, vernetzte Entities,
+Overlays, Displacements und Materialien und zeigt jeweils, wie nah die Map an den Grenzen von
+Source ist (gelb ab 75 %, rot darüber). So sieht man vor dem Kompilieren, ob eine große Map
+noch passt.
 
 **Dicht-Prüfung.** Unten rechts steht immer, ob die Map dicht ist („✓ Map ist dicht“ oder
 „⚠ Leck: info_player_start ist nicht umschlossen“). Die Prüfung läuft nach jeder Änderung im

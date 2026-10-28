@@ -3,22 +3,44 @@ bei einer einzelnen Entity zusätzlich ihre Keyvalues."""
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
+from ...core.commands import SetWorldKeyvalues
 from ...core.model import Entity
 from ...core.scene import kind_of
 from ...core.scene import label as object_label
+from ...render.sky import available_skies
 from ..editor import EditorContext
 from .entity_panel import EntityPanel
 
 LIMIT = 32768
+#: Map-Eigenschaften (worldspawn) wie in Hammer: (Schlüssel, Beschriftung, Art, Standard, Hinweis)
+WORLD_FIELDS = (
+    ("message", "Titel der Map", "text", "", "Wird beim Laden der Map angezeigt"),
+    ("skyname", "Himmel", "sky", "sky_day01_01", "Name der 2D-Skybox (materials/skybox/<Name>rt …)"),
+    ("detailmaterial", "Detail-Material", "text", "detail/detailsprites", "Bild für Gras-Sprites auf Displacements"),
+    ("detailvbsp", "Detail-Datei", "text", "detail.vbsp", "Welche Detail-Sprites auf welchen Materialien wachsen"),
+    ("maxpropscreenwidth", "Props ausblenden ab", "int", "-1",
+     "Props verschwinden, wenn sie schmaler als so viele Pixel sind (-1 = nie)"),
+    ("coldworld", "Kalte Welt", "bool", "0", "Atemwolken und kalter Hauch (nur manche Spiele)"),
+)
+
+
+def set_world_kv(kvs: tuple[tuple[str, str], ...], key: str, value: str) -> tuple[tuple[str, str], ...]:
+    out = [(k, value) if k == key else (k, v) for k, v in kvs]
+    if not any(k == key for k, _ in kvs):
+        out.append((key, value))
+    return tuple(out)
 
 
 def _spin() -> QSpinBox:
@@ -58,6 +80,32 @@ class SelectionPanel(QWidget):
         lay.addWidget(box)
         self.geom_box = box
 
+        self.world_box = QGroupBox(self.tr("Map-Eigenschaften"))
+        world_form = QFormLayout(self.world_box)
+        self.world_fields: dict[str, QWidget] = {}
+        for key, label, kind, default, hint in WORLD_FIELDS:
+            if kind == "sky":
+                w = QComboBox()
+                w.setEditable(True)
+                w.lineEdit().editingFinished.connect(lambda k=key: self._world_changed(k))
+                w.activated.connect(lambda _i, k=key: self._world_changed(k))
+            elif kind == "bool":
+                w = QCheckBox()
+                w.toggled.connect(lambda _on, k=key: self._world_changed(k))
+            elif kind == "int":
+                w = QSpinBox()
+                w.setRange(-1, 4096)
+                w.setKeyboardTracking(False)
+                w.valueChanged.connect(lambda _v, k=key: self._world_changed(k))
+            else:
+                w = QLineEdit()
+                w.setPlaceholderText(default)
+                w.editingFinished.connect(lambda k=key: self._world_changed(k))
+            w.setToolTip(self.tr(hint))
+            self.world_fields[key] = w
+            world_form.addRow(self.tr(label), w)
+        lay.addWidget(self.world_box)
+
         self.kv_box = QGroupBox(self.tr("Entity"))
         kv_lay = QVBoxLayout(self.kv_box)
         kv_lay.setContentsMargins(4, 4, 4, 4)
@@ -93,8 +141,55 @@ class SelectionPanel(QWidget):
             self.kv_box.setVisible(ent is not None)
             self.stretch.setVisible(ent is None)
             self.entity_panel.show_entity(ent)
+            self.world_box.setVisible(not objs)
+            self.geom_box.setVisible(bool(objs))
+            if not objs:
+                self._show_world()
         finally:
             self._updating = False
+
+    # ---- Map-Eigenschaften ------------------------------------------------------------
+    def _show_world(self) -> None:
+        kvs = dict(self.editor.doc.world_keyvalues)
+        for key, _label, kind, default, _hint in WORLD_FIELDS:
+            w = self.world_fields[key]
+            value = kvs.get(key, "")
+            w.blockSignals(True)
+            if kind == "sky":
+                skies = available_skies(self.editor.materials)
+                if [w.itemText(i) for i in range(w.count())] != skies:
+                    w.clear()
+                    w.addItems(skies)
+                w.setEditText(value or default)
+            elif kind == "bool":
+                w.setChecked(value == "1")
+            elif kind == "int":
+                try:
+                    w.setValue(int(float(value or default)))
+                except ValueError:
+                    w.setValue(int(default))
+            else:
+                w.setText(value)
+            w.blockSignals(False)
+
+    def world_value(self, key: str) -> str:
+        w = self.world_fields[key]
+        if isinstance(w, QComboBox):
+            return w.currentText().strip()
+        if isinstance(w, QCheckBox):
+            return "1" if w.isChecked() else "0"
+        if isinstance(w, QSpinBox):
+            return str(w.value())
+        return w.text().strip()  # type: ignore[attr-defined]
+
+    def _world_changed(self, key: str) -> None:
+        if self._updating:
+            return
+        value = self.world_value(key)
+        kvs = self.editor.doc.world_keyvalues
+        if dict(kvs).get(key, "") == value:
+            return
+        self.editor.run(SetWorldKeyvalues(set_world_kv(kvs, key, value), self.tr("Map-Eigenschaften")))
 
     def _apply_position(self) -> None:
         if self._updating:

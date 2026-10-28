@@ -8,6 +8,7 @@ in float in_layer;
 in float in_layer2;
 in float in_blend;
 in float in_selected;
+in vec3 in_lightmap;
 out vec3 v_pos;
 out vec3 v_normal;
 out vec3 v_color;
@@ -16,6 +17,7 @@ flat out float v_layer;
 flat out float v_layer2;
 out float v_blend;
 out float v_selected;
+out vec3 v_lightmap;
 void main() {
     gl_Position = u_mvp * vec4(in_pos, 1.0);
     v_pos = in_pos;
@@ -26,4 +28,5 @@ void main() {
     v_layer2 = in_layer2;
     v_blend = in_blend;
     v_selected = in_selected;
+    v_lightmap = in_lightmap;
 }

@@ -5,7 +5,7 @@ from rampenschmiede.core.commands import solids_from_faces
 from rampenschmiede.core.geometry import primitives
 from rampenschmiede.core.materials import MaterialLibrary
 from rampenschmiede.core.model import MapDocument, TexAxis
-from rampenschmiede.render.scene_mesh import SceneMesh, _uv, build_object_mesh
+from rampenschmiede.render.scene_mesh import FACE_COLUMNS, SceneMesh, _uv, build_object_mesh
 from rampenschmiede.render.textures import LAYER_SIZE, TextureAtlas
 
 from ..materials.fakegame import make_game
@@ -49,6 +49,6 @@ def test_new_library_rebuilds_meshes(atlas, tmp_path):
     doc = MapDocument()
     doc._insert([block("LOSE/BLAU", doc)])
     scene = SceneMesh(doc, atlas)
-    assert scene.arrays().faces.shape[1] == 15 and scene.arrays().faces[0, 11] == 1.0
+    assert scene.arrays().faces.shape[1] == FACE_COLUMNS and scene.arrays().faces[0, 11] == 1.0
     atlas.set_library(None)
     assert scene.arrays().faces[0, 11] == 0.0

@@ -175,10 +175,83 @@ def multi_copy(doc: MapDocument, objs: Sequence[MapObject], count: int, offset: 
     return Deferred(steps, f"{count}× kopieren"), top_ids
 
 
+AlignMode = str  # "min", "max" oder "mitte"
+
+
+def _units(doc: MapDocument, objs: Sequence[MapObject]) -> list[list[MapObject]]:
+    """Was zusammen bewegt wird: eine Gruppe als Ganzes, sonst jedes oberste Objekt einzeln."""
+    groups: dict[object, list[MapObject]] = {}
+    for root in _roots(doc, objs):
+        key = ("g", root.editor.group_id) if root.editor.group_id is not None else ("o", root.id)
+        groups.setdefault(key, []).append(root)
+    return list(groups.values())
+
+
+def _arrange(doc: MapDocument, objs: Sequence[MapObject], deltas: list[float], units: list[list[MapObject]],
+             axis: int, description: str, texture_lock: bool) -> Command | None:
+    by_id: dict[int, float] = {}
+    for unit, d in zip(units, deltas):
+        if abs(d) < 1e-9:
+            continue
+        ids = [o.id for o in unit]
+        for o in unit + doc.attached(ids):
+            by_id[o.id] = d
+    if not by_id:
+        return None
+    targets = [doc.get(i) for i in by_id]
+
+    def fn(o: MapObject) -> MapObject:
+        delta = [0.0, 0.0, 0.0]
+        delta[axis] = by_id[o.id]
+        return transform.translate(o, tuple(delta), texture_lock)  # type: ignore[arg-type]
+
+    return transform_command(doc, targets, fn, description)  # type: ignore[arg-type]
+
+
+def align(doc: MapDocument, objs: Sequence[MapObject], axis: int, mode: AlignMode,
+          texture_lock: bool = True) -> Command | None:
+    """Ausrichten wie in Hammer: alle an die kleinste (`min`) oder größte (`max`) Kante der
+    ganzen Auswahl oder an ihre Mitte (`mitte`) schieben, nur entlang `axis`."""
+    units = _units(doc, objs)
+    boxes = [doc.bbox(o.id for o in u) for u in units]
+    if len(units) < 2 or any(b is None for b in boxes):
+        return None
+    lo = min(b.mins[axis] for b in boxes)  # type: ignore[union-attr]
+    hi = max(b.maxs[axis] for b in boxes)  # type: ignore[union-attr]
+    deltas = []
+    for b in boxes:
+        if mode == "min":
+            deltas.append(lo - b.mins[axis])  # type: ignore[union-attr]
+        elif mode == "max":
+            deltas.append(hi - b.maxs[axis])  # type: ignore[union-attr]
+        else:
+            deltas.append(round((lo + hi) / 2 - (b.mins[axis] + b.maxs[axis]) / 2))  # type: ignore[union-attr]
+    return _arrange(doc, objs, deltas, units, axis, "Ausrichten", texture_lock)
+
+
+def distribute(doc: MapDocument, objs: Sequence[MapObject], axis: int, texture_lock: bool = True) -> Command | None:
+    """Gleichmäßig verteilen: das erste und das letzte Objekt bleiben, dazwischen werden die
+    Abstände entlang `axis` gleich groß (auf ganze Units gerundet)."""
+    units = _units(doc, objs)
+    boxes = [doc.bbox(o.id for o in u) for u in units]
+    if len(units) < 3 or any(b is None for b in boxes):
+        return None
+    order = sorted(range(len(units)), key=lambda i: boxes[i].mins[axis])  # type: ignore[union-attr]
+    first, last = boxes[order[0]], boxes[order[-1]]
+    sizes = sum(boxes[i].maxs[axis] - boxes[i].mins[axis] for i in order)  # type: ignore[union-attr]
+    gap = (last.maxs[axis] - first.mins[axis] - sizes) / (len(units) - 1)  # type: ignore[union-attr]
+    deltas = [0.0] * len(units)
+    pos = first.maxs[axis] + gap  # type: ignore[union-attr]
+    for i in order[1:-1]:
+        deltas[i] = round(pos - boxes[i].mins[axis])  # type: ignore[union-attr]
+        pos += boxes[i].maxs[axis] - boxes[i].mins[axis] + gap  # type: ignore[union-attr]
+    return _arrange(doc, objs, deltas, units, axis, "Verteilen", texture_lock)
+
+
 def snap_delta(bbox_mins: Point, grid: int) -> Point:
     """Verschiebung, die die untere Ecke der Auswahl aufs Raster legt (Strg+B)."""
     return tuple(round(m / grid) * grid - m for m in bbox_mins)  # type: ignore[return-value]
 
 
-__all__ = ["COMMON_BRUSH_CLASSES", "OrganizeError", "expand_groups", "group", "group_of", "move_to_world",
+__all__ = ["COMMON_BRUSH_CLASSES", "OrganizeError", "align", "distribute", "expand_groups", "group", "group_of", "move_to_world",
            "multi_copy", "new_group_id", "snap_delta", "tie_to_entity", "ungroup"]

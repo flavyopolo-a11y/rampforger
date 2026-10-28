@@ -36,6 +36,10 @@ class ViewportFrame(QFrame):
         self.mode_combo = QComboBox()
         for key, title in RENDER_MODES.items():
             self.mode_combo.addItem(self.tr(title), key)
+        self.mode_combo.setItemData(list(RENDER_MODES).index("lightmap"), self.tr(
+            "Ein Kästchen = ein Lichtpunkt der Lightmap. Rot: fein (schöne Schatten, kostet Speicher), "
+            "grau: Standard 16, blau: grob (spart Speicher). Dunkel: Flächen ohne Lightmap. "
+            "Ändern im Textur-Werkzeug unter Lightmap-Skalierung."), Qt.ToolTipRole)
         self.mode_combo.currentIndexChanged.connect(self._on_mode)
         hl.addWidget(self.view_combo)
         hl.addWidget(self.mode_combo)

@@ -127,6 +127,48 @@ def hole(doc: MapDocument, ids: Iterable[int], axes: tuple[int, int, int],
     return _carve(doc, targets, [cutter], "Loch schneiden")
 
 
+def _offset(faces, distance: float) -> tuple:
+    """Alle Seiten um `distance` entlang ihrer Normale verschieben (positiv = nach außen)."""
+    out = []
+    for f in faces:
+        n = f.plane.normal
+        pts = tuple(tuple(_tidy(p[k] + n[k] * distance) for k in range(3)) for p in f.points)
+        out.append(dataclasses.replace(f, points=pts, vmf_id=None))
+    return tuple(out)
+
+
+def _tidy(v: float) -> float:
+    r = round(v)
+    return float(r) if abs(v - r) < 1e-6 else round(v, 4)
+
+
+def hollow(doc: MapDocument, ids: Iterable[int], thickness: float) -> tuple[Command | None, list[int]]:
+    """Hohl machen (Strg+Shift+H): aus jedem Brush werden Wände der Stärke `thickness`.
+    Positiv: Wände nach innen (Außenmaß bleibt), negativ: nach außen (Innenraum = alter Brush).
+    Brushes, die für die Wandstärke zu dünn sind, bleiben unverändert."""
+    remove: list[int] = []
+    add: list[Solid] = []
+    for s in _solids(doc, ids):
+        if thickness > 0:
+            outer, inner = s.faces, _offset(s.faces, -thickness)
+        else:
+            outer, inner = _offset(s.faces, -thickness), s.faces
+        polys = _polys(inner)
+        if len(polys) < 4 or len([p for p in _polys(outer) if p]) < 4:
+            continue  # zu dünn: der innere Brush wäre leer
+        inner_box = BBox.from_points([p for poly in polys for p in poly])
+        if inner_box is None or min(inner_box.size) < 1:
+            continue
+        pieces = carve(outer, inner)
+        if not pieces:
+            continue
+        remove.append(s.id)
+        add += _pieces(doc, s, pieces)
+    if not remove:
+        return None, []
+    return SwapObjects(remove, add, "Hohl machen"), [s.id for s in add]
+
+
 def _polys(faces) -> list:
     from .geometry.brush import solid_polygons
 
@@ -137,4 +179,4 @@ def _overlap(a: BBox, b: BBox) -> bool:
     return all(a.mins[i] < b.maxs[i] and b.mins[i] < a.maxs[i] for i in range(3))
 
 
-__all__ = ["Keep", "carve_with", "clip", "cuttable", "hole"]
+__all__ = ["Keep", "carve_with", "clip", "cuttable", "hole", "hollow"]
