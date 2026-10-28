@@ -32,6 +32,7 @@ from ..core.materials.authoring import import_image, ramp_material, wall_materia
 from ..core.materials.styles import WorldStyle, pick_sky, pick_wall, sky_command, style_command
 from ..core.materials.theme import SetTheme, Theme, apply_collision, apply_theme, get_theme
 from ..core.model import Entity, MapDocument, MapObject
+from ..core.models.props import prop_problems
 from ..core.profiles import ProfileStore, detect_profiles
 from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
 from ..core.validation.seal import describe as describe_seal
@@ -57,6 +58,7 @@ from .icons import ACTIVE, icon, pixmap
 from .panels.compile_log import CompileLogPanel
 from .panels.library_panel import LibraryPanel
 from .panels.material_browser import MaterialBrowser
+from .panels.model_browser import ModelBrowser
 from .panels.scene_panel import ScenePanel
 from .panels.selection_panel import SelectionPanel
 from .panels.tool_options import ToolOptionsPanel
@@ -87,7 +89,7 @@ BSP_FILTER = "Kompilierte Map (*.bsp)"
 VMF_FILTER = "Hammer-Map (*.vmf)"
 MAX_RECENT = 8
 #: Steigt, wenn neue Panels dazukommen: Alte gespeicherte Anordnungen werden dann verworfen
-LAYOUT_VERSION = 5
+LAYOUT_VERSION = 6
 DOCK_MIN_WIDTH = 340
 
 CONTROLS_HELP = """
@@ -208,9 +210,17 @@ class MainWindow(QMainWindow):
         self.mat_dock.setObjectName("dock_materials")
         self.material_browser = MaterialBrowser(self.editor)
         self.mat_dock.setWidget(self.material_browser)
+        self.model_dock = QDockWidget(self.tr("Modelle"), self)
+        self.model_dock.setObjectName("dock_models")
+        self.model_browser = ModelBrowser(self.editor, self._insert_point)
+        self.model_dock.setWidget(self.model_browser)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.mat_dock)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
+        self.tabifyDockWidget(self.mat_dock, self.model_dock)
         self.tabifyDockWidget(self.mat_dock, self.log_dock)
+        self._bottom_height = 260
+        for dock in (self.mat_dock, self.model_dock, self.log_dock):
+            dock.visibilityChanged.connect(lambda visible, d=dock: self._bottom_tab_switched(d, visible))
         self.log_dock.hide()
         self.mat_dock.raise_()
 
@@ -352,6 +362,7 @@ class MainWindow(QMainWindow):
         m.addAction(self.sel_dock.toggleViewAction())
         m.addAction(self.lib_dock.toggleViewAction())
         m.addAction(self.mat_dock.toggleViewAction())
+        m.addAction(self.model_dock.toggleViewAction())
 
         m = mb.addMenu(self.tr("&Werkzeuge"))
         for a in self.tool_actions.values():
@@ -1025,6 +1036,8 @@ class MainWindow(QMainWindow):
             warnings.append(LogLine(self.tr(
                 "Zonen: Ohne Start- und Zielzone der Hauptstrecke wird keine Momentum-Zonendatei geschrieben."),
                 Level.WARNING))
+        for ent, problem in prop_problems(self.editor.doc, self.editor.models):
+            warnings.append(LogLine(self.tr("Props: {0}").format(problem), Level.WARNING, position=ent.origin))
         started = self.compiler.start(profile, self.compile_settings, warnings)
         if started and not seal.sealed:
             self.editor.set_leak_path(seal.path)
@@ -1088,6 +1101,27 @@ class MainWindow(QMainWindow):
         self.mat_dock.setFloating(False)
         self.mat_dock.show()
         self.addDockWidget(Qt.BottomDockWidgetArea, self.mat_dock)
+        self.model_dock.setFloating(False)
+        self.model_dock.show()
+        self.tabifyDockWidget(self.mat_dock, self.model_dock)
+        self.mat_dock.raise_()
+
+    def _bottom_tab_switched(self, dock: QDockWidget, visible: bool) -> None:
+        """Beim Wechsel der Reiter unten (Materialien, Modelle, Kompilieren) die Höhe behalten:
+        Qt nimmt sonst beim ersten Zeigen eines Reiters dessen eigene, viel größere Höhe."""
+        if dock.isFloating():
+            return
+        if not visible:
+            if dock.height() > 40:
+                self._bottom_height = dock.height()
+            return
+        QTimer.singleShot(0, lambda: dock.isVisible() and not dock.isFloating()
+                          and self.resizeDocks([dock], [self._bottom_height], Qt.Vertical))
+
+    def _initial_dock_sizes(self) -> None:
+        self.resizeDocks([self.lib_dock, self.sel_dock], [320, 420], Qt.Vertical)
+        # Unten nur so hoch, dass die Ansichten das meiste Platz behalten
+        self.resizeDocks([self.mat_dock], [260], Qt.Vertical)
 
     def _arrange_left(self) -> None:
         """Links oben Bibliothek und Szene als Reiter, darunter, was ausgewählt ist. Erst teilen,
@@ -1126,7 +1160,7 @@ class MainWindow(QMainWindow):
         if not restored:
             self.resizeDocks([self.mat_dock], [260], Qt.Vertical)
             # Szene oben etwas kleiner als das, was ausgewählt ist (erst wenn das Fenster steht)
-            QTimer.singleShot(0, lambda: self.resizeDocks([self.lib_dock, self.sel_dock], [320, 420], Qt.Vertical))
+            QTimer.singleShot(0, self._initial_dock_sizes)
         try:
             self.grid_view.restore_state(json.loads(self.settings.value("viewports", "{}")))
         except (TypeError, ValueError):

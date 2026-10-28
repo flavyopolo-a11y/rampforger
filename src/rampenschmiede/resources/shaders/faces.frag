@@ -73,6 +73,10 @@ void main() {
     bool sky_face = v_layer < -0.5;
     bool marker = v_layer < -0.1 && !sky_face;
     float layer = sky_face ? -v_layer - 1.0 : (marker ? 0.0 : v_layer);
+    // Durchsichtige Materialien (Blätter, Gitter): Aufschlag 512 = $alphatest, 1024 = $translucent
+    float cutout = 0.0;
+    if (layer > 1023.5) { layer -= 1024.0; cutout = 0.08; }
+    else if (layer > 511.5) { layer -= 512.0; cutout = 0.5; }
     if (sky_face && u_has_sky > 0.5) {
         // Skybox-Fläche: dahinter liegt der Himmel
         vec3 sky = sky_color(normalize(v_pos - u_eye));
@@ -89,7 +93,9 @@ void main() {
     float tint = 0.45;
     if (u_textured > 0.5 && layer > 0.5) {
         tint = 0.2;
-        base = texture(u_textures, vec3(v_uv, layer)).rgb;
+        vec4 texel = texture(u_textures, vec3(v_uv, layer));
+        if (texel.a < cutout) discard;
+        base = texel.rgb;
         light = mix(0.55 + 0.4 * key + 0.12 * fill, 1.0, u_flat);
     }
     vec3 color = base * light;

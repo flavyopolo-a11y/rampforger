@@ -212,9 +212,12 @@ def original_material(name: str) -> str:
     return hit.group("name") if hit else name
 
 
+MODEL_FILES = (".mdl", ".vvd", ".vtx", ".phy")
+
+
 def extract_materials(path: str | os.PathLike[str], target: str | os.PathLike[str]) -> int:
-    """In die BSP gepackte Materialien und Texturen nach target/materials/... auspacken, damit
-    Ansicht und Material-Browser sie finden (und sie beim Kompilieren wieder mitkommen).
+    """In die BSP gepackte Materialien, Texturen und Modelle nach target/... auspacken, damit
+    Ansichten und Browser sie finden (Materialien kommen beim Kompilieren wieder mit).
     Umbenannte Kopien und Cubemap-Bilder unter materials/maps/ bleiben weg. Gibt die Anzahl
     der ausgepackten Dateien zurück."""
     from srctools.bsp import BSP
@@ -228,9 +231,11 @@ def extract_materials(path: str | os.PathLike[str], target: str | os.PathLike[st
     for info in pak.infolist():
         name = info.filename.replace("\\", "/")
         low = name.lower()
-        if info.is_dir() or not low.startswith("materials/") or low.startswith("materials/maps/"):
+        if info.is_dir() or ".." in Path(low).parts or low.startswith("materials/maps/"):
             continue
-        if not low.endswith((".vmt", ".vtf")) or ".." in Path(low).parts:
+        material = low.startswith("materials/") and low.endswith((".vmt", ".vtf"))
+        model = low.startswith("models/") and low.endswith(MODEL_FILES)
+        if not (material or model):
             continue
         out = root / low
         out.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,7 @@
 """Editor-Kontext: verbindet Dokument, Undo-Stapel, Auswahl und Werkzeuge mit der Oberfläche."""
 from __future__ import annotations
 
+import weakref
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
@@ -17,7 +18,16 @@ from ..core.lights import LightSet, collect_lights, gizmo_segments
 from ..core.materials import MaterialLibrary
 from ..core.materials.sizes import set_size_lookup
 from ..core.mathutil import BBox, Point
-from ..core.model import DEFAULT_MATERIAL, ChangeSet, MapDocument, MapObject, owner_id
+from ..core.model import (
+    DEFAULT_MATERIAL,
+    ChangeSet,
+    MapDocument,
+    MapObject,
+    owner_id,
+    set_entity_bounds,
+)
+from ..core.models.library import ModelLibrary
+from ..core.models.props import prop_bbox
 from ..core.templates.starter import grow_hull
 from ..render.scene_mesh import SceneMesh
 from ..render.sky import SkyCache, SkyImages
@@ -41,6 +51,16 @@ def _size_lookup(library: MaterialLibrary | None):
 LEAK_COLOR = (1.0, 0.1, 0.1)
 
 
+def _use_model_bounds(editor: "EditorContext") -> None:
+    """Auswahl, Picking und Gizmos sehen Props so groß wie ihr Modell."""
+    ref = weakref.ref(editor)
+
+    def bounds(ent):
+        ed = ref()
+        return prop_bbox(ent, ed.models) if ed is not None else None
+    set_entity_bounds(bounds)
+
+
 class EditorContext(QObject):
     document_replaced = Signal()
     document_changed = Signal()
@@ -60,12 +80,16 @@ class EditorContext(QObject):
     current_material_changed = Signal(str)
     #: Gilt eine Rampen-Textur für alle Rampen oder nur eine ("alle"/"einer")?
     material_scope_changed = Signal(str)
+    #: Ein Modell aus dem Modell-Browser wurde in eine Ansicht gezogen: (Modellname, Weltpunkt)
+    model_dropped = Signal(str, object)
 
     def __init__(self) -> None:
         super().__init__()
         self.doc = MapDocument()
         self.stack = CommandStack(self.doc)
         self.materials: MaterialLibrary | None = None
+        #: Modelle des Spiels (gleiche Dateien wie die Materialien), None ohne Spielprofil
+        self.models: ModelLibrary | None = None
         self.atlas = TextureAtlas()
         self.current_material = DEFAULT_MATERIAL
         #: Gilt eine Rampen-Textur für alle Rampen ("alle") oder nur eine ("einer")?
@@ -88,6 +112,7 @@ class EditorContext(QObject):
         #: Kamera der zuletzt gezeichneten 3D-Ansicht (setzt die Ansicht selbst)
         self.camera3d = None
         self._hook_document()
+        _use_model_bounds(self)
 
     # ---- Dokument --------------------------------------------------------------
     def _hook_document(self) -> None:
@@ -99,7 +124,7 @@ class EditorContext(QObject):
         self.scene.detach()
         self.doc = doc
         self.stack = CommandStack(doc)
-        self.scene = SceneMesh(doc, self.atlas)
+        self.scene = SceneMesh(doc, self.atlas, self.models)
         self.file_path = path
         self.import_path = import_path
         self.selection = frozenset()
@@ -141,8 +166,11 @@ class EditorContext(QObject):
 
     def set_material_library(self, library: MaterialLibrary | None) -> None:
         self.materials = library
+        self.models = ModelLibrary(library) if library is not None else None
+        _use_model_bounds(self)
         self.sky_cache.forget()
         self.atlas.set_library(library)
+        self.scene.set_models(self.models)
         set_size_lookup(_size_lookup(library))
         self.materials_changed.emit()
         self.redraw_requested.emit()
