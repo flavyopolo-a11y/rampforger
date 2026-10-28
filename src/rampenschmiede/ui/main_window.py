@@ -40,6 +40,7 @@ from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter
 from ..core.validation.problems import find_problems
 from ..core.validation.seal import describe as describe_seal
 from ..core.zones import collect_zones, momentum_zones, zone_problems
+from .autosave import DEFAULT_MINUTES, Autosaver, backup_before_save, backups_dir, latest_autosave
 from .compile_controller import CompileController, load_pointfile
 from .dialogs.compile_dialog import CompileDialog
 from .dialogs.find_dialog import FindDialog
@@ -181,6 +182,7 @@ class MainWindow(QMainWindow):
         self.compile_settings = self._load_compile_settings()
         self.compiler = CompileController(self.editor, self)
         self.seal = SealWatcher(self.editor, self)
+        self.autosaver = Autosaver(self.editor, int(self.settings.value("autosave_minutes", DEFAULT_MINUTES)), self)
         self._reload_materials()
 
         self.grid_view = ViewportGrid(self.editor)
@@ -215,6 +217,11 @@ class MainWindow(QMainWindow):
         ed.files_dropped.connect(lambda paths: QTimer.singleShot(0, lambda: self.open_dropped(paths)))
         self._new_document()
         self._update_undo_actions()
+        # Letzte Sitzung abgestürzt? Neueste automatische Sicherung anbieten
+        crashed = self.settings.value("clean_exit", "true") == "false"
+        self.settings.setValue("clean_exit", "false")
+        if crashed:
+            QTimer.singleShot(0, self._offer_recovery)
 
     # ---- Aufbau ------------------------------------------------------------------
     def _build_docks(self) -> None:
@@ -301,6 +308,12 @@ class MainWindow(QMainWindow):
                                          "Geht auch per Ziehen ins Fenster")
         self.act_export_vmf = self._action("Als VMF e&xportieren …", self.file_export_vmf, "Ctrl+Shift+E",
                                            "Map als .vmf für Hammer oder andere Werkzeuge speichern")
+        self.act_autosave = self._action("Automatisch &sichern (alle 5 Minuten)", self._toggle_autosave, None,
+                                         "Geänderte Maps regelmäßig in den Sicherungsordner schreiben; vor jedem "
+                                         "Speichern wird die alte Fassung dort abgelegt", checkable=True)
+        self.act_autosave.setChecked(self.autosaver.minutes > 0)
+        self.act_open_backup = self._action("Sicherung ö&ffnen …", lambda: self.open_backup(), None,
+                                            "Automatische Sicherungen und alte Fassungen vor dem Speichern")
         self.act_quit = self._action("&Beenden", self.close, QKeySequence.Quit)
 
         self.act_undo = self._action("&Rückgängig", ed.undo, QKeySequence.Undo)
@@ -407,7 +420,8 @@ class MainWindow(QMainWindow):
         self.recent_menu = m.addMenu(self.tr("&Zuletzt geöffnet"))
         self.recent_menu.aboutToShow.connect(self._fill_recent)
         m.addSeparator()
-        for a in (self.act_save, self.act_save_as, None, self.act_import_vmf, self.act_open_bsp, self.act_export_vmf):
+        for a in (self.act_save, self.act_save_as, None, self.act_autosave, self.act_open_backup, None,
+                  self.act_import_vmf, self.act_open_bsp, self.act_export_vmf):
             m.addSeparator() if a is None else m.addAction(a)
         m.addSeparator()
         m.addAction(self.act_quit)
@@ -714,6 +728,39 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(self.tr("{0} geladen ({1} Objekte)").format(path.name, len(doc)), 5000)
         return True
 
+    # ---- Sicherungen ---------------------------------------------------------------
+    def _toggle_autosave(self, on: bool) -> None:
+        minutes = DEFAULT_MINUTES if on else 0
+        self.settings.setValue("autosave_minutes", minutes)
+        self.autosaver.set_minutes(minutes)
+
+    def open_backup(self, path: Path | None = None) -> bool:
+        """Sicherung öffnen; Speichern fragt danach nach einem Ort (nie in den Sicherungsordner)."""
+        if path is None:
+            name, _ = QFileDialog.getOpenFileName(self, self.tr("Sicherung öffnen"), str(backups_dir()),
+                                                  self.tr(FILE_FILTER))
+            if not name:
+                return False
+            path = Path(name)
+        if not self._confirm_discard() or not self.open_path(path):
+            return False
+        self.editor.file_path = None
+        self.editor.stack.set_dirty()  # ungespeichert, bis man einen Ort wählt
+        self.statusBar().showMessage(self.tr("Sicherung geöffnet: {0}. Mit „Speichern unter“ ablegen").format(
+            path.name), 8000)
+        return True
+
+    def _offer_recovery(self) -> None:
+        latest = latest_autosave()
+        if latest is None:
+            return
+        answer = QMessageBox.question(
+            self, APP_NAME, self.tr("Die letzte Sitzung wurde nicht sauber beendet.\n"
+                                    "Neueste automatische Sicherung öffnen?\n\n{0}").format(latest.name),
+            QMessageBox.Yes | QMessageBox.No)
+        if answer == QMessageBox.Yes:
+            self.open_backup(latest)
+
     def _import_vmf(self, path: Path) -> bool:
         try:
             doc, report = vmf.load_vmf(path)
@@ -810,6 +857,7 @@ class MainWindow(QMainWindow):
     def _save_to(self, path: Path) -> bool:
         for vp in self.grid_view.viewports():
             vp.store_camera()
+        backup_before_save(path)
         try:
             rsmap.save(self.editor.doc, path)
         except OSError as exc:
@@ -1377,6 +1425,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("window_state", self.saveState(LAYOUT_VERSION))
         self.settings.setValue("viewports", json.dumps(self.grid_view.save_state()))
+        self.settings.setValue("clean_exit", "true")
         e.accept()
 
 
