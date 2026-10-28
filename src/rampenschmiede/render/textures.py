@@ -38,7 +38,7 @@ class TextureAtlas:
     def __init__(self, library: MaterialLibrary | None = None) -> None:
         self._lock = threading.Lock()
         self.library = library
-        self._slots: dict[str, TextureSlot | None] = {}
+        self._slots: dict[str | tuple, TextureSlot | None] = {}
         self._layers: list[bytes] = [b"\xff" * (LAYER_SIZE * LAYER_SIZE * 4)]
         #: Steigt, wenn sich die Zuordnung Material → Ebene ändert (Meshes neu bauen)
         self.generation = 0
@@ -59,24 +59,33 @@ class TextureAtlas:
 
     def slot(self, material: str) -> TextureSlot | None:
         """Ebene für ein Material, None wenn es keine Textur gibt (dann zeigt die Ansicht eine Farbe)."""
-        key = normalize(material)
+        return self._slot(normalize(material), 1)
+
+    def slot2(self, material: str) -> TextureSlot | None:
+        """Ebene der zweiten Textur eines Überblend-Materials ($basetexture2), sonst None."""
+        return self._slot(normalize(material), 2)
+
+    def _slot(self, key: str, which: int) -> TextureSlot | None:
+        cache = key if which == 1 else (key, which)
         with self._lock:
-            if key in self._slots:
-                return self._slots[key]
+            if cache in self._slots:
+                return self._slots[cache]
             lib = self.library
-        image = lib.texture(key) if lib is not None else None
+        image = None
+        if lib is not None:
+            image = lib.texture(key) if which == 1 else lib.texture2(key)
         info = lib.material(key) if image is not None and lib is not None else None
         cutout = {"alphatest": CUTOUT_ALPHATEST, "translucent": CUTOUT_TRANSLUCENT}.get(
-            info.transparency if info else "", 0)
+            info.transparency if info and which == 1 else "", 0)
         with self._lock:
-            if key in self._slots:
-                return self._slots[key]
+            if cache in self._slots:
+                return self._slots[cache]
             if image is None or len(self._layers) >= MAX_LAYERS:
-                self._slots[key] = None
+                self._slots[cache] = None
                 return None
             self._layers.append(_to_layer(image.rgba, image.width, image.height))
             slot = TextureSlot(len(self._layers) - 1, image.source_width, image.source_height, cutout)
-            self._slots[key] = slot
+            self._slots[cache] = slot
             return slot
 
 

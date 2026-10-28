@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ..geometry.displacement import is_displacement_solid
 from ..mathutil import BBox, Point
 from ..model import Entity, MapDocument, Solid
 
@@ -49,6 +50,8 @@ def seals(solid: Solid) -> bool:
     """Ein Welt-Brush dichtet ab, wenn nicht alle Seiten Werkzeug-Texturen ohne Wandwirkung tragen."""
     if solid.parent_id is not None:  # func_detail und andere Brush-Entities dichten nie
         return False
+    if any(f.extra.get("raw") for f in solid.faces) and is_displacement_solid(solid):
+        return False  # Gelände (Displacements) dichtet in vbsp nicht ab
     for f in solid.faces:
         m = f.material.upper()
         if m not in NON_SEALING and "WATER" not in m:

@@ -18,6 +18,7 @@ from typing import Callable
 from ..mathutil import Point, add, dot, length, round_point, sub
 from ..model.objects import Entity, Face, MapObject, Solid, TexAxis
 from .brush import best_triangle, is_valid_solid
+from .displacement import face_displacement, transform_displacement, with_displacement
 
 Matrix3 = tuple[Point, Point, Point]  # Zeilen
 
@@ -55,6 +56,10 @@ def _transform_solid(solid: Solid, point_fn: Callable[[Point], Point],
         nf = dataclasses.replace(face, points=pts)  # type: ignore[arg-type]
         if tex_fn is not None:
             nf = dataclasses.replace(nf, uaxis=tex_fn(face.uaxis), vaxis=tex_fn(face.vaxis))
+        disp = face_displacement(face)
+        if disp is not None:
+            o = point_fn((0.0, 0.0, 0.0))
+            nf = with_displacement(nf, transform_displacement(disp, point_fn, lambda v, o=o: sub(point_fn(v), o)))
         new_faces.append(nf)
     result = solid.replace(faces=tuple(new_faces))
     if not is_valid_solid(result):

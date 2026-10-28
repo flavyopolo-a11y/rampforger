@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core.blocks import is_block_root
+from ..core.geometry.displacement import DispSurface, is_displacement_solid, surfaces
 from ..core.lights import LIGHT_CLASSES, parse_color
 from ..core.model import (
     ChangeSet,
@@ -83,7 +84,9 @@ def entity_color(classname: str, ent: Entity | None = None) -> tuple[float, floa
 
 @dataclass
 class ObjectMesh:
-    tris: np.ndarray   # (n, 12): Position, Normale, Farbe, UV, Textur-Ebene (0 = keine, ≤ -1 = Skybox, -0,25 = Entity)
+    #: (n, 12): Position, Normale, Farbe, UV, Textur-Ebene (0 = keine, ≤ -1 = Skybox, -0,25 = Entity);
+    #: Displacements (n, 14) mit zweiter Textur-Ebene und Überblendung 0…1 dahinter
+    tris: np.ndarray
     lines: np.ndarray  # (m, 3): Kanten als Linienpaare
     color2d: tuple[float, float, float]
     #: Kanten für die 3D-Ansicht (ohne Knicke in fast ebenen Flächen), (k, 3); None = wie `lines`
@@ -109,8 +112,9 @@ class ObjectMesh:
         if hit is None:
             flag = np.full((len(self.tris), 1), 1.0 if selected else 0.0, dtype=np.float32)
             color = np.asarray(SELECT_COLOR_2D if selected else self.color2d, dtype=np.float32)
+            blend = np.zeros((len(self.tris), FACE_COLUMNS - 1 - self.tris.shape[1]), dtype=np.float32)
             hit = (
-                np.hstack([self.tris, flag]),
+                np.hstack([self.tris, blend, flag]),
                 np.hstack([self.lines, np.tile(color, (len(self.lines), 1))]),
             )
             self._variants[selected] = hit
@@ -174,6 +178,8 @@ def _polygons_to_arrays(polys: list[tuple[tuple[float, float, float], list]], co
     )
 
 
+#: Spalten je Vertex im GPU-Puffer der Flächen
+FACE_COLUMNS = 15
 #: Kanten zwischen Seiten, die weniger als so viel Grad abknicken, zeichnet die 3D-Ansicht nicht
 SOFT_EDGE_DEG = 12.0
 _SOFT_COS = math.cos(math.radians(SOFT_EDGE_DEG))
@@ -265,11 +271,66 @@ def _box_edges(lo, hi) -> np.ndarray:
     return _polygons_to_arrays(polys, [(0, 0, 0)] * len(polys))[1]
 
 
+def _grid_lines(surf: DispSurface) -> np.ndarray:
+    """Rasterlinien (Zeilen und Spalten, ohne Diagonalen) als Linienpaare."""
+    n = surf.size
+    g = surf.positions.reshape(n, n, 3)
+    rows = np.stack([g[:, :-1], g[:, 1:]], axis=2).reshape(-1, 3)
+    cols = np.stack([g[:-1, :], g[1:, :]], axis=2).reshape(-1, 3)
+    return np.concatenate([rows, cols])
+
+
+def _border_lines(surf: DispSurface) -> np.ndarray:
+    n = surf.size
+    g = surf.positions.reshape(n, n, 3)
+    out = []
+    for line in (g[0], g[-1], g[:, 0], g[:, -1]):
+        out.append(np.stack([line[:-1], line[1:]], axis=1).reshape(-1, 3))
+    return np.concatenate(out)
+
+
+def build_displacement_mesh(solid: Solid, atlas: TextureAtlas | None = None) -> ObjectMesh | None:
+    """Gelände-Brush: nur die Displacement-Flächen (die übrigen Seiten wirft vbsp weg). 2D zeigt
+    das Raster, 3D den Rand; mit der zweiten Textur überblendet nach dem Alpha der Punkte."""
+    surfs = surfaces(solid)
+    if not surfs:
+        return None
+    tris, lines, edges = [], [], []
+    for surf in surfs:
+        face = solid.faces[surf.face_index]
+        idx = surf.triangles().reshape(-1)
+        rows = np.zeros((len(idx), 14), dtype=np.float32)
+        rows[:, 0:3] = surf.positions[idx]
+        rows[:, 3:6] = surf.vertex_normals()[idx]
+        rows[:, 6:9] = material_color(face.material)
+        slot = atlas.slot(face.material) if atlas is not None else None
+        if slot is not None:
+            base = surf.base[idx]
+            u, v = face.uaxis, face.vaxis
+            rows[:, 9] = (base @ np.asarray((u.x, u.y, u.z)) / (u.scale or 1.0) + u.offset) / slot.width
+            rows[:, 10] = (base @ np.asarray((v.x, v.y, v.z)) / (v.scale or 1.0) + v.offset) / slot.height
+            rows[:, 11] = slot.shader_layer
+            slot2 = atlas.slot2(face.material)
+            if slot2 is not None:
+                rows[:, 12] = slot2.layer
+                rows[:, 13] = surf.disp.alphas[idx] / 255.0
+        tris.append(rows)
+        lines.append(_grid_lines(surf))
+        edges.append(_border_lines(surf))
+    c = solid.editor.color
+    return ObjectMesh(np.concatenate(tris), np.concatenate(lines).astype(np.float32),
+                      (c[0] / 255, c[1] / 255, c[2] / 255), np.concatenate(edges).astype(np.float32))
+
+
 def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_part: bool = False,
                       models: ModelLibrary | None = None) -> ObjectMesh | None:
     if isinstance(obj, Entity) and models is not None and obj.get("model", "").lower().endswith(".mdl"):
         model = models.load(obj.get("model"))
         mesh = build_prop_mesh(obj, model, atlas) if model is not None else None
+        if mesh is not None:
+            return mesh
+    if isinstance(obj, Solid) and is_displacement_solid(obj):
+        mesh = build_displacement_mesh(obj, atlas)
         if mesh is not None:
             return mesh
     if isinstance(obj, Solid):
@@ -305,7 +366,8 @@ def build_object_mesh(obj: MapObject, atlas: TextureAtlas | None = None, block_p
 class SceneArrays:
     """Zusammengefügte Arrays für die GPU."""
 
-    faces: np.ndarray       # (n, 13): Position, Normale, Farbe, UV, Textur-Ebene, ausgewählt (0/1)
+    #: (n, 15): Position, Normale, Farbe, UV, Textur-Ebene, zweite Ebene, Überblendung, ausgewählt (0/1)
+    faces: np.ndarray
     lines2d: np.ndarray     # (m, 6): Position, Farbe
     lines_sel: np.ndarray   # (k, 6): Kanten der Auswahl für die 3D-Ansicht
     lines3d: np.ndarray     # (j, 6): Kanten für die 3D-Ansicht (ohne weiche Knicke)
@@ -392,7 +454,7 @@ class SceneMesh:
             return np.concatenate(parts).astype(np.float32) if parts else np.zeros((0, width), dtype=np.float32)
 
         self._arrays = SceneArrays(
-            faces=cat(faces_unsel + faces_sel, 13),
+            faces=cat(faces_unsel + faces_sel, FACE_COLUMNS),
             lines2d=cat(lines_unsel + lines_sel2d, 6),
             lines_sel=cat(lines_sel3d, 6),
             lines3d=cat(edges3d, 6),

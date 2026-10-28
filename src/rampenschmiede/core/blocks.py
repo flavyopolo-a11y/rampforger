@@ -83,6 +83,10 @@ def build_block(doc: MapDocument, template: str, values: dict | None = None, at:
     t = CATALOG[template]
     v = t.values(values)
     gen = generate(t, v, at)
+    if t.world:
+        if color is None:
+            color = (120, 200, 90)
+        return [Solid(id=doc.new_id(), faces=faces, editor=EditorInfo(color=color)) for faces in gen.face_sets], gen
     info = {"template": template, "values": v, "placement": [at.x, at.y, at.z, at.yaw]}
     collision = v.get("kollision", "clip") if t.entity is None else "none"
     root = _root_entity(root_id if root_id is not None else doc.new_id(), collision, info, root_editor)

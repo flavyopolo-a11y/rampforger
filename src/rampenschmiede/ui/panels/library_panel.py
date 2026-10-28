@@ -64,7 +64,8 @@ from ..tools.shape_tool import SHAPE_HINTS, SHAPES
 from ..widgets.material_field import MaterialField
 
 #: Symbol je Gruppe in der Bibliothek
-CATEGORY_ICONS = {"Rampen": "ramp", "Kurven": "curve", "Spezial": "halfpipe", "Bhop": "bhop", "Zonen": "flag"}
+CATEGORY_ICONS = {"Rampen": "ramp", "Kurven": "curve", "Spezial": "halfpipe", "Bhop": "bhop", "Zonen": "flag",
+                  "Gelände": "terrain"}
 MIME_TEMPLATE = "application/x-rampenschmiede-vorlage"
 PREFAB_PREFIX = "prefab:"
 SHAPE_PREFIX = "shape:"
@@ -470,7 +471,10 @@ class LibraryPanel(QWidget):
         objs, gen = insert_block(self.editor.doc, key, values, at)
         if not self.editor.run(AddObjects(objs, self.tr("{0} einfügen").format(self.tr(template.name)))):
             return None
-        self.editor.set_selection({objs[0].id})
+        # Gelände sind lose Welt-Brushes: alle auswählen
+        self.editor.set_selection({o.id for o in objs} if template.world else {objs[0].id})
+        if template.world:
+            self.editor.status_message.emit(self.tr("Gelände eingefügt. Mit dem Gelände-Werkzeug (Shift+G) weiter formen"))
         if gen.warnings:
             self.editor.status_message.emit(" · ".join(self.tr(w) for w in gen.warnings))
         self.inserted.emit(objs[0].id)
