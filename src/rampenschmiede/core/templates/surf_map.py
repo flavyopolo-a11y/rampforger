@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..attach import SITS_ON, fit_on, link
 from ..blocks import build_block
 from ..geometry import primitives
 from ..mathutil import BBox
@@ -51,11 +52,13 @@ def _platform(doc: MapDocument, x: int, top: int, size: int) -> Solid:
     return _box(doc, (x, -half, top - 32), (x + size, half, top))
 
 
-def _zone(doc: MapDocument, template: str, x: int, top: int, size: int, **values) -> list[MapObject]:
-    """Zone über einer Plattform, 32 Units Rand rundherum."""
-    inner = size - 64
-    objs, _gen = build_block(doc, template, {"laenge": inner, "breite": inner, "hoehe": 128, **values},
-                             Placement(x + 32, 0, top, 0))
+def _zone(doc: MapDocument, template: str, platform: Solid, **values) -> list[MapObject]:
+    """Zone auf einer Plattform; sie folgt ihr, wenn die Plattform verschoben wird."""
+    box = platform.bbox()
+    assert box is not None
+    fit, at = fit_on(box)
+    objs, _gen = build_block(doc, template, {**fit, "hoehe": 128, **values}, at)
+    objs[0] = objs[0].replace(extra={**objs[0].extra, SITS_ON: link(platform.id, box)})
     return objs
 
 
@@ -84,11 +87,12 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
     lowest = top
     for stage in range(s.stages):
         start_x, platform_top = x, top
-        objs.append(_platform(doc, x, top, s.platform))
+        platform = _platform(doc, x, top, s.platform)
+        objs.append(platform)
         if stage == 0:
-            objs += _zone(doc, "zone_start", x, top, s.platform)
+            objs += _zone(doc, "zone_start", platform)
         else:
-            objs += _zone(doc, "zone_stage", x, top, s.platform, nummer=stage + 1)
+            objs += _zone(doc, "zone_stage", platform, nummer=stage + 1)
         name = f"stage_{stage + 1}"
         objs.append(Entity(id=doc.new_id(), classname="info_teleport_destination", keyvalues=(
             ("targetname", name), ("origin", f"{x + 128} 0 {top + 8}"), ("angles", "0 0 0"))))
@@ -110,8 +114,9 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
         stages.append((start_x, x, platform_top))
 
     # Ziel
-    objs.append(_platform(doc, x, top, s.platform))
-    objs += _zone(doc, "zone_ende", x, top, s.platform)
+    platform = _platform(doc, x, top, s.platform)
+    objs.append(platform)
+    objs += _zone(doc, "zone_ende", platform)
     objs.append(Entity(id=doc.new_id(), classname="info_target", keyvalues=(
         ("targetname", "ziel"), ("origin", f"{x + s.platform // 2} 0 {top + 32}"))))
     end_x = x + s.platform

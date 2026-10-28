@@ -80,12 +80,13 @@ from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
 from .tools.terrain_tool import TerrainTool
 from .tools.vertex_tool import VertexTool
+from .tools.wall_tool import WallTool
 from .viewports.layout import ViewportGrid
 from .viewports.viewport import MAP_SUFFIXES, dropped_maps
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
-TOOL_ORDER = ("select", "paint", "shape", "vertex", "terrain", "scatter", "entity", "face", "clip", "hole", "measure")
+TOOL_ORDER = ("select", "paint", "shape", "wall", "vertex", "terrain", "scatter", "entity", "face", "clip", "hole", "measure")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -126,6 +127,13 @@ CONTROLS_HELP = """
 <tr><td>Strg+B</td><td>Auswahl ans Raster legen</td></tr>
 <tr><td>Enter / Esc</td><td>Form erstellen / Rahmen oder Auswahl verwerfen</td></tr>
 </table>
+<h3>Wände (Shift+K)</h3>
+<table>
+<tr><td>Klick in „Oben“ oder 3D</td><td>Punkt setzen, die Wände werden an den Ecken verbunden</td></tr>
+<tr><td>Klick auf den ersten Punkt</td><td>Raum schließen</td></tr>
+<tr><td>Enter / zweiter Klick auf den letzten Punkt</td><td>fertig</td></tr>
+<tr><td>Rücktaste / Esc</td><td>letzten Punkt zurück / verwerfen</td></tr>
+</table>
 <h3>Ecken (Shift+V)</h3>
 <table>
 <tr><td>Ecke oder Kantenmitte ziehen</td><td>Brush verformen; Kantenmitte zieht beide Ecken</td></tr>
@@ -163,7 +171,7 @@ class MainWindow(QMainWindow):
         self.editor = EditorContext()
         for tool in (SelectTool(self.editor), ShapeTool(self.editor), EntityTool(self.editor), FaceTool(self.editor),
                      ClipTool(self.editor), HoleTool(self.editor), TerrainTool(self.editor), VertexTool(self.editor),
-                     MeasureTool(self.editor)):
+                     MeasureTool(self.editor), WallTool(self.editor)):
             self.editor.register_tool(tool)
         self._clipboard: list[MapObject] = []
         self.settings = QSettings("Rampenschmiede", "Rampenschmiede")

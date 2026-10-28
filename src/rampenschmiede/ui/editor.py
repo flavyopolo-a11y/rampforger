@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Iterable
 import numpy as np
 from PySide6.QtCore import QObject, Signal
 
+from ..core.attach import follow_supports
 from ..core.blocks import clone_objects, transform_command
 from ..core.commands import AddObjects, Command, CommandStack, RemoveObjects, ReplaceObjects
 from ..core.entities.fgd import EntityCatalog, builtin_catalog, load_catalog
@@ -29,6 +30,7 @@ from ..core.model import (
 from ..core.models.library import ModelLibrary
 from ..core.models.props import prop_bbox
 from ..core.organize import expand_groups
+from ..core.pillars import follow_pillars
 from ..core.templates.starter import grow_hull
 from ..render.scene_mesh import SceneMesh
 from ..render.sky import SkyCache, SkyImages
@@ -209,7 +211,11 @@ class EditorContext(QObject):
         except TransformError as exc:
             self.status_message.emit(str(exc))
             return False
-        # Die Hülle des Startraums wächst mit, im selben Undo-Schritt
+        # Zonen folgen ihrem Block, die Hülle des Startraums wächst mit, im selben Undo-Schritt
+        # Erst die Stützen der Rampen, dann die Zonen auf ihren Blöcken
+        for follow in (follow_pillars(self.doc), follow_supports(self.doc)):
+            if follow is not None:
+                self.stack.attach(follow)
         grow = grow_hull(self.doc)
         if grow is not None:
             self.stack.attach(grow)

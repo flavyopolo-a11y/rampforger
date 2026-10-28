@@ -17,6 +17,9 @@ from ..model import EditorInfo, Entity, MapDocument, MapObject, Solid, object_bb
 SKY = "TOOLS/TOOLSSKYBOX"
 FLOOR = "DEV/DEV_MEASUREGENERIC01B"
 HULL_COLOR = (90, 160, 220)
+START_COLOR = (240, 150, 40)
+#: Kantenlänge des Startblocks im Startraum
+START_BLOCK = 512
 #: Kennzeichen der Hüllen-Brushes in `Solid.extra`, Wert = Seite
 HULL_KEY = "huelle"
 HULL_SIDES = ("boden", "decke", "-x", "+x", "-y", "+y")
@@ -52,15 +55,35 @@ def hull_around(doc: MapDocument, inner: BBox, thickness: int = 16, floor_materi
     ]
 
 
+def start_zone_on(doc: MapDocument, block: Solid, yaw: float = 0.0) -> list[MapObject]:
+    """Startzone auf `block`; sie folgt ihm beim Verschieben und Vergrößern."""
+    from ..attach import SITS_ON, fit_on, link
+    from ..blocks import build_block
+
+    box = block.bbox()
+    assert box is not None
+    values, at = fit_on(box, yaw)
+    objs, _gen = build_block(doc, "zone_start", {**values, "hoehe": 128}, at)
+    objs[0] = objs[0].replace(extra={**objs[0].extra, SITS_ON: link(block.id, box)})
+    return objs
+
+
 def starter_room(doc: MapDocument, game: str | None = None, half_size: int = 4096, height: int = 3072) -> list[MapObject]:
     """Innenraum von (-half, -half, 0) bis (half, half, height), Boden-Oberkante bei z = 0."""
     inner = BBox((-half_size, -half_size, 0), (half_size, half_size, height))
     objs: list[MapObject] = list(hull_around(doc, inner, floor_material=FLOOR))
+    # Startblock mit Startzone darauf (die Zone folgt dem Block), Spawns stehen in der Zone
+    cx, cy = -half_size // 2, -half_size // 2
+    half = START_BLOCK // 2
+    block = Solid(id=doc.new_id(), faces=primitives.block((cx - half, cy - half, 0), (cx + half, cy + half, 32),
+                                                          FLOOR)[0], editor=EditorInfo(color=START_COLOR))
+    objs.append(block)
+    objs += start_zone_on(doc, block, yaw=90)
     classes = SPAWN_CLASSES.get(game or "", ALL_SPAWNS)
     for i, cls in enumerate(classes):
-        x = -half_size // 2 + i * 64
+        x = cx - 64 + i * 64
         objs.append(Entity(id=doc.new_id(), classname=cls,
-                           keyvalues=(("origin", f"{x} {-half_size // 2} 8"), ("angles", "0 90 0"))))
+                           keyvalues=(("origin", f"{x} {cy - 64} 40"), ("angles", "0 90 0"))))
     objs.append(Entity(id=doc.new_id(), classname="light_environment", keyvalues=(
         ("origin", f"0 0 {height - 64}"), ("_light", "255 240 220 300"), ("_ambient", "150 170 200 40"),
         ("angles", "-50 45 0"), ("pitch", "-50"))))

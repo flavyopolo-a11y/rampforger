@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...core.attach import SITS_ON, fit_on, is_zone_template, link, support_below
 from ...core.blocks import (
     block_info,
     change_block,
@@ -45,6 +46,9 @@ from ...core.commands import AddObjects
 from ...core.io.rsmap import ProjectFormatError
 from ...core.materials.theme import block_defaults
 from ...core.model import Entity
+from ...core.pillars import CONFIG as PILLAR_CONFIG
+from ...core.pillars import DEFAULT_CONFIG as DEFAULT_PILLARS
+from ...core.pillars import set_pillars
 from ...core.prefabs import list_prefabs, load_prefab, make_prefab, place_prefab, save_prefab
 from ...core.surf.catalog import (
     CATALOG,
@@ -213,6 +217,25 @@ class LibraryPanel(QWidget):
         self.dissolve_btn.setToolTip(self.tr(
             "Macht normale Brushes daraus. Danach lässt sich die Form frei bearbeiten, aber nicht mehr über Regler."))
         self.dissolve_btn.clicked.connect(self._dissolve)
+        # Stützen unter Rampen: an, Abstand
+        self.pillar_row = QWidget()
+        prow = QHBoxLayout(self.pillar_row)
+        prow.setContentsMargins(0, 0, 0, 0)
+        self.pillar_check = QCheckBox(self.tr("Stützen bis zum Boden"))
+        self.pillar_check.setToolTip(self.tr(
+            "Pfeiler unter der Rampe bis zum nächsten Brush darunter. Sie wandern mit und passen sich an, "
+            "wenn die Rampe geändert wird."))
+        self.pillar_check.toggled.connect(self._pillars_toggled)
+        self.pillar_spacing = QSpinBox()
+        self.pillar_spacing.setRange(64, 8192)
+        self.pillar_spacing.setSingleStep(64)
+        self.pillar_spacing.setValue(DEFAULT_PILLARS["abstand"])
+        self.pillar_spacing.setPrefix(self.tr("alle "))
+        self.pillar_spacing.setSuffix(" u")
+        self.pillar_spacing.editingFinished.connect(lambda: self._pillars_toggled(self.pillar_check.isChecked()))
+        prow.addWidget(self.pillar_check)
+        prow.addWidget(self.pillar_spacing)
+        box_lay.addWidget(self.pillar_row)
         box_lay.addWidget(self.dissolve_btn)
         lay.addWidget(self.box, 2)
 
@@ -275,6 +298,17 @@ class LibraryPanel(QWidget):
                 self.tree.scrollToItem(child)
                 return
 
+    def _pillars_toggled(self, on: bool) -> None:
+        root = self.selected_block()
+        if root is None:
+            return
+        cfg = root.extra.get(PILLAR_CONFIG)
+        if on and cfg is not None and int(cfg.get("abstand", 0)) == self.pillar_spacing.value():
+            return
+        cmd = set_pillars(self.editor.doc, [root.id], on, self.pillar_spacing.value())
+        if cmd is not None:
+            self.editor.run(cmd)
+
     def _template_changed(self, *_args) -> None:
         if self.selected_block() is None:
             self._show_form()
@@ -308,6 +342,17 @@ class LibraryPanel(QWidget):
             at = None
             self.box.setTitle(self.tr("Vorlage: {0}").format(self.tr(template.name)) if template else "")
         self.dissolve_btn.setVisible(root is not None)
+        ramp = root is not None and template is not None and template.check_angles and template.entity is None \
+            and not template.world
+        self.pillar_row.setVisible(ramp)
+        if ramp:
+            cfg = root.extra.get(PILLAR_CONFIG)
+            for w in (self.pillar_check, self.pillar_spacing):
+                w.blockSignals(True)
+            self.pillar_check.setChecked(cfg is not None)
+            self.pillar_spacing.setValue(int((cfg or DEFAULT_PILLARS)["abstand"]))
+            for w in (self.pillar_check, self.pillar_spacing):
+                w.blockSignals(False)
         key = self.current_key()
         self.insert_btn.setEnabled(template is not None or bool(key and key.startswith((PREFAB_PREFIX, SHAPE_PREFIX))))
         if root is None and key and key.startswith(SHAPE_PREFIX):
@@ -463,12 +508,27 @@ class LibraryPanel(QWidget):
             return None
         snap = self.editor.snap
         at = Placement(snap(point[0]), snap(point[1]), snap(point[2]), yaw)
-        return self.place(key, self.insert_values(template), at)
+        values = self.insert_values(template)
+        extra = None
+        if is_zone_template(key):
+            # Zonen setzen sich auf den Block unter dem Mauszeiger und folgen ihm
+            support = support_below(self.editor.doc, point[0], point[1], point[2])
+            box = self.editor.doc.bbox([support]) if support is not None else None
+            if box is not None:
+                fit, at = fit_on(box, yaw)
+                values = {**values, **fit}
+                extra = {SITS_ON: link(support, box)}
+        oid = self.place(key, values, at, extra)
+        if extra is not None and oid is not None:
+            self.editor.status_message.emit(self.tr("Zone sitzt auf dem Block und folgt ihm"))
+        return oid
 
-    def place(self, key: str, values: dict, at: Placement) -> int | None:
+    def place(self, key: str, values: dict, at: Placement, extra: dict | None = None) -> int | None:
         """Vorlage mit genau diesen Werten und dieser Platzierung einfügen (z. B. gemalt)."""
         template = CATALOG[key]
         objs, gen = insert_block(self.editor.doc, key, values, at)
+        if extra and objs and isinstance(objs[0], Entity):
+            objs[0] = objs[0].replace(extra={**objs[0].extra, **extra})
         if not self.editor.run(AddObjects(objs, self.tr("{0} einfügen").format(self.tr(template.name)))):
             return None
         # Gelände sind lose Welt-Brushes: alle auswählen

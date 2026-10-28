@@ -59,6 +59,8 @@ class ToolOptionsPanel(QStackedWidget):
             self._add("terrain", self._terrain_page())
         if "vertex" in editor.tools:
             self._add("vertex", self._vertex_page())
+        if "wall" in editor.tools:
+            self._add("wall", self._wall_page())
         editor.tool_changed.connect(self._on_tool)
 
     def _add(self, name: str, page: QWidget) -> None:
@@ -89,6 +91,51 @@ class ToolOptionsPanel(QStackedWidget):
             "Klick wählt aus, Strg+Klick ergänzt. Auswahl ziehen verschiebt sie, Shift+Ziehen kopiert. "
             "Ein zweiter Klick auf die Auswahl schaltet zwischen Skalier- und Drehgriffen um. "
             "Pfeiltasten verschieben um eine Rasterweite. Exakte Werte: Strg+M."
+        )))
+        lay.addStretch(1)
+        return w
+
+    # ---- Wände -----------------------------------------------------------------------
+    def _wall_page(self) -> QWidget:
+        opts = self.editor.tools["wall"].options  # type: ignore[attr-defined]
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        form = QFormLayout()
+
+        def spin(attr: str, lo: int, hi: int, step: int, tip: str) -> QSpinBox:
+            s = QSpinBox()
+            s.setRange(lo, hi)
+            s.setSingleStep(step)
+            s.setSuffix(" u")
+            s.setValue(getattr(opts, attr))
+            s.setToolTip(self.tr(tip))
+            s.valueChanged.connect(lambda v: (setattr(opts, attr, v), self.editor.redraw_requested.emit()))
+            return s
+
+        self.wall_height = spin("height", 8, 16384, 16, "Höhe der Wände")
+        self.wall_thickness = spin("thickness", 2, 1024, 8, "Dicke der Wände")
+        self.wall_bottom = spin("bottom", -16384, 16384, 16, "Unterkante; in 3D setzt der erste Klick sie automatisch")
+        form.addRow(self.tr("Höhe"), self.wall_height)
+        form.addRow(self.tr("Dicke"), self.wall_thickness)
+        form.addRow(self.tr("Unterkante"), self.wall_bottom)
+
+        def sync_bottom() -> None:
+            # Der erste Klick in 3D setzt die Unterkante: Feld nachziehen
+            if self.wall_bottom.value() != opts.bottom:
+                self.wall_bottom.blockSignals(True)
+                self.wall_bottom.setValue(opts.bottom)
+                self.wall_bottom.blockSignals(False)
+        self.editor.redraw_requested.connect(sync_bottom)
+        group = QCheckBox(self.tr("Wände als Gruppe"))
+        group.setChecked(opts.group)
+        group.toggled.connect(lambda v: setattr(opts, "group", v))
+        form.addRow("", group)
+        lay.addLayout(form)
+        lay.addWidget(_hint(self.tr(
+            "In „Oben“ oder in 3D Punkte klicken. Die Wände stoßen an den Ecken sauber aneinander. "
+            "Klick auf den ersten Punkt schließt den Raum, Enter oder ein zweiter Klick auf den letzten "
+            "Punkt beendet. Rücktaste nimmt den letzten Punkt zurück, Esc verwirft. "
+            "Material: das aktuelle aus dem Material-Browser."
         )))
         lay.addStretch(1)
         return w
