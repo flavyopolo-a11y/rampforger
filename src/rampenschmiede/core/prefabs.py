@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+from ..i18n import tr
 from .blocks import clone_objects
 from .geometry import transform
 from .io.rsmap import ProjectFormatError, object_from_dict, object_to_dict
@@ -27,7 +28,7 @@ def make_prefab(doc: MapDocument, ids: Iterable[int], name: str) -> dict[str, An
     ids = [i for i in ids if i in doc]
     objs: list[MapObject] = [o for i in ids if (o := doc.get(i)) is not None] + doc.attached(ids)
     if not objs:
-        raise ValueError("Nichts ausgewählt")
+        raise ValueError(tr("Nichts ausgewählt"))
     bounds = BBox.union(object_bbox(o) for o in objs)
     assert bounds is not None
     anchor = (round(bounds.center[0]), round(bounds.center[1]), round(bounds.mins[2]))
@@ -44,7 +45,7 @@ def make_prefab(doc: MapDocument, ids: Iterable[int], name: str) -> dict[str, An
 def place_prefab(doc: MapDocument, data: dict[str, Any], at: Point) -> tuple[list[MapObject], list[int]]:
     """Objekte des Prefabs mit neuen IDs, Anker an `at`. Liefert Objekte und oberste IDs."""
     if data.get("format") != FORMAT_NAME:
-        raise ProjectFormatError("Keine Prefab-Datei")
+        raise ProjectFormatError(tr("Keine Prefab-Datei"))
     objs = [object_from_dict(o) for o in data.get("objects", [])]
     clones, roots = clone_objects(doc, objs)
     delta = (round(at[0]), round(at[1]), round(at[2]))
@@ -70,9 +71,9 @@ def load_prefab(path: str | os.PathLike[str]) -> dict[str, Any]:
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ProjectFormatError(f"Prefab nicht lesbar: {exc}") from exc
+        raise ProjectFormatError(tr('Prefab nicht lesbar: {0}').format(exc)) from exc
     if data.get("format") != FORMAT_NAME:
-        raise ProjectFormatError("Keine Prefab-Datei")
+        raise ProjectFormatError(tr("Keine Prefab-Datei"))
     return data
 
 

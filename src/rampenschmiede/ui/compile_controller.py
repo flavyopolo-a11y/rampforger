@@ -26,6 +26,7 @@ from ..core.materials.authoring import pack_list, used_materials
 from ..core.model import MapDocument
 from ..core.profiles import GameProfile
 from ..core.zones import collect_zones, momentum_zones
+from ..i18n import tr
 from .editor import EditorContext
 from .paths import compile_dir
 
@@ -101,7 +102,7 @@ class CompileController(QObject):
                 Path(plan.vmf_path).parent.mkdir(parents=True, exist_ok=True)
                 self.export = save_vmf(doc, plan.vmf_path, for_compile=True)
             except OSError as exc:
-                self.line.emit(LogLine(f"VMF konnte nicht geschrieben werden: {exc}", Level.ERROR))
+                self.line.emit(LogLine(tr('VMF konnte nicht geschrieben werden: {0}').format(exc), Level.ERROR))
                 self.finished.emit(CompileResult(failed_step="VMF schreiben"))
                 return False
             self.line.emit(LogLine(f"VMF geschrieben: {plan.vmf_path}"))

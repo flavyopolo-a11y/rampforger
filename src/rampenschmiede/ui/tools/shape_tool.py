@@ -17,32 +17,33 @@ from ...core.commands import AddObjects, solids_from_faces
 from ...core.geometry import primitives
 from ...core.mathutil import BBox
 from ...core.model import Solid
+from ...i18n import N_, tr
 from .base import Tool, box_lines, pick_3d
 
 if TYPE_CHECKING:
     from ..viewports.viewport import Viewport
 
 SHAPES = {
-    "block": "Block",
-    "wedge": "Keil",
-    "cylinder": "Zylinder",
-    "arch": "Bogen",
-    "stairs": "Treppe",
-    "spike": "Spitze",
-    "sphere": "Kugel",
-    "torus": "Torus",
+    "block": N_("Block"),
+    "wedge": N_("Keil"),
+    "cylinder": N_("Zylinder"),
+    "arch": N_("Bogen"),
+    "stairs": N_("Treppe"),
+    "spike": N_("Spitze"),
+    "sphere": N_("Kugel"),
+    "torus": N_("Torus"),
 }
 
 DRAFT_COLOR = (1.0, 1.0, 1.0)
 SHAPE_HINTS = {
-    "block": "Quader. Der Grundbaustein für Böden, Wände und Plattformen.",
-    "wedge": "Keil mit schräger Oberseite, z. B. für Rampen zum Hochlaufen.",
-    "cylinder": "Säule mit einstellbarer Seitenzahl.",
-    "arch": "Bogen oder Ring aus Segmenten, mit Wandstärke.",
-    "stairs": "Treppe mit einstellbarer Stufenzahl.",
-    "spike": "Kegel oder Pyramide (3 bis 64 Seiten), Spitze oben.",
-    "sphere": "Kugel aus einem Brush. Mehr Seiten = runder (höchstens 12, mehr erlaubt vbsp nicht).",
-    "torus": "Ring mit rundem Querschnitt; Wandstärke = Dicke des Rings.",
+    "block": tr("Quader. Der Grundbaustein für Böden, Wände und Plattformen."),
+    "wedge": tr("Keil mit schräger Oberseite, z. B. für Rampen zum Hochlaufen."),
+    "cylinder": tr("Säule mit einstellbarer Seitenzahl."),
+    "arch": tr("Bogen oder Ring aus Segmenten, mit Wandstärke."),
+    "stairs": tr("Treppe mit einstellbarer Stufenzahl."),
+    "spike": tr("Kegel oder Pyramide (3 bis 64 Seiten), Spitze oben."),
+    "sphere": tr("Kugel aus einem Brush. Mehr Seiten = runder (höchstens 12, mehr erlaubt vbsp nicht)."),
+    "torus": tr("Ring mit rundem Querschnitt; Wandstärke = Dicke des Rings."),
 }
 
 
@@ -131,7 +132,7 @@ class ShapeTool(Tool):
         self._drag_start = None
         self._drag_mode = None
         if self.draft is not None:
-            self.editor.status_message.emit("Enter erstellt die Form, Esc verwirft den Rahmen")
+            self.editor.status_message.emit(tr("Enter erstellt die Form, Esc verwirft den Rahmen"))
 
     def cursor_2d(self, vp: "Viewport", pos: QPointF) -> Qt.CursorShape:
         if self.draft is not None and self._draft_rect(vp).contains(pos):
@@ -171,7 +172,7 @@ class ShapeTool(Tool):
         else:
             mins[main] = int(np.floor(point[main] + 1e-6)) - int(size[main])
         self.draft = BBox(tuple(mins), tuple(m + s for m, s in zip(mins, size)))  # type: ignore[arg-type]
-        self.editor.status_message.emit("Enter erstellt die Form, Esc verwirft den Rahmen")
+        self.editor.status_message.emit(tr("Enter erstellt die Form, Esc verwirft den Rahmen"))
         self.editor.redraw_requested.emit()
 
     # ---- Erstellen ----------------------------------------------------------------------
@@ -199,7 +200,7 @@ class ShapeTool(Tool):
             return False
         parts = self.build(self.draft)
         if not parts:
-            self.editor.status_message.emit("Mit diesen Maßen lässt sich keine gültige Form bauen")
+            self.editor.status_message.emit(tr("Mit diesen Maßen lässt sich keine gültige Form bauen"))
             return False
         solids = solids_from_faces(self.editor.doc, parts)
         self.editor.run(AddObjects(solids, SHAPES[self.options.shape] + " erstellen"))

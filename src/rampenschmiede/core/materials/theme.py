@@ -11,6 +11,7 @@ import dataclasses
 from dataclasses import asdict, dataclass, fields
 from typing import Iterable
 
+from ...i18n import tr
 from ..blocks import MEMBER_KEY, block_info, change_block
 from ..commands import Command, MacroCommand, ReplaceObjects
 from ..model import ChangeSet, Entity, MapDocument, MapObject, Solid
@@ -50,7 +51,7 @@ def set_theme(doc: MapDocument, theme: Theme) -> None:
 class SetTheme(Command):
     """Thema der Map setzen, rückgängig machbar."""
 
-    def __init__(self, theme: Theme, description: str = "Map-Thema ändern") -> None:
+    def __init__(self, theme: Theme, description: str = tr("Map-Thema ändern")) -> None:
         self.new = asdict(theme)
         self.old: object = None
         self.description = description

@@ -56,6 +56,9 @@ def create_app(argv: list[str]) -> QApplication:
     app.setApplicationVersion(__version__)
     app.setStyle("Fusion")
     app.setPalette(dark_palette())
+    from . import i18n
+
+    i18n.install(app, i18n.saved_language())
     return app  # type: ignore[return-value]
 
 

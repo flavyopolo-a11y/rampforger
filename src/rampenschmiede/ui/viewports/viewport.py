@@ -18,6 +18,7 @@ from PySide6.QtGui import QColor, QCursor, QFont, QKeyEvent, QMouseEvent, QPaint
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
 from ...core.materials.apply import apply_dropped
+from ...i18n import N_, tr
 from ...render.camera import VIEW_AXES, Camera2D, Camera3D
 from ...render.gl_renderer import SKY_MODES, ViewportRenderer
 from ..editor import EditorContext
@@ -28,13 +29,13 @@ from ..tools.base import pick_2d, pick_3d
 
 VIEW_TITLES = {
     "3d": "3D",
-    "top": "Oben (X/Y)",
-    "front": "Vorne (Y/Z)",
-    "side": "Seite (X/Z)",
+    "top": N_("Oben (X/Y)"),
+    "front": N_("Vorne (Y/Z)"),
+    "side": N_("Seite (X/Z)"),
 }
 
-RENDER_MODES = {"textured": "Texturiert", "lit": "Licht-Vorschau", "shaded": "Schattiert", "flat": "Flach",
-                "lightmap": "Lightmap-Raster", "wireframe": "Drahtgitter"}
+RENDER_MODES = {"textured": N_("Texturiert"), "lit": N_("Licht-Vorschau"), "shaded": N_("Schattiert"), "flat": N_("Flach"),
+                "lightmap": N_("Lightmap-Raster"), "wireframe": N_("Drahtgitter")}
 
 FLY_KEYS = {Qt.Key_W, Qt.Key_A, Qt.Key_S, Qt.Key_D, Qt.Key_Q, Qt.Key_E}
 
@@ -108,7 +109,7 @@ class Viewport(QOpenGLWidget):
             self.ctx = moderngl.create_context()
             self.renderer = ViewportRenderer(self.ctx)
         except Exception as exc:  # pragma: no cover - hängt vom Grafiktreiber ab
-            self.gl_error = f"OpenGL 3.3 nicht verfügbar: {exc}"
+            self.gl_error = tr('OpenGL 3.3 nicht verfügbar: {0}').format(exc)
             self.editor.status_message.emit(self.gl_error)
 
     def paintGL(self) -> None:
@@ -151,7 +152,7 @@ class Viewport(QOpenGLWidget):
         p = QPainter(self)
         p.fillRect(self.rect(), QColor(40, 0, 0))
         p.setPen(QColor(255, 200, 200))
-        p.drawText(self.rect(), Qt.AlignCenter | Qt.TextWordWrap, self.gl_error or "OpenGL nicht verfügbar")
+        p.drawText(self.rect(), Qt.AlignCenter | Qt.TextWordWrap, self.gl_error or tr("OpenGL nicht verfügbar"))
         p.end()
 
     def _paint_overlay(self, p: QPainter) -> None:

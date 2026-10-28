@@ -17,6 +17,7 @@ import math
 import random
 from typing import Callable, Iterable, Sequence
 
+from ..i18n import tr
 from .commands import Command, ReplaceObjects, SwapObjects
 from .model import EditorInfo, Entity, MapDocument, MapObject, Solid, owner_id
 from .surf.catalog import CATALOG, ORIGIN, TRIGGER, Generated, Placement, generate
@@ -206,7 +207,7 @@ def change_block(doc: MapDocument, root_id: int, values: dict | None = None, at:
     assert isinstance(root, Entity) and is_block_root(root)
     new, gen = rebuild(doc, root, values, at)
     old = [root_id] + [s.id for s in doc.attached([root_id])]
-    return SwapObjects(old, new, "Baustein ändern", merge_key), gen
+    return SwapObjects(old, new, tr("Baustein ändern"), merge_key), gen
 
 
 def dissolve(doc: MapDocument, root_ids: Iterable[int]) -> Command | None:
@@ -223,7 +224,7 @@ def dissolve(doc: MapDocument, root_ids: Iterable[int]) -> Command | None:
         for s in doc.attached([rid]):
             if MEMBER_KEY in s.extra:
                 changed.append(s.replace(extra={k: v for k, v in s.extra.items() if k != MEMBER_KEY}))
-    return ReplaceObjects(changed, "Baustein lösen") if changed else None
+    return ReplaceObjects(changed, tr("Baustein lösen")) if changed else None
 
 
 def transform_command(doc: MapDocument, originals: Sequence[MapObject], fn: Callable[[MapObject], MapObject],

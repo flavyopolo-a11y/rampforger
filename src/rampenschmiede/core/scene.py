@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..i18n import tr
 from .blocks import is_block_root, is_clip_member
 from .model import Entity, MapDocument, MapObject, Solid
 from .surf.catalog import CATALOG
@@ -21,21 +22,21 @@ class Folder:
 
 
 FOLDERS: tuple[Folder, ...] = (
-    Folder("rampen", "Rampen", "ramp"),
-    Folder("welt", "Welt", "shape"),
-    Folder("trigger", "Trigger", "flag"),
-    Folder("spawns", "Spawns", "entity"),
-    Folder("teleport", "Teleport-Ziele", "entity"),
-    Folder("lichter", "Lichter", "sun"),
-    Folder("props", "Props", "prefab"),
-    Folder("brush_entities", "Brush-Entities", "shape_block"),
-    Folder("sonstiges", "Sonstiges", "entity"),
+    Folder("rampen", tr("Rampen"), "ramp"),
+    Folder("welt", tr("Welt"), "shape"),
+    Folder("trigger", tr("Trigger"), "flag"),
+    Folder("spawns", tr("Spawns"), "entity"),
+    Folder("teleport", tr("Teleport-Ziele"), "entity"),
+    Folder("lichter", tr("Lichter"), "sun"),
+    Folder("props", tr("Props"), "prefab"),
+    Folder("brush_entities", tr("Brush-Entities"), "shape_block"),
+    Folder("sonstiges", tr("Sonstiges"), "entity"),
 )
 
 #: Was ein einzelnes Objekt eines Ordners ist (für die Anzeige der Auswahl)
 SINGULAR = {
-    "rampen": "Rampe", "welt": "Brush", "trigger": "Trigger", "spawns": "Spawn", "teleport": "Teleport-Ziel",
-    "lichter": "Licht", "props": "Prop", "brush_entities": "Brush-Entity", "sonstiges": "Entity",
+    "rampen": tr("Rampe"), "welt": tr("Brush"), "trigger": tr("Trigger"), "spawns": tr("Spawn"), "teleport": tr("Teleport-Ziel"),
+    "lichter": tr("Licht"), "props": tr("Prop"), "brush_entities": tr("Brush-Entity"), "sonstiges": tr("Entity"),
 }
 LIGHTS = {"light", "light_spot", "light_environment", "light_dynamic", "point_spotlight", "env_projectedtexture"}
 #: Surf-Fläche: steiler als 44° (Normale z ≤ 0,72), aber nicht senkrecht
@@ -120,12 +121,12 @@ def kind_of(doc: MapDocument, obj: MapObject) -> str:
     """Art eines Objekts in Worten (Rampe, Brush, Licht …), wie der Szenen-Ordner es einteilt."""
     if isinstance(obj, Entity):
         if _plain_detail(obj):
-            return "Detail-Gruppe"
+            return tr("Detail-Gruppe")
         key = entity_folder(obj, bool(doc.children(obj.id)))
     else:
         parent = doc.get(obj.parent_id) if obj.parent_id is not None else None
         if isinstance(parent, Entity) and not _plain_detail(parent) and not is_block_root(parent):
-            return f"Brush von {parent.classname}"
+            return tr('Brush von {0}').format(parent.classname)
         key = "rampen" if is_ramp_solid(obj) else "welt"
     return SINGULAR[key]
 
@@ -154,4 +155,4 @@ def label(obj: MapObject) -> str:
             return f"{obj.classname} · {model}" if model else obj.classname
         return f"{obj.classname} · {name}" if name else obj.classname
     main = max((f.material for f in obj.faces), key=lambda m: not m.upper().startswith("TOOLS/"), default="")
-    return f"Brush {obj.id} · {main.rsplit('/', 1)[-1].lower()}"
+    return tr('Brush {0} · {1}').format(obj.id, main.rsplit('/', 1)[-1].lower())

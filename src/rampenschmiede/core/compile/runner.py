@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from ...i18n import tr
 from .logparse import Level, LineSplitter, LogLine, classify, parse_pointfile
 from .plan import CompilePlan, CopyFilesStep, CopyStep, LaunchStep, Step, ToolStep, WriteStep
 
@@ -111,13 +112,13 @@ class CompileRunner:
                     result.leaked = True
                     result.pointfile = parse_pointfile(lin.read_text(encoding="utf-8", errors="replace"))
                 if code != 0:
-                    self._emit(LogLine(f"{step.label} ist mit Code {code} abgebrochen", Level.ERROR), result)
+                    self._emit(LogLine(tr('{0} ist mit Code {1} abgebrochen').format(step.label, code), Level.ERROR), result)
                     result.failed_step = step.label
                     return
                 if step.tool == "vbsp" and result.leaked and self.stop_on_leak:
                     self._emit(LogLine(
-                        "Die Map hat ein Leck: Ein Weg führt von einer Entity ins Leere. "
-                        "Die rote Linie in den Ansichten zeigt den Weg.", Level.ERROR, leak=True), result)
+                        tr("Die Map hat ein Leck: Ein Weg führt von einer Entity ins Leere. "
+                        "Die rote Linie in den Ansichten zeigt den Weg."), Level.ERROR, leak=True), result)
                     result.failed_step = step.label
                     return
             elif isinstance(step, CopyStep):
@@ -138,7 +139,7 @@ class CompileRunner:
                 try:
                     _spawn_detached([step.program, *step.args])
                 except OSError as exc:
-                    self._emit(LogLine(f"Spiel konnte nicht gestartet werden: {exc}", Level.ERROR), result)
+                    self._emit(LogLine(tr('Spiel konnte nicht gestartet werden: {0}').format(exc), Level.ERROR), result)
                     result.failed_step = step.label
                     return
         result.ok = True
@@ -155,7 +156,7 @@ class CompileRunner:
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs,
             )
         except OSError as exc:
-            self._emit(LogLine(f"{step.program} lässt sich nicht starten: {exc}", Level.ERROR), result)
+            self._emit(LogLine(tr('{0} lässt sich nicht starten: {1}').format(step.program, exc), Level.ERROR), result)
             return -1
         with self._lock:
             self._proc = proc
@@ -184,7 +185,7 @@ class CompileRunner:
         self._emit(LogLine(f"==== {step.label} ====", Level.STEP), result)
         src = Path(step.source)
         if not src.is_file():
-            self._emit(LogLine(f"Keine BSP-Datei entstanden: {src}", Level.ERROR), result)
+            self._emit(LogLine(tr('Keine BSP-Datei entstanden: {0}').format(src), Level.ERROR), result)
             return False
         try:
             Path(step.target).parent.mkdir(parents=True, exist_ok=True)
@@ -215,7 +216,7 @@ class CompileRunner:
                 Path(target).parent.mkdir(parents=True, exist_ok=True)
                 Path(target).write_text(step.text, encoding="utf-8")
             except OSError as exc:
-                self._emit(LogLine(f"{target} konnte nicht geschrieben werden: {exc}", Level.ERROR), result)
+                self._emit(LogLine(tr('{0} konnte nicht geschrieben werden: {1}').format(target, exc), Level.ERROR), result)
                 return False
             self._emit(LogLine(f"geschrieben: {target}"), result)
         return True

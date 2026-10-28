@@ -36,7 +36,7 @@ class ProblemsDialog(QDialog):
         self.summary = QLabel()
         lay.addWidget(self.summary)
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels([self.tr("Art"), self.tr("Bereich"), self.tr("Problem")])
+        self.tree.setHeaderLabels([self.tr("Art"), self.tr("Thema"), self.tr("Problem")])
         self.tree.setRootIsDecorated(False)
         self.tree.setWordWrap(True)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -67,7 +67,7 @@ class ProblemsDialog(QDialog):
         self.problems = self.window_.find_problems()
         self.tree.clear()
         for i, p in enumerate(self.problems):
-            item = QTreeWidgetItem([p.level, p.area, p.text])
+            item = QTreeWidgetItem([self.tr(p.level), p.area, p.text])
             item.setForeground(0, LEVEL_COLORS[p.level])
             item.setData(0, Qt.UserRole, i)
             tip = p.text + (self.tr("\nReparieren: {0}").format(p.fix_label) if p.fix is not None else "")

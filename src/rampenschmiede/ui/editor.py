@@ -40,6 +40,7 @@ from ..core.pillars import follow_pillars
 from ..core.sounds import SoundLibrary
 from ..core.templates.starter import grow_hull
 from ..core.tracks import PATH_COLOR, path_segments
+from ..i18n import tr
 from ..render.scene_mesh import SceneMesh
 from ..render.sky import SkyCache, SkyImages
 from ..render.textures import TextureAtlas
@@ -194,7 +195,7 @@ class EditorContext(QObject):
                 self._entity_catalog = load_catalog(existing)
             except Exception as exc:  # kaputte FGD: eingebaute Liste reicht zum Arbeiten
                 self._entity_catalog = builtin_catalog()
-                self.status_message.emit(f"FGD-Dateien nicht lesbar, nutze eingebaute Entity-Liste ({exc})")
+                self.status_message.emit(tr('FGD-Dateien nicht lesbar, nutze eingebaute Entity-Liste ({0})').format(exc))
         return self._entity_catalog
 
     def lights(self) -> LightSet:
@@ -257,7 +258,7 @@ class EditorContext(QObject):
         grow = grow_hull(self.doc)
         if grow is not None:
             self.stack.attach(grow)
-            self.status_message.emit("Hülle vergrößert, damit alles hineinpasst")
+            self.status_message.emit(tr("Hülle vergrößert, damit alles hineinpasst"))
         return True
 
     def undo(self) -> None:
@@ -340,10 +341,10 @@ class EditorContext(QObject):
         """Bereich um die Auswahl legen (mit `pad` Luft) und einschalten."""
         bb = self.selection_bbox()
         if bb is None:
-            self.status_message.emit("Erst etwas auswählen oder mit dem Werkzeug „Bereich“ ziehen")
+            self.status_message.emit(tr("Erst etwas auswählen oder mit dem Werkzeug „Bereich“ ziehen"))
             return False
         self.set_cordon(BBox(tuple(v - pad for v in bb.mins), tuple(v + pad for v in bb.maxs)), True)  # type: ignore[arg-type]
-        self.status_message.emit("Bereich um die Auswahl gelegt: beim Kompilieren wird nur er gebaut")
+        self.status_message.emit(tr("Bereich um die Auswahl gelegt: beim Kompilieren wird nur er gebaut"))
         return True
 
     def cordon_lines(self) -> np.ndarray | None:
@@ -397,11 +398,11 @@ class EditorContext(QObject):
         if bbox is None:
             return False
         pivot = tuple(round(c) for c in bbox.center)
-        return self.transform_selection(lambda o: transform.mirror(o, pivot, axis), "Spiegeln")  # type: ignore[arg-type]
+        return self.transform_selection(lambda o: transform.mirror(o, pivot, axis), tr("Spiegeln"))  # type: ignore[arg-type]
 
     def delete_selection(self) -> None:
         if self.selection:
-            self.run(RemoveObjects(sorted(self.selection), "Löschen"))
+            self.run(RemoveObjects(sorted(self.selection), tr("Löschen")))
 
     def duplicate(self, objs: list[MapObject], offset: Point) -> list[MapObject]:
         """Kopiert Objekte mit neuen IDs (Brush-Entities und Bausteine samt Brushes) und verschiebt sie."""
@@ -409,7 +410,7 @@ class EditorContext(QObject):
         clones, roots = clone_objects(self.doc, objs + self.doc.attached(o.id for o in objs))
         new_objs = [transform.translate(o, offset, self.texture_lock) for o in clones]
         if new_objs:
-            self.run(AddObjects(new_objs, "Duplizieren"))
+            self.run(AddObjects(new_objs, tr("Duplizieren")))
             self.set_selection(roots)
         return new_objs
 

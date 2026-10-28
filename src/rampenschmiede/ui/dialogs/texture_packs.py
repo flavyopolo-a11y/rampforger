@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...i18n import tr
+
 
 def pack_root(folder: str | Path) -> Path:
     """Wählt jemand den materials-Ordner selbst, gilt der Ordner darüber als Paket."""
@@ -24,9 +26,9 @@ def pack_root(folder: str | Path) -> Path:
 def pack_problem(folder: str | Path) -> str:
     p = Path(folder)
     if not p.is_dir():
-        return "Ordner fehlt"
+        return tr("Ordner fehlt")
     if not (p / "materials").is_dir():
-        return "kein materials-Ordner darin"
+        return tr("kein materials-Ordner darin")
     return ""
 
 

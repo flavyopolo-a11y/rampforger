@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ...i18n import tr
 from ..geometry.displacement import is_displacement_solid
 from ..mathutil import BBox, Point
 from ..model import Entity, MapDocument, Solid
@@ -207,11 +208,11 @@ def _simplify(points: list[Point]) -> list[Point]:
 
 def describe(doc: MapDocument, result: SealResult) -> str:
     if result.unknown:
-        return "Keine Entities: Dichtheit nicht prüfbar"
+        return tr("Keine Entities: Dichtheit nicht prüfbar")
     if result.sealed:
-        return "Map ist dicht"
+        return tr("Map ist dicht")
     ent = doc.get(result.entity_id) if result.entity_id is not None else None
     name = ent.classname if isinstance(ent, Entity) else "Entity"
     more = len(result.leaking_ids) - 1
-    extra = f" (und {more} weitere)" if more > 0 else ""
-    return f"Leck: {name}{extra} ist nicht umschlossen"
+    extra = tr(' (und {0} weitere)').format(more) if more > 0 else ""
+    return tr('Leck: {0}{1} ist nicht umschlossen').format(name, extra)

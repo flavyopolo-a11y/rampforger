@@ -29,6 +29,7 @@ from ...core.materials import texturing
 from ...core.models.scatter import KITS, KITS_BY_KEY, STYLE_KITS
 from ...core.surf.catalog import CATALOG
 from ...core.terrain import POWER_LABELS
+from ...i18n import N_
 from ..editor import EditorContext
 from ..icons import icon
 from ..tools.entity_tool import POINT_ENTITIES, EntityTool
@@ -116,8 +117,8 @@ class ToolOptionsPanel(QStackedWidget):
         row = QHBoxLayout()
         group = QButtonGroup(w)
         self.sticker_modes: dict[str, QPushButton] = {}
-        for key, label, tip in (("overlay", "Overlay", "Beliebige Größe, jedes Material (auch Wege, Schilder)"),
-                                ("decal", "Decal", "Bild aus decals/ in Originalgröße, z. B. Graffiti, Risse")):
+        for key, label, tip in (("overlay", N_("Overlay"), N_("Beliebige Größe, jedes Material (auch Wege, Schilder)")),
+                                ("decal", N_("Decal"), N_("Bild aus decals/ in Originalgröße, z. B. Graffiti, Risse"))):
             b = QPushButton(self.tr(label))
             b.setCheckable(True)
             b.setChecked(opts.mode == key)
@@ -209,9 +210,9 @@ class ToolOptionsPanel(QStackedWidget):
             s.valueChanged.connect(lambda v: (setattr(opts, attr, v), self.editor.redraw_requested.emit()))
             return s
 
-        self.wall_height = spin("height", 8, 16384, 16, "Höhe der Wände")
-        self.wall_thickness = spin("thickness", 2, 1024, 8, "Dicke der Wände")
-        self.wall_bottom = spin("bottom", -16384, 16384, 16, "Unterkante; in 3D setzt der erste Klick sie automatisch")
+        self.wall_height = spin("height", 8, 16384, 16, N_("Höhe der Wände"))
+        self.wall_thickness = spin("thickness", 2, 1024, 8, N_("Dicke der Wände"))
+        self.wall_bottom = spin("bottom", -16384, 16384, 16, N_("Unterkante; in 3D setzt der erste Klick sie automatisch"))
         form.addRow(self.tr("Höhe"), self.wall_height)
         form.addRow(self.tr("Dicke"), self.wall_thickness)
         form.addRow(self.tr("Unterkante"), self.wall_bottom)
@@ -601,8 +602,9 @@ class ToolOptionsPanel(QStackedWidget):
         lm.setRange(1, 128)
         lm.setKeyboardTracking(False)
         fields["lightmap"] = lm
-        for key, label in (("scale_u", "Skalierung X"), ("scale_v", "Skalierung Y"), ("shift_u", "Verschiebung X"),
-                           ("shift_v", "Verschiebung Y"), ("rotation", "Drehung"), ("lightmap", "Lightmap-Skalierung")):
+        for key, label in (("scale_u", N_("Skalierung X")), ("scale_v", N_("Skalierung Y")),
+                           ("shift_u", N_("Verschiebung X")), ("shift_v", N_("Verschiebung Y")),
+                           ("rotation", N_("Drehung")), ("lightmap", N_("Lightmap-Skalierung"))):
             form.addRow(self.tr(label), fields[key])
         lay.addLayout(form)
 
@@ -619,10 +621,10 @@ class ToolOptionsPanel(QStackedWidget):
             field.valueChanged.connect(lambda v, k=key: changed(k, v))
 
         just = QHBoxLayout()
-        for mode, label, tip in (("fit", "Einpassen", "Textur genau einmal auf die Seite strecken"),
-                                 ("left", "L", "Linke Kante bündig"), ("right", "R", "Rechte Kante bündig"),
-                                 ("top", "O", "Obere Kante bündig"), ("bottom", "U", "Untere Kante bündig"),
-                                 ("center", "M", "Mittig")):
+        for mode, label, tip in (("fit", N_("Einpassen"), N_("Textur genau einmal auf die Seite strecken")),
+                                 ("left", "L", N_("Linke Kante bündig")), ("right", "R", N_("Rechte Kante bündig")),
+                                 ("top", "O", N_("Obere Kante bündig")), ("bottom", "U", N_("Untere Kante bündig")),
+                                 ("center", "M", N_("Mittig"))):
             b = QPushButton(self.tr(label))
             b.setToolTip(self.tr(tip))
             if len(label) == 1:

@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Iterable, Mapping
 
+from ...i18n import tr
 from ..model.objects import Face, Solid, default_tex_axes
 from ..surf.hull import IPoint, hull_planes
 from .brush import order_on_plane, vmf_points_from_loop
@@ -71,11 +72,11 @@ def move_vertices(solid: Solid, moves: Mapping[IPoint, IPoint], rebuild: bool = 
     new_pts = list(dict.fromkeys(target.values()))
     planes = hull_planes(new_pts)
     if len(planes) < 4:
-        raise VertexError("Der Brush würde flach: Ecken nicht aufeinander schieben")
+        raise VertexError(tr("Der Brush würde flach: Ecken nicht aufeinander schieben"))
     on_hull = {p for _n, _d, on in planes for p in on}
     for v, p in target.items():
         if v in moves and p not in on_hull:
-            raise VertexError("So würde der Brush hohl (nicht konvex). Ecke weniger weit ziehen")
+            raise VertexError(tr("So würde der Brush hohl (nicht konvex). Ecke weniger weit ziehen"))
     # Woher kommt jede neue Ecke?
     sources: dict[IPoint, list[IPoint]] = {}
     for v, p in target.items():

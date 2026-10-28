@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Iterable, Sequence
 
+from ..i18n import tr
 from .blocks import clone_objects, is_block_root, transform_command
 from .commands import AddObjects, Command, Deferred, ReplaceObjects, SwapObjects
 from .geometry import transform
@@ -67,7 +68,7 @@ def ungroup(doc: MapDocument, objs: Sequence[MapObject]) -> Command | None:
         return None
     new = [o.replace(editor=dataclasses.replace(o.editor, group_id=None))
            for o in doc.objects() if o.editor.group_id in gids]
-    return ReplaceObjects(new, "Gruppe auflösen")
+    return ReplaceObjects(new, tr("Gruppe auflösen"))
 
 
 def expand_groups(doc: MapDocument, ids: Iterable[int]) -> set[int]:
@@ -89,13 +90,13 @@ def _solids_of(doc: MapDocument, objs: Iterable[MapObject]) -> tuple[list[Solid]
         if isinstance(o, Solid):
             if o.extra.get("block_of") is not None or (
                     o.parent_id is not None and is_block_root(doc.get(o.parent_id))):
-                raise OrganizeError("Rampen-Bausteine erst lösen (Bibliothek: „Baustein lösen“)")
+                raise OrganizeError(tr("Rampen-Bausteine erst lösen (Bibliothek: „Baustein lösen“)"))
             solids[o.id] = o
             if o.parent_id is not None:
                 sources.add(o.parent_id)
         elif isinstance(o, Entity):
             if is_block_root(o):
-                raise OrganizeError("Rampen-Bausteine erst lösen (Bibliothek: „Baustein lösen“)")
+                raise OrganizeError(tr("Rampen-Bausteine erst lösen (Bibliothek: „Baustein lösen“)"))
             kids = doc.children(o.id)
             if kids:
                 sources.add(o.id)
@@ -113,7 +114,7 @@ def tie_to_entity(doc: MapDocument, objs: Sequence[MapObject], classname: str,
     """Brushes der Auswahl in eine neue Brush-Entity packen (Strg+T)."""
     solids, sources = _solids_of(doc, objs)
     if not solids:
-        raise OrganizeError("Erst Brushes auswählen, die zur Entity werden sollen")
+        raise OrganizeError(tr("Erst Brushes auswählen, die zur Entity werden sollen"))
     kvs = tuple(keyvalues)
     if classname.startswith("trigger_") and not any(k == "spawnflags" for k, _ in kvs):
         kvs += (("spawnflags", "1"),)  # Spieler lösen aus
@@ -133,7 +134,7 @@ def move_to_world(doc: MapDocument, objs: Sequence[MapObject]) -> tuple[Command,
     solids, sources = _solids_of(doc, objs)
     solids = [s for s in solids if s.parent_id is not None]
     if not solids:
-        raise OrganizeError("In der Auswahl sind keine Brushes einer Entity")
+        raise OrganizeError(tr("In der Auswahl sind keine Brushes einer Entity"))
     moved = [s.replace(parent_id=None) for s in solids]
     gone = _emptied(doc, sources, {s.id for s in solids})
     return SwapObjects([s.id for s in solids] + gone, moved, "Zur Welt"), [s.id for s in moved]
@@ -148,7 +149,7 @@ def multi_copy(doc: MapDocument, objs: Sequence[MapObject], count: int, offset: 
     um `pivot`) gedreht. Gibt das Command und die IDs der obersten Kopien zurück."""
     roots = _roots(doc, objs)
     if not roots or count < 1:
-        raise OrganizeError("Erst etwas auswählen, das kopiert werden soll")
+        raise OrganizeError(tr("Erst etwas auswählen, das kopiert werden soll"))
     everything = roots + doc.attached(o.id for o in roots)
     if pivot is None:
         bb = doc.bbox(o.id for o in roots)

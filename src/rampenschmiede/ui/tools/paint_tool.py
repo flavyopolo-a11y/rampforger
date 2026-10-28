@@ -18,6 +18,7 @@ from PySide6.QtGui import QColor, QKeyEvent, QMouseEvent, QPainter, QPen
 from ...core.model import Solid
 from ...core.surf.catalog import Placement, generate
 from ...core.surf.paint import MIN_STROKE, fit_stroke
+from ...i18n import tr
 from .base import Tool, pick_3d
 
 if TYPE_CHECKING:
@@ -111,13 +112,13 @@ class PaintTool(Tool):
     def place(self) -> int | None:
         plan = self.plan()
         if plan is None:
-            self.editor.status_message.emit("Erst links eine Vorlage anklicken")
+            self.editor.status_message.emit(tr("Erst links eine Vorlage anklicken"))
             return None
         key, values, at = plan
         root = self.library.place(key, values, at)
         if root is not None:
             self.yaw, self.z = at.yaw, at.z
-            self.editor.status_message.emit("Gebaut. Weiter malen, Regler links ändern oder Esc")
+            self.editor.status_message.emit(tr("Gebaut. Weiter malen, Regler links ändern oder Esc"))
         return root
 
     # ---- Punkte aus der Maus -----------------------------------------------------------

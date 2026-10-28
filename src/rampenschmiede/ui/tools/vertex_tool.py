@@ -28,6 +28,7 @@ from ...core.geometry.vertex_edit import (
     vertices,
 )
 from ...core.model import Entity, Solid
+from ...i18n import tr
 from .base import Tool, pick_2d, pick_3d
 
 if TYPE_CHECKING:
@@ -91,10 +92,10 @@ class VertexTool(Tool):
     def _warn_unsupported(self) -> None:
         objs = self.editor.selected_objects()
         if any(is_block_root(o) for o in objs):
-            self.editor.status_message.emit("Rampen-Bausteine erst lösen (Bibliothek: „Baustein lösen“), "
-                                            "dann lassen sich ihre Ecken ziehen")
+            self.editor.status_message.emit(tr("Rampen-Bausteine erst lösen (Bibliothek: „Baustein lösen“), "
+                                            "dann lassen sich ihre Ecken ziehen"))
         elif any(isinstance(o, Solid) and is_displacement_solid(o) for o in objs):
-            self.editor.status_message.emit("Gelände formt man mit dem Gelände-Werkzeug (Shift+G)")
+            self.editor.status_message.emit(tr("Gelände formt man mit dem Gelände-Werkzeug (Shift+G)"))
 
     def handles(self) -> list[tuple[int, tuple[float, float, float], tuple[IPoint, ...], bool]]:
         """(Brush-ID, Lage, Ecken, ist_Kante) für alle Griffe."""
@@ -121,7 +122,7 @@ class VertexTool(Tool):
             self.editor.status_message.emit(str(exc))
             return False
         if new:
-            self.editor.run(ReplaceObjects(new, "Ecken verschieben", key))
+            self.editor.run(ReplaceObjects(new, tr("Ecken verschieben"), key))
         return True
 
     def nudge(self, delta: tuple[int, int, int]) -> bool:

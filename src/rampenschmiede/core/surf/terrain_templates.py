@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ...i18n import N_, tr
 from ..geometry import primitives
 from ..geometry.displacement import heights_to_disp, make_displacement, set_surface, surfaces
 from ..model.objects import Face, Solid
@@ -199,28 +200,28 @@ def _builder(kind: str):
 
 def _params(length: int, width: int, height: int, hint: str = "") -> tuple[Param, ...]:
     return (
-        Param("laenge", "Länge", length, 256, 16384, 16, "u"),
-        Param("breite", "Breite", width, 256, 16384, 16, "u"),
-        Param("hoehe", "Höhe", height, -4096, 8192, 16, "u", hint=hint),
-        Param("dicke", "Sockel", 16, 8, 512, 8, "u", hint="Dicke der flachen Brushes unter dem Gelände"),
-        Param("feinheit", "Feinheit", "3", choices=(("2", "Grob (4 × 4 je Kachel)"), ("3", "Normal (8 × 8)"),
-                                                     ("4", "Fein (16 × 16)"))),
-        Param("zufall", "Variante", 1, 0, 9999, hint="Andere Zahl, andere Form"),
-        Param("hang_textur", "Zweite Textur an steilen Hängen", True),
-        Param("mat_gelaende", "Material", DEFAULT_TERRAIN_MATERIAL,
-              hint="Überblend-Material mit zwei Texturen, z. B. nature/blendgrassgravel001a"),
+        Param("laenge", tr("Länge"), length, 256, 16384, 16, "u"),
+        Param("breite", tr("Breite"), width, 256, 16384, 16, "u"),
+        Param("hoehe", tr("Höhe"), height, -4096, 8192, 16, "u", hint=hint),
+        Param("dicke", tr("Sockel"), 16, 8, 512, 8, "u", hint=tr("Dicke der flachen Brushes unter dem Gelände")),
+        Param("feinheit", tr("Feinheit"), "3", choices=(("2", tr("Grob (4 × 4 je Kachel)")), ("3", tr("Normal (8 × 8)")),
+                                                     ("4", tr("Fein (16 × 16)")))),
+        Param("zufall", tr("Variante"), 1, 0, 9999, hint=tr("Andere Zahl, andere Form")),
+        Param("hang_textur", tr("Zweite Textur an steilen Hängen"), True),
+        Param("mat_gelaende", tr("Material"), DEFAULT_TERRAIN_MATERIAL,
+              hint=tr("Überblend-Material mit zwei Texturen, z. B. nature/blendgrassgravel001a")),
     )
 
 
-_GROUP = "Gelände"
+_GROUP = N_("Gelände")
 for key, name, desc, dims in (
-    ("huegel", "Hügel", "Runde, sanfte Erhebung.", (1024, 1024, 192)),
-    ("berg", "Berg", "Hoher Gipfel mit Graten, läuft am Rand flach aus.", (2048, 2048, 1024)),
-    ("felsen", "Felsen", "Unruhige, steinige Erhebung.", (768, 768, 256)),
-    ("insel", "Insel", "Flaches Plateau mit weichem Ufer, gut über Wasser.", (2048, 2048, 128)),
-    ("klippe", "Klippe", "Steile Kante quer über die Fläche, unten und oben flach.", (1024, 1024, 512)),
+    ("huegel", tr("Hügel"), tr("Runde, sanfte Erhebung."), (1024, 1024, 192)),
+    ("berg", "Berg", tr("Hoher Gipfel mit Graten, läuft am Rand flach aus."), (2048, 2048, 1024)),
+    ("felsen", "Felsen", tr("Unruhige, steinige Erhebung."), (768, 768, 256)),
+    ("insel", "Insel", tr("Flaches Plateau mit weichem Ufer, gut über Wasser."), (2048, 2048, 128)),
+    ("klippe", "Klippe", tr("Steile Kante quer über die Fläche, unten und oben flach."), (1024, 1024, 512)),
 ):
-    _add(Template(f"gelaende_{key}", name, _GROUP, desc + " Formbar mit dem Gelände-Werkzeug (Shift+G).",
+    _add(Template(f"gelaende_{key}", name, _GROUP, desc + tr(" Formbar mit dem Gelände-Werkzeug (Shift+G)."),
                   _params(*dims), _builder(key), check_angles=False, world=True))
 
 

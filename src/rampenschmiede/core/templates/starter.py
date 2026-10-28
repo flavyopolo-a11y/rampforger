@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import math
 
+from ...i18n import tr
 from ..commands import Command, ReplaceObjects
 from ..geometry import primitives
 from ..mathutil import BBox, Point
@@ -168,5 +169,5 @@ def grow_hull(doc: MapDocument, margin: int = HULL_MARGIN, snap: int = HULL_SNAP
         faces = f.faces if side in ("boden", "decke") else tuple(
             dataclasses.replace(face, material=_main_material(old)) for face in f.faces)
         new.append(dataclasses.replace(old, faces=faces))
-    return ReplaceObjects(new, "Hülle vergrößern")
+    return ReplaceObjects(new, tr("Hülle vergrößern"))
 

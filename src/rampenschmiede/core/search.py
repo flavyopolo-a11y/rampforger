@@ -11,6 +11,7 @@ import fnmatch
 import re
 from typing import Iterable
 
+from ..i18n import tr
 from .blocks import MEMBER_KEY
 from .commands import Command, ReplaceObjects
 from .materials.apply import FaceRef, edit_faces
@@ -110,7 +111,7 @@ def replace_materials(doc: MapDocument, pattern: str, new: str, ids: Iterable[in
         if MEMBER_KEY in s.extra:
             continue
         refs += [(s.id, i) for i, f in enumerate(s.faces) if material_match(f.material, pattern)]
-    return edit_faces(doc, refs, lambda f: dataclasses.replace(f, material=new_u), "Textur ersetzen")
+    return edit_faces(doc, refs, lambda f: dataclasses.replace(f, material=new_u), tr("Textur ersetzen"))
 
 
 def used_materials(doc: MapDocument) -> list[str]:

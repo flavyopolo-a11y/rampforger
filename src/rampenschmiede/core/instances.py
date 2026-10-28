@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from typing import Callable
 
+from ..i18n import tr
 from .geometry.transform import TransformError, _transform_solid, mat_mul_vec
 from .mathutil import BBox, Point
 from .model import Entity, MapDocument, MapObject, Solid, TexAxis
@@ -250,14 +251,14 @@ def collapse_instances(doc: MapDocument, base_dir: Path | None,
         content = cache.get(path) if path is not None else None
         if content is None:
             name = inst.get("targetname") or f"#{inst.id}"
-            problems.append(f"Instanz {name}: Datei „{inst.get('file')}“ nicht gefunden oder nicht lesbar")
+            problems.append(tr('Instanz {0}: Datei „{1}“ nicht gefunden oder nicht lesbar').format(name, inst.get('file')))
             return []
         placed = placed_objects(inst, content, out.new_id)
         result: list[MapObject] = []
         for obj in placed:
             if isinstance(obj, Entity) and obj.classname.lower() == INSTANCE:
                 if depth >= MAX_DEPTH:
-                    problems.append(f"Instanzen tiefer als {MAX_DEPTH} Ebenen verschachtelt: {path}")
+                    problems.append(tr('Instanzen tiefer als {0} Ebenen verschachtelt: {1}').format(MAX_DEPTH, path))
                     continue
                 result += expand(obj, path.parent, depth + 1)  # type: ignore[union-attr]
             else:

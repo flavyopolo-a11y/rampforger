@@ -19,6 +19,7 @@ from ...core.commands import SetWorldKeyvalues
 from ...core.model import Entity
 from ...core.scene import kind_of
 from ...core.scene import label as object_label
+from ...i18n import N_
 from ...render.sky import available_skies
 from ..editor import EditorContext
 from .entity_panel import EntityPanel
@@ -26,13 +27,13 @@ from .entity_panel import EntityPanel
 LIMIT = 32768
 #: Map-Eigenschaften (worldspawn) wie in Hammer: (Schlüssel, Beschriftung, Art, Standard, Hinweis)
 WORLD_FIELDS = (
-    ("message", "Titel der Map", "text", "", "Wird beim Laden der Map angezeigt"),
-    ("skyname", "Himmel", "sky", "sky_day01_01", "Name der 2D-Skybox (materials/skybox/<Name>rt …)"),
-    ("detailmaterial", "Detail-Material", "text", "detail/detailsprites", "Bild für Gras-Sprites auf Displacements"),
-    ("detailvbsp", "Detail-Datei", "text", "detail.vbsp", "Welche Detail-Sprites auf welchen Materialien wachsen"),
-    ("maxpropscreenwidth", "Props ausblenden ab", "int", "-1",
-     "Props verschwinden, wenn sie schmaler als so viele Pixel sind (-1 = nie)"),
-    ("coldworld", "Kalte Welt", "bool", "0", "Atemwolken und kalter Hauch (nur manche Spiele)"),
+    ("message", N_("Titel der Map"), "text", "", N_("Wird beim Laden der Map angezeigt")),
+    ("skyname", N_("Himmel"), "sky", "sky_day01_01", N_("Name der 2D-Skybox (materials/skybox/<Name>rt …)")),
+    ("detailmaterial", N_("Detail-Material"), "text", "detail/detailsprites", N_("Bild für Gras-Sprites auf Displacements")),
+    ("detailvbsp", N_("Detail-Datei"), "text", "detail.vbsp", N_("Welche Detail-Sprites auf welchen Materialien wachsen")),
+    ("maxpropscreenwidth", N_("Props ausblenden ab"), "int", "-1",
+     N_("Props verschwinden, wenn sie schmaler als so viele Pixel sind (-1 = nie)")),
+    ("coldworld", N_("Kalte Welt"), "bool", "0", N_("Atemwolken und kalter Hauch (nur manche Spiele)")),
 )
 
 

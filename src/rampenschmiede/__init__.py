@@ -1,3 +1,3 @@
 """Rampenschmiede: Map-Editor für Surf-, Bhop- und Trick-Maps."""
 
-__version__ = "0.19.0"
+__version__ = "0.20.0"

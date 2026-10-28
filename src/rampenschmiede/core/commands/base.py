@@ -8,11 +8,12 @@ from __future__ import annotations
 import random
 from typing import Callable, Iterable, Sequence
 
+from ...i18n import tr
 from ..model import ChangeSet, EditorInfo, MapDocument, MapObject, Solid
 
 
 class Command:
-    description: str = "Änderung"
+    description: str = tr("Änderung")
     #: Commands mit gleichem, nicht leerem merge_key verschmelzen zu einem Undo-Schritt
     #: (z. B. alle Mausbewegungen eines Ziehvorgangs).
     merge_key: object | None = None
@@ -29,7 +30,7 @@ class Command:
 
 
 class AddObjects(Command):
-    def __init__(self, objs: Sequence[MapObject], description: str = "Hinzufügen") -> None:
+    def __init__(self, objs: Sequence[MapObject], description: str = tr("Hinzufügen")) -> None:
         self.objs = list(objs)
         self.description = description
 
@@ -43,7 +44,7 @@ class AddObjects(Command):
 class RemoveObjects(Command):
     """Entfernt Objekte. Bei Brush-Entities und Bausteinen werden ihre Brushes mit entfernt."""
 
-    def __init__(self, ids: Iterable[int], description: str = "Löschen") -> None:
+    def __init__(self, ids: Iterable[int], description: str = tr("Löschen")) -> None:
         self.ids = list(dict.fromkeys(ids))
         self.description = description
         self.removed: list[MapObject] = []
@@ -92,7 +93,7 @@ class SwapObjects(Command):
     """Entfernt Objekte und fügt andere ein, als ein Undo-Schritt. Objekte, die mit derselben
     ID wieder eingefügt werden, gelten als geändert (z. B. ein neu erzeugter Baustein)."""
 
-    def __init__(self, remove_ids: Iterable[int], add: Sequence[MapObject], description: str = "Ändern",
+    def __init__(self, remove_ids: Iterable[int], add: Sequence[MapObject], description: str = tr("Ändern"),
                  merge_key: object | None = None) -> None:
         self.remove_ids = list(dict.fromkeys(remove_ids))
         self.added = list(add)
@@ -132,7 +133,7 @@ class SwapObjects(Command):
 
 
 class SetWorldKeyvalues(Command):
-    def __init__(self, kvs: tuple[tuple[str, str], ...], description: str = "Map-Eigenschaften") -> None:
+    def __init__(self, kvs: tuple[tuple[str, str], ...], description: str = tr("Map-Eigenschaften")) -> None:
         self.new = kvs
         self.old: tuple[tuple[str, str], ...] = ()
         self.description = description

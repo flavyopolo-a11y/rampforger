@@ -16,6 +16,7 @@ import re
 import time
 from dataclasses import dataclass
 
+from ..i18n import tr
 from .model import Entity, MapDocument
 
 #: Grenzen des Momentum-Formats (libs/formats/zone/src/zone-validator.ts)
@@ -133,22 +134,22 @@ def zone_problems(zones: list[Zone]) -> list[str]:
         if ends == 0:
             problems.append(f"{where}: Zielzone fehlt")
         if track and any(z.kind == "stage" for z in mine):
-            problems.append(f"{where}: Stages gibt es nur auf der Hauptstrecke (Momentum)")
+            problems.append(tr('{0}: Stages gibt es nur auf der Hauptstrecke (Momentum)').format(where))
     stages = sorted(z.number for z in zones if z.kind == "stage" and z.track == 0)
     if stages:
         dupes = sorted({n for n in stages if stages.count(n) > 1})
         if dupes:
-            problems.append("Stage doppelt vergeben: " + ", ".join(map(str, dupes)))
+            problems.append(tr("Stage doppelt vergeben: ") + ", ".join(map(str, dupes)))
         expected = list(range(2, 2 + len(set(stages))))
         if sorted(set(stages)) != expected:
-            problems.append("Stages sollten lückenlos ab 2 nummeriert sein (Stage 1 ist die Startzone), "
-                            "gefunden: " + ", ".join(map(str, sorted(set(stages)))))
+            problems.append(tr("Stages sollten lückenlos ab 2 nummeriert sein (Stage 1 ist die Startzone), "
+                            "gefunden: ") + ", ".join(map(str, sorted(set(stages)))))
     bonuses = [t for t in tracks if t]
     if bonuses and bonuses != list(range(1, len(bonuses) + 1)):
-        problems.append("Boni sollten lückenlos ab 1 nummeriert sein, gefunden: " + ", ".join(map(str, bonuses)))
+        problems.append(tr("Boni sollten lückenlos ab 1 nummeriert sein, gefunden: ") + ", ".join(map(str, bonuses)))
     for z in zones:
         if any(abs(c) > MOMENTUM_MAX_COORD for p in z.points for c in p):
-            problems.append(f"{z.label} liegt außerhalb der Map")
+            problems.append(tr('{0} liegt außerhalb der Map').format(z.label))
     return problems
 
 

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ...i18n import tr
 from ..geometry.brush import ray_intersect_solid
 from ..geometry.displacement import is_displacement_solid, solid_ray_face
 from ..mathutil import Point
@@ -41,22 +42,22 @@ class DetailKit:
 
 
 KITS: tuple[DetailKit, ...] = (
-    DetailKit("wald", "Wald und Wiese", "Bäume, Büsche und Farne.",
+    DetailKit("wald", tr("Wald und Wiese"), tr("Bäume, Büsche und Farne."),
               ("models/props_foliage/*tree*", "models/props_foliage/*bush*", "models/props_foliage/*shrub*",
                "models/props_foliage/*fern*", "models/props_foliage/*grass*", "models/props/de_inferno/bush*",
                "models/props/pi_fern*")),
-    DetailKit("felsen", "Felsen und Geröll", "Steine und Felsbrocken, am Hang ausgerichtet.",
+    DetailKit("felsen", tr("Felsen und Geröll"), tr("Steine und Felsbrocken, am Hang ausgerichtet."),
               ("models/props_wasteland/rock*", "models/props_foliage/rock*", "models/props/*rock*",
                "models/props_canal/rock*", "models/props_debris/*rock*", "models/props_nature/rock*"),
               align=True),
-    DetailKit("wueste", "Wüste", "Kakteen, Palmen, Steine und Kisten aus Dust und Aztec.",
+    DetailKit("wueste", tr("Wüste"), tr("Kakteen, Palmen, Steine und Kisten aus Dust und Aztec."),
               ("models/props/de_inferno/cactus*", "models/props/de_dust/*", "models/props/cs_militia/*rock*",
                "models/props_foliage/*palm*", "models/props/de_aztec/*")),
-    DetailKit("industrie", "Industrie", "Fässer, Kisten, Paletten und Absperrungen.",
+    DetailKit("industrie", tr("Industrie"), tr("Fässer, Kisten, Paletten und Absperrungen."),
               ("models/props_c17/oildrum*", "models/props_junk/wood_crate*", "models/props_junk/*pallet*",
                "models/props_industrial/*", "models/props_wasteland/barricade*", "models/props/de_nuke/*crate*",
                "models/props/de_train/*barrel*", "models/props_c17/concrete_barrier*")),
-    DetailKit("stadt", "Stadt", "Laternen, Bänke, Mülltonnen und Hydranten.",
+    DetailKit("stadt", tr("Stadt"), tr("Laternen, Bänke, Mülltonnen und Hydranten."),
               ("models/props_c17/lamppost*", "models/props_c17/bench*", "models/props_junk/trashbin*",
                "models/props_junk/trashdumpster*", "models/props_c17/fence*", "models/props/cs_office/*plant*",
                "models/props/cs_italy/*")),

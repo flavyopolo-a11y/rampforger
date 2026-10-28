@@ -8,6 +8,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable, Iterable
 
+from ...i18n import tr
 from ..blocks import MEMBER_KEY, block_info, change_block
 from ..commands import Command, MacroCommand, ReplaceObjects
 from ..model import Entity, Face, MapDocument, MapObject, Solid
@@ -170,7 +171,7 @@ def expand_scope(doc: MapDocument, ids: Iterable[int], scope: str) -> list[int]:
 
 
 def edit_faces(doc: MapDocument, refs: Iterable[FaceRef], fn: Callable[[Face], Face],
-               description: str = "Seiten bearbeiten", merge_key: object | None = None) -> Command | None:
+               description: str = tr("Seiten bearbeiten"), merge_key: object | None = None) -> Command | None:
     """`fn` auf einzelne Seiten anwenden. Seiten von Bausteinen können nur ihr Material
     ändern (über die Regler), Ausrichtung gilt dort nicht dauerhaft und wird übersprungen."""
     by_solid: dict[int, list[int]] = {}

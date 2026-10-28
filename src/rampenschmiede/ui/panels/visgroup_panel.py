@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core import visgroups as vg
+from ...i18n import N_
 from ..editor import EditorContext
 from ..icons import icon
 
@@ -38,10 +39,10 @@ class VisgroupPanel(QWidget):
         title = QLabel(self.tr("Sichtgruppen"))
         title.setStyleSheet("font-weight: bold;")
         head.addWidget(title, 1)
-        self.new_btn = self._button("visgroup", "Neue Sichtgruppe aus der Auswahl", self.create_from_selection)
-        self.add_btn = self._button("new", "Auswahl zur markierten Gruppe hinzufügen", self.add_selection)
-        self.remove_btn = self._button("hole", "Auswahl aus der markierten Gruppe nehmen", self.remove_selection)
-        self.delete_btn = self._button("eye_off", "Markierte Gruppe auflösen (die Objekte bleiben)",
+        self.new_btn = self._button("visgroup", N_("Neue Sichtgruppe aus der Auswahl"), self.create_from_selection)
+        self.add_btn = self._button("new", N_("Auswahl zur markierten Gruppe hinzufügen"), self.add_selection)
+        self.remove_btn = self._button("hole", N_("Auswahl aus der markierten Gruppe nehmen"), self.remove_selection)
+        self.delete_btn = self._button("eye_off", N_("Markierte Gruppe auflösen (die Objekte bleiben)"),
                                        self.delete_current)
         for b in (self.new_btn, self.add_btn, self.remove_btn, self.delete_btn):
             head.addWidget(b)

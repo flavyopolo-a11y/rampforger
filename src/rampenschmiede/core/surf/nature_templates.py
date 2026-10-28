@@ -13,11 +13,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from ...i18n import N_, tr
 from .catalog import Param, Placement, Template, _add, _box_points, build_trigger_box
 from .hull import IPoint, hull_faces
 from .sweep import SweepPiece
 
-GROUP = "Natur"
+GROUP = N_("Natur")
 NODRAW = "TOOLS/TOOLSNODRAW"
 #: HL2-Wasser, in CS:S und Momentum vorhanden; fehlt es, sucht der Editor ein anderes Wasser
 DEFAULT_WATER = "NATURE/WATER_CANALS_WATER2"
@@ -80,13 +81,13 @@ def water_triggers(v: dict, at: Placement) -> list[tuple[str, tuple[tuple[str, s
     return [("trigger_hurt", _hurt(), _box(v, at, at.z, v["tiefe"]))]
 
 
-_add(Template("wasser", "Wasser", GROUP,
-              "Wasserfläche mit echtem Source-Wasser (Spiegelung, Schwimmen). Unterkante auf den Boden legen. "
-              "Mit „Tod im Wasser“ wird es zur Todesfalle.",
-              (Param("laenge", "Länge", 1024, 32, 16384, 16, "u"), Param("breite", "Breite", 1024, 32, 16384, 16, "u"),
-               Param("tiefe", "Tiefe", 128, 16, 4096, 16, "u"),
-               Param("mat_wasser", "Wasser-Material", DEFAULT_WATER, hint="Ein Material mit Wasser-Shader"),
-               Param("todeswasser", "Tod im Wasser", False, hint="Wer hineinfällt, stirbt (trigger_hurt)")),
+_add(Template("wasser", tr("Wasser"), GROUP,
+              tr("Wasserfläche mit echtem Source-Wasser (Spiegelung, Schwimmen). Unterkante auf den Boden legen. "
+              "Mit „Tod im Wasser“ wird es zur Todesfalle."),
+              (Param("laenge", tr("Länge"), 1024, 32, 16384, 16, "u"), Param("breite", tr("Breite"), 1024, 32, 16384, 16, "u"),
+               Param("tiefe", tr("Tiefe"), 128, 16, 4096, 16, "u"),
+               Param("mat_wasser", tr("Wasser-Material"), DEFAULT_WATER, hint=tr("Ein Material mit Wasser-Shader")),
+               Param("todeswasser", tr("Tod im Wasser"), False, hint=tr("Wer hineinfällt, stirbt (trigger_hurt)"))),
               build_water, check_angles=False, world=True, triggers=water_triggers))
 
 
@@ -101,16 +102,16 @@ def lava_triggers(v: dict, at: Placement) -> list[tuple[str, tuple[tuple[str, st
     return [("trigger_hurt", _hurt(), _box(v, at, at.z + v["tiefe"] - LAVA_REACH, 2 * LAVA_REACH))]
 
 
-_add(Template("lava", "Lava", GROUP, "Glühender Boden: Wer ihn berührt, stirbt.",
-              (Param("laenge", "Länge", 1024, 32, 16384, 16, "u"), Param("breite", "Breite", 1024, 32, 16384, 16, "u"),
-               Param("tiefe", "Dicke", 32, 16, 1024, 16, "u"),
-               Param("mat_lava", "Material", DEFAULT_LAVA, hint="Standard: eigene leuchtende Lava-Textur")),
+_add(Template("lava", tr("Lava"), GROUP, tr("Glühender Boden: Wer ihn berührt, stirbt."),
+              (Param("laenge", tr("Länge"), 1024, 32, 16384, 16, "u"), Param("breite", tr("Breite"), 1024, 32, 16384, 16, "u"),
+               Param("tiefe", tr("Dicke"), 32, 16, 1024, 16, "u"),
+               Param("mat_lava", tr("Material"), DEFAULT_LAVA, hint=tr("Standard: eigene leuchtende Lava-Textur"))),
               build_lava, check_angles=False, world=True, triggers=lava_triggers))
 
 
 # ---- Kill-Zone -------------------------------------------------------------------------
 
-KILL_CHOICES = (("tod", "Tod"), ("zurueck", "Zurück zum Start (Teleport)"))
+KILL_CHOICES = (("tod", "Tod"), ("zurueck", tr("Zurück zum Start (Teleport)")))
 
 
 def kill_entity(v: dict, at: Placement) -> tuple[str, tuple[tuple[str, str], ...]]:
@@ -119,14 +120,14 @@ def kill_entity(v: dict, at: Placement) -> tuple[str, tuple[tuple[str, str], ...
     return "trigger_hurt", _hurt()
 
 
-_add(Template("killzone", "Kill-Zone (Grube)", GROUP,
-              "Unten in Gruben und Abgründe legen: Wer hineinfällt, stirbt oder landet wieder am Start. "
-              "Für ein Loch im Boden erst mit dem Werkzeug „Loch“ den Boden öffnen.",
-              (Param("laenge", "Länge", 1024, 32, 16384, 16, "u"), Param("breite", "Breite", 1024, 32, 16384, 16, "u"),
-               Param("hoehe", "Höhe", 64, 16, 4096, 16, "u"),
-               Param("art", "Was passiert", "tod", choices=KILL_CHOICES),
-               Param("ziel", "Zielname", "zurueck", only_if=("art", "zurueck"),
-                     hint="targetname des info_teleport_destination; wird beim Einfügen am Start angelegt")),
+_add(Template("killzone", tr("Kill-Zone (Grube)"), GROUP,
+              tr("Unten in Gruben und Abgründe legen: Wer hineinfällt, stirbt oder landet wieder am Start. "
+              "Für ein Loch im Boden erst mit dem Werkzeug „Loch“ den Boden öffnen."),
+              (Param("laenge", tr("Länge"), 1024, 32, 16384, 16, "u"), Param("breite", tr("Breite"), 1024, 32, 16384, 16, "u"),
+               Param("hoehe", tr("Höhe"), 64, 16, 4096, 16, "u"),
+               Param("art", tr("Was passiert"), "tod", choices=KILL_CHOICES),
+               Param("ziel", tr("Zielname"), "zurueck", only_if=("art", "zurueck"),
+                     hint=tr("targetname des info_teleport_destination; wird beim Einfügen am Start angelegt"))),
               build_trigger_box, check_angles=False, entity=kill_entity))
 
 

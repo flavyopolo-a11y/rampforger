@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, fields, replace
 
+from ...i18n import tr
+
 
 @dataclass
 class CompileSettings:
@@ -32,23 +34,23 @@ class CompileSettings:
 
 PRESETS: dict[str, tuple[str, str, CompileSettings]] = {
     "geometry": (
-        "Nur Geometrie",
-        "Sekunden. Ohne VIS und Licht: alles hell, gut zum Testen von Rampen und Sprüngen.",
+        tr("Nur Geometrie"),
+        tr("Sekunden. Ohne VIS und Licht: alles hell, gut zum Testen von Rampen und Sprüngen."),
         CompileSettings(preset="geometry", run_vvis=False, run_vrad=False),
     ),
     "fast": (
-        "Schnell",
-        "Grobe Sichtbarkeit und schnelles Licht. Für Zwischentests.",
+        tr("Schnell"),
+        tr("Grobe Sichtbarkeit und schnelles Licht. Für Zwischentests."),
         CompileSettings(preset="fast", vvis_args="-fast", vrad_args="-fast -bounce 2"),
     ),
     "normal": (
-        "Normal",
-        "Volle Sichtbarkeit und normales Licht.",
+        tr("Normal"),
+        tr("Volle Sichtbarkeit und normales Licht."),
         CompileSettings(preset="normal"),
     ),
     "final": (
-        "Final",
-        "Für die Veröffentlichung: LDR und HDR, weiche Schatten, Props werfen Schatten. Dauert lange.",
+        tr("Final"),
+        tr("Für die Veröffentlichung: LDR und HDR, weiche Schatten, Props werfen Schatten. Dauert lange."),
         CompileSettings(
             preset="final",
             vrad_args="-both -final -textureshadows -StaticPropLighting -StaticPropPolys",

@@ -22,6 +22,7 @@ from ...core.blocks import block_info, change_block, is_clip_member
 from ...core.materials.apply import FaceRef, edit_faces, fitted_block, replace_material
 from ...core.materials.texturing import scale_by, shift_by
 from ...core.model import Face, Solid
+from ...i18n import tr
 from .base import Tool, _ray_box, _visible, hit_solid_face
 
 if TYPE_CHECKING:
@@ -154,7 +155,7 @@ class FaceTool(Tool):
 
     def apply_material(self, material: str, refs: list[FaceRef] | None = None) -> bool:
         material = material.upper()
-        return self.edit(lambda f: dataclasses.replace(f, material=material), "Material anwenden", refs=refs)
+        return self.edit(lambda f: dataclasses.replace(f, material=material), tr("Material anwenden"), refs=refs)
 
     def recolor(self, ref: FaceRef, material: str | None = None) -> bool:
         """Umfärben per Klick: Das Material dieser Seite wird in der ganzen Map ersetzt."""
@@ -168,7 +169,7 @@ class FaceTool(Tool):
         cmd = replace_material(self.editor.doc, old, new)
         if cmd is None or not self.editor.run(cmd):
             return False
-        self.editor.status_message.emit(f"Umgefärbt: {old} → {new}")
+        self.editor.status_message.emit(tr('Umgefärbt: {0} → {1}').format(old, new))
         return True
 
     # ---- Textur ziehen -------------------------------------------------------------------
@@ -220,20 +221,20 @@ class FaceTool(Tool):
         step = tuple(total[k] - last[k] for k in range(3))
         d.last = total
         self.edit(lambda f: shift_by(f, step, self.texture_size(f.material)),  # type: ignore[arg-type]
-                  "Textur verschieben", d.merge_key)
+                  tr("Textur verschieben"), d.merge_key)
 
     def _scale(self, d: _TexDrag, factor: float) -> None:
         if d.root is not None:
             values = dict(d.values)
             values["textur_groesse"] = max(10, min(1000, round(d.values.get("textur_groesse", 100) * factor)))
             self._change_block(d, values)
-            self.editor.status_message.emit(f"Textur-Größe {values['textur_groesse']} %")
+            self.editor.status_message.emit(tr('Textur-Größe {0} %').format(values['textur_groesse']))
             return
         last = d.last if isinstance(d.last, float) else 1.0
         step = factor / last
         d.last = factor
         self.edit(lambda f: scale_by(f, step, d.start_hit, self.texture_size(f.material)),
-                  "Textur skalieren", d.merge_key)
+                  tr("Textur skalieren"), d.merge_key)
 
     def _change_block(self, d: _TexDrag, values: dict) -> None:
         if d.root is None or self.editor.doc.get(d.root) is None:

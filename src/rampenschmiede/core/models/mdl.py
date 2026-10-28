@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ...i18n import tr
+
 STATIC_PROP_FLAG = 0x10
 MDL_VERSIONS = range(44, 50)
 VTX_SUFFIXES = (".dx90.vtx", ".dx80.vtx", ".sw.vtx", ".vtx")
@@ -139,14 +141,14 @@ def _vec(data: bytes, offset: int) -> tuple[float, float, float]:
 
 def read_header(data: bytes) -> StudioHeader:
     if len(data) < 408 or data[:4] != b"IDST":
-        raise ModelError("keine MDL-Datei")
+        raise ModelError(tr("keine MDL-Datei"))
     version = struct.unpack_from("<i", data, 4)[0]
     if version not in MDL_VERSIONS:
-        raise ModelError(f"MDL-Version {version} wird nicht unterstützt")
+        raise ModelError(tr('MDL-Version {0} wird nicht unterstützt').format(version))
     try:
         return _read_header(data, version)
     except (struct.error, IndexError) as exc:
-        raise ModelError(f"MDL beschädigt: {exc}") from exc
+        raise ModelError(tr('MDL beschädigt: {0}').format(exc)) from exc
 
 
 def _read_header(data: bytes, version: int) -> StudioHeader:
@@ -206,13 +208,13 @@ def _read_header(data: bytes, version: int) -> StudioHeader:
 def read_vertices(data: bytes) -> np.ndarray:
     """Alle Vertices der höchsten Detailstufe (mit angewendeter Fixup-Tabelle)."""
     if len(data) < 64 or data[:4] != b"IDSV":
-        raise ModelError("keine VVD-Datei")
+        raise ModelError(tr("keine VVD-Datei"))
     num_lods = struct.unpack_from("<i", data, 12)[0]
     lod_counts = struct.unpack_from("<8i", data, 16)
     num_fixups, fixup_start, vertex_start = struct.unpack_from("<3i", data, 48)
     total = lod_counts[0] if num_lods > 0 else 0
     if vertex_start + total * 48 > len(data) or total < 0:
-        raise ModelError("VVD beschädigt")
+        raise ModelError(tr("VVD beschädigt"))
     verts = np.frombuffer(data, dtype=_VERTEX, count=total, offset=vertex_start)
     if num_fixups <= 0:
         return verts
@@ -248,16 +250,16 @@ def _strip_groups(data: bytes, mesh: int, count: int, offset: int) -> list[tuple
             groups.append((verts, idx))
         if ok:
             return groups
-    raise ModelError("VTX beschädigt")
+    raise ModelError(tr("VTX beschädigt"))
 
 
 def read_triangles(data: bytes, header: StudioHeader) -> tuple[list[np.ndarray], list[int]]:
     """Dreiecke je Mesh als Indizes in die VVD-Vertices, dazu die Material-Spalte je Mesh."""
     if len(data) < 36:
-        raise ModelError("keine VTX-Datei")
+        raise ModelError(tr("keine VTX-Datei"))
     version, = struct.unpack_from("<i", data, 0)
     if version != 7:
-        raise ModelError(f"VTX-Version {version} wird nicht unterstützt")
+        raise ModelError(tr('VTX-Version {0} wird nicht unterstützt').format(version))
     body_count, body_offset = struct.unpack_from("<2i", data, 28)
     tris: list[np.ndarray] = []
     materials: list[int] = []
@@ -283,12 +285,12 @@ def read_triangles(data: bytes, header: StudioHeader) -> tuple[list[np.ndarray],
                         continue
                     orig = verts["orig"].astype(np.int64)
                     if int(orig.max()) >= ref.vertex_count:
-                        raise ModelError("VTX passt nicht zur MDL")
+                        raise ModelError(tr("VTX passt nicht zur MDL"))
                     tri = (orig[idx.astype(np.int64)] + ref.vertex_start).reshape(-1, 3)
                     tris.append(tri.astype(np.int32))
                     materials.append(ref.material)
     except struct.error as exc:
-        raise ModelError(f"VTX beschädigt: {exc}") from exc
+        raise ModelError(tr('VTX beschädigt: {0}').format(exc)) from exc
     return tris, materials
 
 
@@ -302,7 +304,7 @@ def build_geometry(header: StudioHeader, vvd: bytes, vtx: bytes) -> ModelGeometr
         triangles = np.zeros((0, 3), dtype=np.int32)
         tri_material = np.zeros(0, dtype=np.int32)
     if len(triangles) and int(triangles.max()) >= len(verts):
-        raise ModelError("VTX verweist auf fehlende Vertices")
+        raise ModelError(tr("VTX verweist auf fehlende Vertices"))
     return ModelGeometry(
         positions=np.ascontiguousarray(verts["pos"], dtype=np.float32),
         normals=np.ascontiguousarray(verts["normal"], dtype=np.float32),

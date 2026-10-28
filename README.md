@@ -14,6 +14,17 @@ spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
 ![Rampenschmiede, Etappe 3: Rampen-Bibliothek mit Reglern einer Kurve](docs/bilder/etappe3.png)
 
+## Sprache / Language
+
+The interface is in **English** by default. *View → Language* switches to **Deutsch** or
+**Русский**; the new language applies after a restart.
+
+Die Oberfläche ist standardmäßig englisch. Unter *Ansicht → Sprache* lässt sich Deutsch oder
+Russisch wählen, die Sprache gilt nach dem Neustart. Die Texte im Code sind deutsch,
+`src/rampenschmiede/resources/i18n/<sprache>.json` ordnet ihnen die Übersetzung zu.
+`python tools/i18n_extract.py` zählt fehlende Übersetzungen, `--missing en` listet sie auf;
+ein Test schlägt fehl, solange ein Text fehlt.
+
 ## Installation
 
 ### Fertige .exe (empfohlen)

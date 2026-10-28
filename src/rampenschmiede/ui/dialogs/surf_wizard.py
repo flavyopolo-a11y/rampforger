@@ -15,8 +15,9 @@ from PySide6.QtWidgets import (
 from ...core.surf.catalog import CATALOG
 from ...core.templates import RAMP_KINDS, SurfMapSettings
 from ...core.templates.surf_map import MAP_LIMIT, total_length
+from ...i18n import tr
 
-GAMES = (("css", "Counter-Strike: Source"), ("momentum", "Momentum Mod"), ("", "Beide (alle Spawns)"))
+GAMES = (("css", tr("Counter-Strike: Source")), ("momentum", tr("Momentum Mod")), ("", tr("Beide (alle Spawns)")))
 
 
 def _spin(lo: int, hi: int, value: int, step: int, suffix: str = " u") -> QSpinBox:

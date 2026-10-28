@@ -10,6 +10,7 @@ from typing import Iterable
 
 import numpy as np
 
+from ..i18n import tr
 from .geometry.displacement import (
     POWERS,
     brush_stroke,
@@ -25,7 +26,7 @@ from .mathutil import Point
 from .model import MapDocument, Solid, owner_id
 
 #: Anzeige der Power-Stufen: Felder je Kante
-POWER_LABELS = {2: "4 × 4 Felder", 3: "8 × 8 Felder", 4: "16 × 16 Felder"}
+POWER_LABELS = {2: tr("4 × 4 Felder"), 3: tr("8 × 8 Felder"), 4: tr("16 × 16 Felder")}
 
 
 class TerrainError(ValueError):
@@ -48,12 +49,12 @@ def top_face(solid: Solid) -> int | None:
 def convert(doc: MapDocument, solid: Solid, power: int = 3) -> Solid:
     """Oberseite eines Welt-Brushes in flaches Gelände umwandeln."""
     if power not in POWERS:
-        raise TerrainError(f"Power {power} gibt es nicht (2, 3 oder 4)")
+        raise TerrainError(tr('Power {0} gibt es nicht (2, 3 oder 4)').format(power))
     if owner_id(solid) is not None:
-        raise TerrainError("Gelände geht nur aus Welt-Brushes, nicht aus Bausteinen oder func_detail")
+        raise TerrainError(tr("Gelände geht nur aus Welt-Brushes, nicht aus Bausteinen oder func_detail"))
     k = top_face(solid)
     if k is None:
-        raise TerrainError("Der Brush hat keine viereckige Seite")
+        raise TerrainError(tr("Der Brush hat keine viereckige Seite"))
     if face_displacement(solid.faces[k]) is not None:
         return solid
     return make_displacement(solid, k, power)

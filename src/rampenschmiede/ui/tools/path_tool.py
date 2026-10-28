@@ -18,6 +18,7 @@ from PySide6.QtGui import QColor, QKeyEvent, QMouseEvent, QPainter
 
 from ...core.commands import AddObjects
 from ...core.tracks import PATH_COLOR, path_entities
+from ...i18n import tr
 from .base import Tool, pick_3d
 
 if TYPE_CHECKING:
@@ -68,7 +69,7 @@ class PathTool(Tool):
             return []
         ed.run(AddObjects(ents, "Pfad"))
         ed.set_selection([ents[0].id])
-        ed.status_message.emit(f"Pfad mit {len(ents)} Punkten" + (" (Rundkurs)" if closed else "")
+        ed.status_message.emit(tr('Pfad mit {0} Punkten').format(len(ents)) + (tr(" (Rundkurs)") if closed else "")
                                + f", Start: {ents[0].get('targetname')}")
         ed.redraw_requested.emit()
         return [e.id for e in ents]

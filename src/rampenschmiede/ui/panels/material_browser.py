@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from ...core.materials import MaterialLibrary, normalize
 from ...core.materials.apply import SCOPE_ALL, apply_to_objects, expand_scope
+from ...i18n import N_
 from ...render.scene_mesh import material_color
 from ..editor import EditorContext
 from ..widgets.preview_3d import SHAPES, Preview3D, material_groups
@@ -44,8 +45,8 @@ from ..widgets.scope_switch import ScopeSwitch
 THUMB = 72
 #: Kantenlänge der 3D-Vorschau rechts neben den Kacheln
 PREVIEW_3D = 150
-FILTERS = (("all", "Alle"), ("favorites", "Favoriten"), ("map", "In dieser Map"), ("recent", "Zuletzt benutzt"),
-           ("own", "Eigene Texturen"))
+FILTERS = (("all", N_("Alle")), ("favorites", N_("Favoriten")), ("map", N_("In dieser Map")), ("recent", N_("Zuletzt benutzt")),
+           ("own", N_("Eigene Texturen")))
 MAX_RECENT = 40
 #: Material per Ziehen aus dem Browser in eine Ansicht
 MIME_MATERIAL = "application/x-rampenschmiede-material"
