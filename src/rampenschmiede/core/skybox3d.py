@@ -16,6 +16,7 @@ import math
 import random
 from dataclasses import dataclass
 
+from ..i18n import tr
 from .commands import AddObjects, Command, MacroCommand, RemoveObjects
 from .geometry import primitives
 from .mathutil import BBox
@@ -48,25 +49,25 @@ class SkyStyle:
 
 
 STYLES: tuple[SkyStyle, ...] = (
-    SkyStyle("berge", "Berge", "Ein Ring aus Bergen am Horizont, die Map steht im Tal.",
+    SkyStyle("berge", tr("Berge"), tr("Ein Ring aus Bergen am Horizont, die Map steht im Tal."),
              ("nature/blendgrassgravel001a", "nature/grassfloor002a", "nature/dirtfloor003a"),
              (("grass",), ("dirt",)),
              ("nature/rockwall004a", "nature/cliffface001a", "nature/rockfloor005a"),
              (("rock",), ("cliff",), ("stone",)),
              (88, 112, 70), (118, 112, 104)),
-    SkyStyle("stadt", "Stadt", "Hochhäuser ringsum, die Map steht mitten in einer Stadt.",
+    SkyStyle("stadt", tr("Stadt"), tr("Hochhäuser ringsum, die Map steht mitten in einer Stadt."),
              ("concrete/concretefloor001a", "concrete/concretefloor028a"),
              (("concrete", "floor"), ("asphalt",)),
              ("concrete/concretewall001a", "building_template/buildingset040a"),
              (("building",), ("concrete", "wall")),
              (70, 72, 78), (120, 124, 132)),
-    SkyStyle("wueste", "Wüste", "Flache Dünen bis zum Horizont.",
+    SkyStyle("wueste", tr("Wüste"), tr("Flache Dünen bis zum Horizont."),
              ("de_dust/sandfloor01", "nature/sandfloor010a"),
              (("sand",),),
              ("de_dust/sandfloor01", "nature/sandfloor010a"),
              (("sand",),),
              (196, 168, 120), (186, 156, 108)),
-    SkyStyle("leer", "Leer", "Nur Raum und Kamera mit Boden, die Kulisse baust du selbst.",
+    SkyStyle("leer", tr("Leer"), tr("Nur Raum und Kamera mit Boden, die Kulisse baust du selbst."),
              ("nature/blendgrassgravel001a",), (("grass",),), (), (), (88, 112, 70), (118, 112, 104)),
 )
 STYLE_BY_KEY = {s.key: s for s in STYLES}

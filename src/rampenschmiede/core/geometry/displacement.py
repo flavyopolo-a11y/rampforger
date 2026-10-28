@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ...i18n import tr
 from ..mathutil import Point
 from ..model.objects import Face, Solid
 
@@ -84,7 +85,7 @@ class Displacement:
         flat = {k.lower(): v for k, v in children if isinstance(v, str)}
         power = int(float(flat.get("power", "3")))
         if power not in POWERS:
-            raise ValueError(f"Displacement-Power {power} wird nicht unterstützt")
+            raise ValueError(tr('Displacement-Power {0} wird nicht unterstützt').format(power))
         n = (1 << power) + 1
         start = tuple(float(c) for c in flat.get("startposition", "[0 0 0]").strip("[] ").split()[:3])
         blocks = {k.lower(): v for k, v in children if isinstance(v, list)}
@@ -280,7 +281,7 @@ def make_displacement(solid: Solid, face_index: int, power: int = 3) -> Solid:
     poly = solid.polygons()[face_index]
     corners = surface_corners(poly, face.plane.normal, poly[0] if poly else (0, 0, 0))
     if corners is None:
-        raise ValueError("Nur viereckige Seiten können Gelände werden")
+        raise ValueError(tr("Nur viereckige Seiten können Gelände werden"))
     start = tuple(float(c) for c in corners[0])
     faces = list(solid.faces)
     faces[face_index] = with_displacement(face, new_displacement(power, start))  # type: ignore[arg-type]
@@ -366,7 +367,7 @@ def brush_stroke(surf: DispSurface, center: Point, radius: float, strength: floa
         k = np.clip(w * min(1.0, strength / 16.0), 0, 1)
         new = pos + direction[None, :] * ((level - h) * k)[:, None]
     else:
-        raise ValueError(f"Unbekannte Pinsel-Art {mode}")
+        raise ValueError(tr('Unbekannte Pinsel-Art {0}').format(mode))
     return heights_to_disp(surf, new)
 
 

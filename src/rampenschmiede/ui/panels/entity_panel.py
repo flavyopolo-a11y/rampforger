@@ -48,6 +48,7 @@ from ...core.models.props import (
     class_problem,
     is_model_entity,
 )
+from ...i18n import tr
 from ..editor import EditorContext
 from ..icons import ACTIVE, icon
 
@@ -730,9 +731,9 @@ class EntityPanel(QWidget):
             self.editor.set_selection([self._sources[row]])
 
 
-MODEL_KEY = KeyDef("model", "Modell", "model", desc="Pfad des Modells, z. B. models/props_c17/oildrum001.mdl")
-SOLID_KEY = KeyDef("solid", "Kollision", "choices", "6", "Wie Spieler mit dem Prop zusammenstoßen",
-                   (("0", "Keine (durchlässig)"), ("2", "Kasten (Bounding Box)"), ("6", "Modell (VPhysics)")))
+MODEL_KEY = KeyDef("model", tr("Modell"), "model", desc=tr("Pfad des Modells, z. B. models/props_c17/oildrum001.mdl"))
+SOLID_KEY = KeyDef("solid", tr("Kollision"), "choices", "6", tr("Wie Spieler mit dem Prop zusammenstoßen"),
+                   (("0", tr("Keine (durchlässig)")), ("2", tr("Kasten (Bounding Box)")), ("6", tr("Modell (VPhysics)"))))
 
 
 def _prop_keys(keys: list[KeyDef]) -> list[KeyDef]:

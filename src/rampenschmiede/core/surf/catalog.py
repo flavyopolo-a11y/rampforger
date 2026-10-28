@@ -14,6 +14,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol
 
+from ...i18n import N_, tr
 from ..model.objects import Face
 from .hull import IPoint, hull_faces
 from .sweep import (
@@ -152,38 +153,38 @@ class Template:
 
 # ---- Querschnitte ------------------------------------------------------------------
 
-PROFILE_CHOICES = (("voll", "Voll (beidseitig)"), ("halb", "Halb (eine Seite)"),
-                   ("invertiert", "Invertiert (Unterseite)"), ("trapez", "Trapez (flache Kante)"))
+PROFILE_CHOICES = (("voll", "Voll (beidseitig)"), ("halb", tr("Halb (eine Seite)")),
+                   ("invertiert", "Invertiert (Unterseite)"), ("trapez", tr("Trapez (flache Kante)")))
 
 PROFILE_PARAMS = (
-    Param("profil", "Querschnitt", "voll", choices=PROFILE_CHOICES),
-    Param("breite", "Breite", 640, 64, 8192, 16, "u"),
-    Param("winkel", "Surf-Winkel", 50.0, 20, 80, 0.5, "°", hint="Ab 45° surfbar, über 65° sehr steil"),
-    Param("lippe", "Lippe", 16, 0, 512, 8, "u", hint="Senkrechter Rand unten an der Rampe"),
-    Param("oben", "Obere Breite", 256, 16, 4096, 16, "u", only_if=("profil", "trapez")),
-    Param("spiegeln", "Seite tauschen", False, only_if=("profil", "halb")),
+    Param("profil", tr("Querschnitt"), "voll", choices=PROFILE_CHOICES),
+    Param("breite", tr("Breite"), 640, 64, 8192, 16, "u"),
+    Param("winkel", tr("Surf-Winkel"), 50.0, 20, 80, 0.5, "°", hint=tr("Ab 45° surfbar, über 65° sehr steil")),
+    Param("lippe", tr("Lippe"), 16, 0, 512, 8, "u", hint=tr("Senkrechter Rand unten an der Rampe")),
+    Param("oben", tr("Obere Breite"), 256, 16, 4096, 16, "u", only_if=("profil", "trapez")),
+    Param("spiegeln", tr("Seite tauschen"), False, only_if=("profil", "halb")),
 )
 
-SURF_MATERIAL = Param("mat_surf", "Material Surf-Fläche", "DEV/DEV_MEASUREGENERIC01B",
-                      hint="Material der surfbaren Flächen")
-SIDE_MATERIAL = Param("mat_seite", "Material Seiten", "DEV/DEV_MEASUREGENERIC01",
-                      hint="Material von Lippe, Enden und flachen Kanten")
+SURF_MATERIAL = Param("mat_surf", tr("Material Surf-Fläche"), "DEV/DEV_MEASUREGENERIC01B",
+                      hint=tr("Material der surfbaren Flächen"))
+SIDE_MATERIAL = Param("mat_seite", tr("Material Seiten"), "DEV/DEV_MEASUREGENERIC01",
+                      hint=tr("Material von Lippe, Enden und flachen Kanten"))
 
 MATERIAL_PARAMS = (
     SURF_MATERIAL,
     SIDE_MATERIAL,
-    Param("unterseite_nodraw", "Unterseite unsichtbar (Nodraw)", True),
-    Param("kollision", "Kollision", "clip", choices=(
-        ("clip", "Playerclip + func_detail (empfohlen)"), ("detail", "Nur func_detail"))),
-    Param("textur", "Textur", "einpassen", choices=(
-        ("einpassen", "Quer über die Rampe einpassen"), ("raster", "Welt-Raster (wie Hammer)")),
-          hint="Einpassen: Die Textur geht quer genau einmal über die Surf-Fläche und läuft längs weiter"),
-    Param("textur_groesse", "Textur-Größe", 100, 10, 1000, 5, "%", only_if=("textur", "einpassen"),
-          hint="100 % = quer genau einmal. In der 3D-Ansicht: Seiten-Werkzeug, Alt+Ziehen"),
-    Param("textur_laengs", "Textur längs", 0, -8192, 8192, 8, "u", only_if=("textur", "einpassen"),
-          hint="Verschiebt die Textur entlang der Rampe. In der 3D-Ansicht: Seiten-Werkzeug, Ziehen"),
-    Param("textur_quer", "Textur quer", 0, -8192, 8192, 8, "u", only_if=("textur", "einpassen"),
-          hint="Verschiebt die Textur quer zur Rampe"),
+    Param("unterseite_nodraw", tr("Unterseite unsichtbar (Nodraw)"), True),
+    Param("kollision", tr("Kollision"), "clip", choices=(
+        ("clip", tr("Playerclip + func_detail (empfohlen)")), ("detail", tr("Nur func_detail")))),
+    Param("textur", tr("Textur"), "einpassen", choices=(
+        ("einpassen", tr("Quer über die Rampe einpassen")), ("raster", tr("Welt-Raster (wie Hammer)"))),
+          hint=tr("Einpassen: Die Textur geht quer genau einmal über die Surf-Fläche und läuft längs weiter")),
+    Param("textur_groesse", tr("Textur-Größe"), 100, 10, 1000, 5, "%", only_if=("textur", "einpassen"),
+          hint=tr("100 % = quer genau einmal. In der 3D-Ansicht: Seiten-Werkzeug, Alt+Ziehen")),
+    Param("textur_laengs", tr("Textur längs"), 0, -8192, 8192, 8, "u", only_if=("textur", "einpassen"),
+          hint=tr("Verschiebt die Textur entlang der Rampe. In der 3D-Ansicht: Seiten-Werkzeug, Ziehen")),
+    Param("textur_quer", tr("Textur quer"), 0, -8192, 8192, 8, "u", only_if=("textur", "einpassen"),
+          hint=tr("Verschiebt die Textur quer zur Rampe")),
 )
 
 
@@ -366,13 +367,13 @@ def _r(v: float) -> int:
 
 # ---- Katalog ------------------------------------------------------------------------
 
-LENGTH = Param("laenge", "Länge", 1024, 64, 32768, 16, "u")
-DROP = Param("gefaelle", "Höhenänderung", 0, -16384, 16384, 16, "u", hint="Negativ = abwärts")
-RADIUS = Param("radius", "Radius (Mitte)", 1024, 128, 16384, 16, "u")
-BEND = Param("bogen", "Bogenwinkel", 90.0, 5, 1080, 5, "°")
-STEP = Param("schritt", "Grad pro Segment", 2.5, 1, 5, 0.5, "°",
-             hint="Kleiner = glatter. Mehr als 5° pro Segment führt zu spürbaren Kanten")
-DIRECTION = Param("richtung", "Richtung", "links", choices=(("links", "Links"), ("rechts", "Rechts")))
+LENGTH = Param("laenge", tr("Länge"), 1024, 64, 32768, 16, "u")
+DROP = Param("gefaelle", tr("Höhenänderung"), 0, -16384, 16384, 16, "u", hint=tr("Negativ = abwärts"))
+RADIUS = Param("radius", tr("Radius (Mitte)"), 1024, 128, 16384, 16, "u")
+BEND = Param("bogen", tr("Bogenwinkel"), 90.0, 5, 1080, 5, "°")
+STEP = Param("schritt", tr("Grad pro Segment"), 2.5, 1, 5, 0.5, "°",
+             hint=tr("Kleiner = glatter. Mehr als 5° pro Segment führt zu spürbaren Kanten"))
+DIRECTION = Param("richtung", tr("Richtung"), "links", choices=(("links", tr("Links")), ("rechts", tr("Rechts"))))
 
 CATALOG: dict[str, Template] = {}
 
@@ -381,58 +382,58 @@ def _add(t: Template) -> None:
     CATALOG[t.key] = t
 
 
-_add(Template("gerade", "Gerade Rampe", "Rampen", "Klassische Surf-Rampe, beidseitig surfbar.",
+_add(Template("gerade", tr("Gerade Rampe"), N_("Rampen"), tr("Klassische Surf-Rampe, beidseitig surfbar."),
               (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight))
-_add(Template("halb", "Halbe Rampe", "Rampen", "Eine Surf-Seite, Rückwand senkrecht. Gut an Wänden.",
+_add(Template("halb", tr("Halbe Rampe"), N_("Rampen"), tr("Eine Surf-Seite, Rückwand senkrecht. Gut an Wänden."),
               (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight, (("profil", "halb"), ("breite", 320))))
-_add(Template("invertiert", "Invertierte Rampe", "Rampen", "Kopfüber: Surf-Flächen zeigen nach unten.",
+_add(Template("invertiert", tr("Invertierte Rampe"), N_("Rampen"), tr("Kopfüber: Surf-Flächen zeigen nach unten."),
               (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight, (("profil", "invertiert"),)))
-_add(Template("trapez", "Trapez-Rampe", "Rampen", "Rampe mit flacher Oberkante zum Landen.",
+_add(Template("trapez", tr("Trapez-Rampe"), N_("Rampen"), tr("Rampe mit flacher Oberkante zum Landen."),
               (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight, (("profil", "trapez"),)))
-_add(Template("ski", "Ski-Rampe", "Rampen", "Lange Rampe mit Gefälle für Tempo.",
+_add(Template("ski", tr("Ski-Rampe"), N_("Rampen"), tr("Lange Rampe mit Gefälle für Tempo."),
               (LENGTH, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_straight,
               (("laenge", 4096), ("gefaelle", -1024))))
-_add(Template("pyramide", "Pyramide", "Rampen", "Surf-Flächen in alle Richtungen.",
-              (Param("seiten", "Seiten", 4, 3, 8), Param("breite", "Breite", 640, 64, 8192, 16, "u"),
-               Param("winkel", "Surf-Winkel", 50.0, 20, 80, 0.5, "°"), Param("lippe", "Lippe", 32, 0, 512, 8, "u"),
+_add(Template("pyramide", tr("Pyramide"), N_("Rampen"), tr("Surf-Flächen in alle Richtungen."),
+              (Param("seiten", tr("Seiten"), 4, 3, 8), Param("breite", tr("Breite"), 640, 64, 8192, 16, "u"),
+               Param("winkel", tr("Surf-Winkel"), 50.0, 20, 80, 0.5, "°"), Param("lippe", tr("Lippe"), 32, 0, 512, 8, "u"),
                *MATERIAL_PARAMS), build_pyramid))
-_add(Template("kurve", "Kurve", "Kurven", "Gebogene Rampe mit gleichmäßigen Segmenten.",
+_add(Template("kurve", tr("Kurve"), N_("Kurven"), tr("Gebogene Rampe mit gleichmäßigen Segmenten."),
               (RADIUS, BEND, DIRECTION, STEP, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_curve))
-_add(Template("kurve_halb", "Halbe Kurve", "Kurven", "Gebogene Rampe mit einer Surf-Seite.",
+_add(Template("kurve_halb", tr("Halbe Kurve"), N_("Kurven"), tr("Gebogene Rampe mit einer Surf-Seite."),
               (RADIUS, BEND, DIRECTION, STEP, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_curve,
               (("profil", "halb"), ("breite", 320))))
-_add(Template("spirale", "Spirale", "Kurven", "Kurve über mehrere Umdrehungen mit Gefälle.",
+_add(Template("spirale", tr("Spirale"), N_("Kurven"), tr("Kurve über mehrere Umdrehungen mit Gefälle."),
               (RADIUS, BEND, DIRECTION, STEP, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_curve,
               (("bogen", 360.0), ("gefaelle", -1024), ("radius", 1280))))
-_add(Template("s_kurve", "S-Kurve", "Kurven", "Zwei Bögen in entgegengesetzte Richtungen.",
-              (RADIUS, BEND, DIRECTION, STEP, Param("mitte", "Gerades Mittelstück", 0, 0, 8192, 16, "u"),
+_add(Template("s_kurve", tr("S-Kurve"), N_("Kurven"), tr("Zwei Bögen in entgegengesetzte Richtungen."),
+              (RADIUS, BEND, DIRECTION, STEP, Param("mitte", tr("Gerades Mittelstück"), 0, 0, 8192, 16, "u"),
                DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_s_curve, (("bogen", 45.0),)))
-_add(Template("banane", "Banane", "Kurven", "Gerade Rampe, deren Höhe sich wölbt.",
-              (LENGTH, Param("bogenhoehe", "Wölbung", -256, -4096, 4096, 16, "u", hint="Negativ = Mulde"),
-               Param("segmente", "Segmente", 16, 2, 96), DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_banana,
+_add(Template("banane", tr("Banane"), N_("Kurven"), tr("Gerade Rampe, deren Höhe sich wölbt."),
+              (LENGTH, Param("bogenhoehe", tr("Wölbung"), -256, -4096, 4096, 16, "u", hint=tr("Negativ = Mulde")),
+               Param("segmente", tr("Segmente"), 16, 2, 96), DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_banana,
               (("laenge", 2048),)))
-_add(Template("welle", "Welle", "Kurven", "Rampe, die auf und ab läuft.",
-              (LENGTH, Param("amplitude", "Wellenhöhe", 128, 0, 2048, 16, "u"), Param("wellen", "Wellen", 2, 1, 16),
-               Param("segmente", "Segmente pro Welle", 12, 4, 48), DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS),
+_add(Template("welle", tr("Welle"), N_("Kurven"), tr("Rampe, die auf und ab läuft."),
+              (LENGTH, Param("amplitude", tr("Wellenhöhe"), 128, 0, 2048, 16, "u"), Param("wellen", tr("Wellen"), 2, 1, 16),
+               Param("segmente", tr("Segmente pro Welle"), 12, 4, 48), DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS),
               build_wave, (("laenge", 3072),)))
-_add(Template("halfpipe", "Halfpipe", "Spezial", "Halbrunde Rinne aus Segmenten.",
-              (LENGTH, Param("radius", "Innenradius", 512, 64, 8192, 16, "u"), Param("dicke", "Wandstärke", 32, 8, 256, 8, "u"),
-               Param("bogen", "Bogen", 180.0, 60, 330, 5, "°"), Param("teile", "Teile", 12, 3, 48), DROP,
+_add(Template("halfpipe", tr("Halfpipe"), N_("Spezial"), tr("Halbrunde Rinne aus Segmenten."),
+              (LENGTH, Param("radius", tr("Innenradius"), 512, 64, 8192, 16, "u"), Param("dicke", tr("Wandstärke"), 32, 8, 256, 8, "u"),
+               Param("bogen", tr("Bogen"), 180.0, 60, 330, 5, "°"), Param("teile", tr("Teile"), 12, 3, 48), DROP,
                *MATERIAL_PARAMS), build_pipe, check_angles=False))
-_add(Template("rohr", "Rohr", "Spezial", "Fast geschlossene Röhre mit Spalt oben.",
-              (LENGTH, Param("radius", "Innenradius", 512, 64, 8192, 16, "u"), Param("dicke", "Wandstärke", 32, 8, 256, 8, "u"),
-               Param("bogen", "Bogen", 300.0, 60, 330, 5, "°"), Param("teile", "Teile", 20, 3, 48), DROP,
+_add(Template("rohr", tr("Rohr"), N_("Spezial"), tr("Fast geschlossene Röhre mit Spalt oben."),
+              (LENGTH, Param("radius", tr("Innenradius"), 512, 64, 8192, 16, "u"), Param("dicke", tr("Wandstärke"), 32, 8, 256, 8, "u"),
+               Param("bogen", tr("Bogen"), 300.0, 60, 330, 5, "°"), Param("teile", tr("Teile"), 20, 3, 48), DROP,
                *MATERIAL_PARAMS), build_pipe, check_angles=False))
-_add(Template("slide", "Slide", "Spezial", "V-Rinne, deren Flächen zur Mitte hin abfallen.",
-              (LENGTH, Param("breite", "Breite", 768, 64, 8192, 16, "u"), Param("winkel", "Surf-Winkel", 50.0, 20, 80, 0.5, "°"),
-               Param("boden", "Flacher Boden", 0, 0, 4096, 16, "u"), Param("lippe", "Lippe", 16, 0, 512, 8, "u"), DROP,
+_add(Template("slide", tr("Slide"), N_("Spezial"), tr("V-Rinne, deren Flächen zur Mitte hin abfallen."),
+              (LENGTH, Param("breite", tr("Breite"), 768, 64, 8192, 16, "u"), Param("winkel", tr("Surf-Winkel"), 50.0, 20, 80, 0.5, "°"),
+               Param("boden", tr("Flacher Boden"), 0, 0, 4096, 16, "u"), Param("lippe", tr("Lippe"), 16, 0, 512, 8, "u"), DROP,
                *MATERIAL_PARAMS), build_slide, (("gefaelle", -256),)))
-_add(Template("gabelung", "Gabelung", "Spezial", "Gerades Stück, das sich in zwei Kurven teilt.",
+_add(Template("gabelung", tr("Gabelung"), N_("Spezial"), tr("Gerades Stück, das sich in zwei Kurven teilt."),
               (LENGTH, RADIUS, BEND, STEP, DROP, *PROFILE_PARAMS, *MATERIAL_PARAMS), build_fork,
               (("laenge", 512), ("bogen", 45.0))))
-_add(Template("transfer", "Transfer", "Spezial", "Zwei Rampen nebeneinander zum Hinüberspringen.",
-              (LENGTH, Param("abstand", "Lücke", 256, 0, 8192, 16, "u"), Param("hoehe", "Zweite tiefer um", 128, -4096, 4096, 16, "u"),
-               Param("versatz", "Zweite nach vorne", 256, -16384, 16384, 16, "u"), DIRECTION, DROP,
+_add(Template("transfer", tr("Transfer"), N_("Spezial"), tr("Zwei Rampen nebeneinander zum Hinüberspringen."),
+              (LENGTH, Param("abstand", tr("Lücke"), 256, 0, 8192, 16, "u"), Param("hoehe", tr("Zweite tiefer um"), 128, -4096, 4096, 16, "u"),
+               Param("versatz", tr("Zweite nach vorne"), 256, -16384, 16384, 16, "u"), DIRECTION, DROP,
                *PROFILE_PARAMS, *MATERIAL_PARAMS), build_transfer))
 
 
@@ -499,27 +500,27 @@ def teleport_entity(v: dict, at: Placement) -> tuple[str, tuple[tuple[str, str],
 
 
 BOX_PARAMS = (
-    Param("laenge", "Länge", 256, 16, 16384, 16, "u"),
-    Param("breite", "Breite", 256, 16, 16384, 16, "u"),
-    Param("hoehe", "Höhe", 128, 16, 16384, 16, "u"),
+    Param("laenge", tr("Länge"), 256, 16, 16384, 16, "u"),
+    Param("breite", tr("Breite"), 256, 16, 16384, 16, "u"),
+    Param("hoehe", tr("Höhe"), 128, 16, 16384, 16, "u"),
 )
 
-_add(Template("bhop", "Bhop-Blöcke", "Bhop", "Reihe von Plattformen zum Springen.",
-              (Param("anzahl", "Anzahl", 6, 1, 64), Param("groesse", "Größe", 64, 16, 1024, 16, "u"),
-               Param("abstand", "Abstand", 192, 0, 2048, 16, "u"), Param("dicke", "Dicke", 16, 8, 512, 8, "u"),
-               Param("zickzack", "Zickzack seitlich", 0, 0, 2048, 16, "u"),
-               Param("stufe", "Stufe pro Block", 0, -512, 512, 8, "u", hint="Positiv = jeder Block höher"),
-               dataclasses.replace(SIDE_MATERIAL, label="Material", hint=""),
-               Param("unterseite_nodraw", "Unterseite unsichtbar (Nodraw)", False)),
+_add(Template("bhop", tr("Bhop-Blöcke"), N_("Bhop"), tr("Reihe von Plattformen zum Springen."),
+              (Param("anzahl", tr("Anzahl"), 6, 1, 64), Param("groesse", tr("Größe"), 64, 16, 1024, 16, "u"),
+               Param("abstand", tr("Abstand"), 192, 0, 2048, 16, "u"), Param("dicke", tr("Dicke"), 16, 8, 512, 8, "u"),
+               Param("zickzack", tr("Zickzack seitlich"), 0, 0, 2048, 16, "u"),
+               Param("stufe", tr("Stufe pro Block"), 0, -512, 512, 8, "u", hint=tr("Positiv = jeder Block höher")),
+               dataclasses.replace(SIDE_MATERIAL, label=tr("Material"), hint=""),
+               Param("unterseite_nodraw", tr("Unterseite unsichtbar (Nodraw)"), False)),
               build_bhop, check_angles=False, entity=bhop_entity))
-_add(Template("booster", "Booster", "Bhop", "Trigger, der den Spieler in eine Richtung schiebt (trigger_push).",
-              (*BOX_PARAMS, Param("tempo", "Tempo", 800, 0, 10000, 50, "u/s"),
-               Param("schub_neigung", "Neigung nach oben", 0.0, -90, 90, 5, "°"),
-               Param("schub_richtung", "Richtung (relativ)", 0.0, -180, 180, 15, "°", hint="0° = entlang des Bausteins")),
+_add(Template("booster", tr("Booster"), N_("Bhop"), tr("Trigger, der den Spieler in eine Richtung schiebt (trigger_push)."),
+              (*BOX_PARAMS, Param("tempo", tr("Tempo"), 800, 0, 10000, 50, "u/s"),
+               Param("schub_neigung", tr("Neigung nach oben"), 0.0, -90, 90, 5, "°"),
+               Param("schub_richtung", tr("Richtung (relativ)"), 0.0, -180, 180, 15, "°", hint=tr("0° = entlang des Bausteins"))),
               build_trigger_box, check_angles=False, entity=booster_entity))
-_add(Template("teleporter", "Teleporter", "Bhop", "Trigger, der zum Ziel teleportiert (trigger_teleport). "
-              "Das Ziel wird mit eingefügt und lässt sich frei verschieben.",
-              (*BOX_PARAMS, Param("ziel", "Zielname", "ziel", hint="targetname des info_teleport_destination")),
+_add(Template("teleporter", tr("Teleporter"), N_("Bhop"), tr("Trigger, der zum Ziel teleportiert (trigger_teleport). "
+              "Das Ziel wird mit eingefügt und lässt sich frei verschieben."),
+              (*BOX_PARAMS, Param("ziel", tr("Zielname"), "ziel", hint=tr("targetname des info_teleport_destination"))),
               build_trigger_box, check_angles=False, entity=teleport_entity))
 
 
@@ -530,11 +531,11 @@ _add(Template("teleporter", "Teleporter", "Bhop", "Trigger, der zum Ziel telepor
 # Zonendatei erzeugt (siehe core/zones.py).
 
 ZONE_PARAMS = (
-    Param("laenge", "Länge", 384, 32, 16384, 16, "u"),
-    Param("breite", "Breite", 384, 32, 16384, 16, "u"),
-    Param("hoehe", "Höhe", 128, 16, 4096, 16, "u"),
+    Param("laenge", tr("Länge"), 384, 32, 16384, 16, "u"),
+    Param("breite", tr("Breite"), 384, 32, 16384, 16, "u"),
+    Param("hoehe", tr("Höhe"), 128, 16, 4096, 16, "u"),
 )
-BONUS = Param("bonus", "Bonus-Nummer", 0, 0, 9, hint="0 = Hauptstrecke, 1–9 = Bonus")
+BONUS = Param("bonus", tr("Bonus-Nummer"), 0, 0, 9, hint=tr("0 = Hauptstrecke, 1–9 = Bonus"))
 
 
 def zone_name(kind: str, bonus: int = 0, number: int = 0) -> str:
@@ -553,14 +554,14 @@ def _zone_entity(kind: str) -> Callable[[dict, Placement], tuple[str, tuple[tupl
     return entity
 
 
-_add(Template("zone_start", "Startzone", "Zonen", "Hier startet die Zeit, sobald man die Zone verlässt. "
-              "CS:S-Timer erkennen sie am Namen, für Momentum wird eine Zonendatei erzeugt.",
+_add(Template("zone_start", tr("Startzone"), N_("Zonen"), tr("Hier startet die Zeit, sobald man die Zone verlässt. "
+              "CS:S-Timer erkennen sie am Namen, für Momentum wird eine Zonendatei erzeugt."),
               (*ZONE_PARAMS, BONUS), build_trigger_box, check_angles=False, entity=_zone_entity("start")))
-_add(Template("zone_ende", "Zielzone", "Zonen", "Hier stoppt die Zeit.",
+_add(Template("zone_ende", tr("Zielzone"), N_("Zonen"), tr("Hier stoppt die Zeit."),
               (*ZONE_PARAMS, BONUS), build_trigger_box, check_angles=False, entity=_zone_entity("end")))
-_add(Template("zone_stage", "Stage-Zone", "Zonen", "Beginn einer Stage auf der Hauptstrecke. "
-              "Stage 1 ist die Startzone, die erste Stage-Zone ist also Stage 2.",
-              (*ZONE_PARAMS, Param("nummer", "Stage", 2, 2, 99)),
+_add(Template("zone_stage", tr("Stage-Zone"), N_("Zonen"), tr("Beginn einer Stage auf der Hauptstrecke. "
+              "Stage 1 ist die Startzone, die erste Stage-Zone ist also Stage 2."),
+              (*ZONE_PARAMS, Param("nummer", tr("Stage"), 2, 2, 99)),
               build_trigger_box, check_angles=False, entity=_zone_entity("stage")))
 
 
@@ -616,9 +617,9 @@ def angle_warnings(angle_range: tuple[float, float] | None) -> list[str]:
     lo, hi = angle_range
     out = []
     if lo < SURF_MIN_ANGLE:
-        out.append(f"Zu flach: {lo:.1f}° (unter {SURF_MIN_ANGLE:.0f}° kann man stehen statt surfen)")
+        out.append(tr('Zu flach: {0:.1f}° (unter {1:.0f}° kann man stehen statt surfen)').format(lo, SURF_MIN_ANGLE))
     if hi > SURF_STEEP_ANGLE:
-        out.append(f"Sehr steil: {hi:.1f}° (über {SURF_STEEP_ANGLE:.0f}° kaum noch kontrollierbar)")
+        out.append(tr('Sehr steil: {0:.1f}° (über {1:.0f}° kaum noch kontrollierbar)').format(hi, SURF_STEEP_ANGLE))
     return out
 
 

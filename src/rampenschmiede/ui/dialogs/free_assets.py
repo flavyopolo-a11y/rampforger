@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from ...core.assets.convert import skybox_from_panorama, surfaceprop_for, texture_material
 from ...core.assets.polyhaven import ATTRIBUTION, KINDS, Asset, PolyHaven, sky_url, texture_urls
 from ...core.materials.styles import sky_command
+from ...i18n import tr
 from ..editor import EditorContext
 from ..paths import data_dir, textures_dir
 
@@ -214,11 +215,11 @@ class FreeAssetsDialog(QDialog):
         if a.kind == "hdris":
             url = sky_url(files)
             if url is None:
-                raise ValueError("Für diesen Himmel gibt es kein Rundum-Bild")
+                raise ValueError(tr("Für diesen Himmel gibt es kein Rundum-Bild"))
             return skybox_from_panorama(root, a.id, self.source.download(url))
         diffuse, normal = texture_urls(files)
         if diffuse is None:
-            raise ValueError("Für diese Textur gibt es kein Farbbild")
+            raise ValueError(tr("Für diese Textur gibt es kein Farbbild"))
         return texture_material(root, a.id, self.source.download(diffuse),
                                 self.source.download(normal) if normal else None,
                                 surfaceprop_for((*a.categories, *a.tags)))

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.profiles import KNOWN_GAMES, GameProfile, ProfileStore, detect_profiles
+from ...i18n import tr
 
 
 class _PathEdit(QWidget):
@@ -99,8 +100,8 @@ class ProfilesDialog(QDialog):
         self.f_kind.addItem(self.tr("Anderes Source-Spiel"), "custom")
         self.f_game = _PathEdit(True, self.tr("Spielordner (mit gameinfo.txt)"))
         self.f_bin = _PathEdit(True, self.tr("Ordner mit vbsp.exe"))
-        self.f_exe = _PathEdit(False, self.tr("Spiel-Exe"), "Programme (*.exe);;Alle Dateien (*)")
-        self.f_steam = _PathEdit(False, self.tr("Steam"), "steam.exe (steam.exe);;Alle Dateien (*)")
+        self.f_exe = _PathEdit(False, self.tr("Spiel-Exe"), tr("Programme (*.exe);;Alle Dateien (*)"))
+        self.f_steam = _PathEdit(False, self.tr("Steam"), tr("steam.exe (steam.exe);;Alle Dateien (*)"))
         self.f_appid = QSpinBox()
         self.f_appid.setRange(0, 99_999_999)
         self.f_via_steam = QCheckBox(self.tr("Über Steam starten (empfohlen)"))

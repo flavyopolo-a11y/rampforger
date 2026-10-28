@@ -10,6 +10,7 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Iterable
 
+from ...i18n import N_, tr
 from ..blocks import MEMBER_KEY, is_block_root
 from ..commands import Command, MacroCommand, RemoveObjects, ReplaceObjects
 from ..decals import is_auto_overlay, overlay_sides
@@ -26,7 +27,8 @@ if TYPE_CHECKING:
     from ..models.library import ModelLibrary
     from .seal import SealResult
 
-ERROR, WARNING, INFO = "Fehler", "Warnung", "Hinweis"
+#: Stufen (deutsche Schlüssel, übersetzt erst beim Anzeigen)
+ERROR, WARNING, INFO = N_("Fehler"), N_("Warnung"), N_("Hinweis")
 
 #: Source-Maps reichen von -16384 bis 16384 (CS:S)
 MAP_LIMIT = 16384
@@ -133,13 +135,11 @@ def _brushes(doc: MapDocument) -> list[Problem]:
     out: list[Problem] = []
     invalid = [s.id for s in doc.solids() if not s.is_valid()]
     if invalid:
-        out.append(Problem(ERROR, "Brushes", f"{len(invalid)} kaputte Brushes (leer, flach oder nicht konvex). "
-                           "vbsp würde sie verwerfen oder abbrechen", tuple(invalid),
-                           fix=_remove(invalid, "Kaputte Brushes löschen"), fix_label="Löschen"))
+        out.append(Problem(ERROR, tr("Brushes"), tr('{0} kaputte Brushes (leer, flach oder nicht konvex). vbsp würde sie verwerfen oder abbrechen').format(len(invalid)), tuple(invalid),
+                           fix=_remove(invalid, tr("Kaputte Brushes löschen")), fix_label=tr("Löschen")))
     many = [s.id for s in doc.solids() if len(s.faces) > MAX_SIDES_PER_BRUSH]
     if many:
-        out.append(Problem(ERROR, "Brushes", f"{len(many)} Brushes mit mehr als {MAX_SIDES_PER_BRUSH} Seiten "
-                           "(vbsp-Grenze)", tuple(many)))
+        out.append(Problem(ERROR, tr("Brushes"), tr('{0} Brushes mit mehr als {1} Seiten (vbsp-Grenze)').format(len(many), MAX_SIDES_PER_BRUSH), tuple(many)))
     seen: dict[tuple, int] = {}
     dupes: list[int] = []
     for s in sorted(doc.solids(), key=lambda s: s.id):
@@ -152,9 +152,8 @@ def _brushes(doc: MapDocument) -> list[Problem]:
         else:
             seen[key] = s.id
     if dupes:
-        out.append(Problem(WARNING, "Brushes", f"{len(dupes)} doppelte Brushes (liegen genau aufeinander, "
-                           "flimmern im Spiel)", tuple(dupes),
-                           fix=_remove(dupes, "Doppelte Brushes löschen"), fix_label="Doppelte löschen"))
+        out.append(Problem(WARNING, tr("Brushes"), tr('{0} doppelte Brushes (liegen genau aufeinander, flimmern im Spiel)').format(len(dupes)), tuple(dupes),
+                           fix=_remove(dupes, tr("Doppelte Brushes löschen")), fix_label=tr("Doppelte löschen")))
     return out
 
 
@@ -180,8 +179,7 @@ def _ramps(doc: MapDocument) -> list[Problem]:
     if flat:
         lo, hi = min(flat_angles), max(flat_angles)
         span = _deg(lo) if hi - lo < 0.05 else f"{_deg(lo)} bis {_deg(hi)}"
-        out.append(Problem(WARNING, "Rampen", f"{len(flat)} Rampen zu flach zum Surfen ({span}). Ab "
-                           f"{_deg(SURF_MIN_DEGREES)} rutscht man, flacher bleibt man stehen", tuple(flat)))
+        out.append(Problem(WARNING, tr("Rampen"), tr('{0} Rampen zu flach zum Surfen ({1}). Ab {2} rutscht man, flacher bleibt man stehen').format(len(flat), span, _deg(SURF_MIN_DEGREES)), tuple(flat)))
     if bug:
         def fix(doc: MapDocument, ids=tuple(bug)) -> Command | None:
             new = []
@@ -192,9 +190,8 @@ def _ramps(doc: MapDocument) -> list[Problem]:
                         new.append(snap_to_grid(s))
                     except VertexError:
                         continue
-            return ReplaceObjects(new, "Ecken aufs Raster") if new else None
-        out.append(Problem(WARNING, "Rampen", f"{len(bug)} Rampen-Brushes mit Ecken zwischen ganzen Units: "
-                           "Rampbug-Gefahr", tuple(bug), fix=fix, fix_label="Ecken aufs Raster"))
+            return ReplaceObjects(new, tr("Ecken aufs Raster")) if new else None
+        out.append(Problem(WARNING, tr("Rampen"), tr('{0} Rampen-Brushes mit Ecken zwischen ganzen Units: Rampbug-Gefahr').format(len(bug)), tuple(bug), fix=fix, fix_label=tr("Ecken aufs Raster")))
     return out
 
 
@@ -210,10 +207,9 @@ def _materials(doc: MapDocument, materials: "MaterialLibrary | None") -> list[Pr
     for name in sorted(users):
         if not materials.exists(name):
             ids = tuple(users[name])
-            out.append(Problem(WARNING, "Texturen", f"Textur fehlt im Spiel: {name.lower()} ({_objects(len(ids))}, "
-                               "im Spiel lila-schwarz)", ids,
+            out.append(Problem(WARNING, tr("Texturen"), tr('Textur fehlt im Spiel: {0} ({1}, im Spiel lila-schwarz)').format(name.lower(), _objects(len(ids))), ids,
                                fix=lambda doc, n=name: replace_material(doc, n, DEFAULT_MATERIAL),
-                               fix_label="Durch Standard ersetzen"))
+                               fix_label=tr("Durch Standard ersetzen")))
     return out
 
 
@@ -236,11 +232,11 @@ def _models(doc: MapDocument, models: "ModelLibrary | None") -> list[Problem]:
 
             def fix(doc: MapDocument, eid=ent.id, cls=new_cls) -> Command | None:
                 e = doc.get(eid)
-                return ReplaceObjects([change_class(e, cls)], "Prop-Klasse ändern") if isinstance(e, Entity) else None
-            wrong.append(Problem(WARNING, "Modelle", f"{ent.classname} {name}: {problem}", (ent.id,), ent.origin,
+                return ReplaceObjects([change_class(e, cls)], tr("Prop-Klasse ändern")) if isinstance(e, Entity) else None
+            wrong.append(Problem(WARNING, tr("Modelle"), f"{ent.classname} {name}: {problem}", (ent.id,), ent.origin,
                                  fix=fix, fix_label=f"Zu {new_cls}"))
-    out = [Problem(WARNING, "Modelle", f"Modell fehlt im Spiel: {name} ({len(ids)}×)", tuple(ids),
-                   fix=_remove(ids, "Props ohne Modell löschen"), fix_label="Löschen")
+    out = [Problem(WARNING, tr("Modelle"), tr('Modell fehlt im Spiel: {0} ({1}×)').format(name, len(ids)), tuple(ids),
+                   fix=_remove(ids, tr("Props ohne Modell löschen")), fix_label=tr("Löschen"))
            for name, ids in sorted(missing.items())]
     return out + wrong
 
@@ -272,31 +268,30 @@ def _entities(doc: MapDocument, catalog: "EntityCatalog | None") -> list[Problem
         if cls == "trigger_teleport":
             target = e.get("target", "")
             if not target:
-                out.append(Problem(ERROR, "Teleporter", "Teleporter ohne Ziel: Spieler werden nicht teleportiert",
+                out.append(Problem(ERROR, tr("Teleporter"), tr("Teleporter ohne Ziel: Spieler werden nicht teleportiert"),
                                    (e.id,)))
             elif target.lower() not in names:
-                out.append(Problem(ERROR, "Teleporter", f"Teleporter-Ziel „{target}“ gibt es nicht", (e.id,)))
+                out.append(Problem(ERROR, tr("Teleporter"), tr('Teleporter-Ziel „{0}“ gibt es nicht').format(target), (e.id,)))
             if e.get("spawnflags", "0") in ("", "0"):
                 def fix(doc: MapDocument, eid=e.id) -> Command | None:
                     ent = doc.get(eid)
                     if not isinstance(ent, Entity):
                         return None
                     kvs = tuple((k, v) for k, v in ent.keyvalues if k.lower() != "spawnflags") + (("spawnflags", "1"),)
-                    return ReplaceObjects([ent.replace(keyvalues=kvs)], "Teleporter: Spieler auslösen")
-                out.append(Problem(WARNING, "Teleporter", "Teleporter reagiert auf niemanden (Flag „Clients“ fehlt)",
+                    return ReplaceObjects([ent.replace(keyvalues=kvs)], tr("Teleporter: Spieler auslösen"))
+                out.append(Problem(WARNING, tr("Teleporter"), tr("Teleporter reagiert auf niemanden (Flag „Clients“ fehlt)"),
                                    (e.id,), fix=fix, fix_label="Flag setzen"))
         for o in e.outputs:
             if not exists(o.target):
-                out.append(Problem(WARNING, "Entities", f"{e.classname}: Ausgang {o.output} zielt auf „{o.target}“, "
-                                   "das es nicht gibt", (e.id,)))
+                out.append(Problem(WARNING, tr("Entities"), tr('{0}: Ausgang {1} zielt auf „{2}“, das es nicht gibt').format(e.classname, o.output, o.target), (e.id,)))
     floating = [e.id for e in doc.entities() if is_auto_overlay(e) and not overlay_sides(doc, e)]
     if floating:
-        out.append(Problem(WARNING, "Aufkleber", f"{len(floating)} Overlay{'s' if len(floating) > 1 else ''} ohne Fläche "
-                           "darunter: im Spiel unsichtbar. Auf eine Fläche schieben oder löschen", tuple(floating),
-                           fix=_remove(floating, "Overlays ohne Fläche löschen"), fix_label="Löschen"))
+        out.append(Problem(WARNING, tr("Aufkleber"), tr('Overlays ohne Fläche darunter: {0}. Im Spiel unsichtbar, auf eine Fläche schieben oder löschen').format(
+            len(floating)), tuple(floating),
+                           fix=_remove(floating, tr("Overlays ohne Fläche löschen")), fix_label=tr("Löschen")))
     if empty:
-        out.append(Problem(WARNING, "Entities", f"{len(empty)} Brush-Entities ohne Brushes", tuple(empty),
-                           fix=_remove(empty, "Leere Brush-Entities löschen"), fix_label="Löschen"))
+        out.append(Problem(WARNING, tr("Entities"), tr('{0} Brush-Entities ohne Brushes').format(len(empty)), tuple(empty),
+                           fix=_remove(empty, tr("Leere Brush-Entities löschen")), fix_label=tr("Löschen")))
     return out
 
 
@@ -304,15 +299,15 @@ def _spawns(doc: MapDocument) -> list[Problem]:
     spawns = [e for e in doc.entities() if e.classname.lower() in SPAWN_CLASSES]
     out: list[Problem] = []
     if not spawns:
-        return [Problem(ERROR, "Spawns", "Kein Spawn: CS:S braucht info_player_terrorist oder "
-                        "info_player_counterterrorist, Momentum info_player_start")]
+        return [Problem(ERROR, tr("Spawns"), tr("Kein Spawn: CS:S braucht info_player_terrorist oder "
+                        "info_player_counterterrorist, Momentum info_player_start"))]
     t = sum(e.classname.lower() == "info_player_terrorist" for e in spawns)
     ct = sum(e.classname.lower() == "info_player_counterterrorist" for e in spawns)
     if (t == 0) != (ct == 0):
         team = "Terroristen" if t == 0 else "Counter-Terroristen"
-        out.append(Problem(INFO, "Spawns", f"CS:S: keine Spawns für {team}, wer dieses Team wählt, spawnt nicht"))
+        out.append(Problem(INFO, tr("Spawns"), tr('CS:S: keine Spawns für {0}, wer dieses Team wählt, spawnt nicht').format(team)))
     elif t == 0 and ct == 0:
-        out.append(Problem(WARNING, "Spawns", "Nur info_player_start: CS:S-Server brauchen T- oder CT-Spawns"))
+        out.append(Problem(WARNING, tr("Spawns"), tr("Nur info_player_start: CS:S-Server brauchen T- oder CT-Spawns")))
     solids = [s for s in doc.solids() if not is_displacement_solid(s) and _collides(doc, s)]
     for e in spawns:
         o = e.origin
@@ -322,7 +317,7 @@ def _spawns(doc: MapDocument) -> list[Problem]:
         maxs = tuple(o[i] + PLAYER_HULL[1][i] for i in range(3))
         hit = next((s for s in solids if _box_in_brush(mins, maxs, s)), None)
         if hit is not None:
-            out.append(Problem(ERROR, "Spawns", f"{e.classname} steckt in Brush {hit.id}: Spieler hängen fest",
+            out.append(Problem(ERROR, tr("Spawns"), tr('{0} steckt in Brush {1}: Spieler hängen fest').format(e.classname, hit.id),
                                (e.id, hit.id), o))
     return out
 
@@ -332,7 +327,7 @@ def _zones(doc: MapDocument) -> list[Problem]:
     out = []
     for text in zone_problems(zones):
         z = next((z for z in zones if text.startswith(f"{z.label} liegt")), None)
-        out.append(Problem(WARNING, "Zonen", text, (z.entity_id,) if z else ()))
+        out.append(Problem(WARNING, tr("Zonen"), text, (z.entity_id,) if z else ()))
     return out
 
 
@@ -346,18 +341,18 @@ def _limits(doc: MapDocument) -> list[Problem]:
         if bb is not None and any(abs(c) > MAP_LIMIT for c in (*bb.mins, *bb.maxs)):
             outside.append(o.id)
     if outside:
-        out.append(Problem(ERROR, "Grenzen", f"{len(outside)} Objekte außerhalb der Map-Grenze (±{MAP_LIMIT})",
+        out.append(Problem(ERROR, tr("Grenzen"), tr('{0} Objekte außerhalb der Map-Grenze (±{1})').format(len(outside), MAP_LIMIT),
                            tuple(outside)))
     brushes = sum(1 for _ in doc.solids())
     sides = sum(len(s.faces) for s in doc.solids())
     ents = sum(1 for e in doc.entities() if e.classname.lower() not in ("prop_static", "info_overlay", "light",
                                                                          "light_spot", "info_node"))
-    for count, limit, what in ((brushes, MAX_BRUSHES, "Brushes"), (sides, MAX_BRUSH_SIDES, "Brush-Seiten"),
-                               (ents, MAX_EDICTS, "Entities im Spiel")):
+    for count, limit, what in ((brushes, MAX_BRUSHES, tr("Brushes")), (sides, MAX_BRUSH_SIDES, tr("Brush-Seiten")),
+                               (ents, MAX_EDICTS, tr("Entities im Spiel"))):
         if count > limit:
-            out.append(Problem(ERROR, "Grenzen", f"{count} {what}, erlaubt sind {limit}"))
+            out.append(Problem(ERROR, tr("Grenzen"), tr('{0} {1}, erlaubt sind {2}').format(count, what, limit)))
         elif count > limit * 0.85:
-            out.append(Problem(WARNING, "Grenzen", f"{count} {what}, nah an der Grenze von {limit}"))
+            out.append(Problem(WARNING, tr("Grenzen"), tr('{0} {1}, nah an der Grenze von {2}').format(count, what, limit)))
     return out
 
 
@@ -365,7 +360,7 @@ def _seal(doc: MapDocument, seal: "SealResult | None") -> list[Problem]:
     if seal is None or seal.sealed or seal.unknown:
         return []
     from .seal import describe
-    return [Problem(ERROR, "Dichtheit", describe(doc, seal) + ". Tipp: Testen → Map mit Skybox umhüllen",
+    return [Problem(ERROR, tr("Dichtheit"), tr("{0}. Tipp: Testen → Map mit Skybox umhüllen").format(describe(doc, seal)),
                     tuple(i for i in (seal.entity_id,) if i is not None),
                     seal.path[0] if seal.path else None, extra={"leak": list(seal.path)})]
 

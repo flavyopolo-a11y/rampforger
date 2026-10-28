@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from ...i18n import tr
 from ..model import (
     EditorInfo,
     EditorState,
@@ -157,7 +158,7 @@ def _read_editor(raw: dict[str, Any] | None, default: EditorInfo) -> EditorInfo:
 def _read_face(raw: dict[str, Any]) -> Face:
     pts = tuple(tuple(float(c) for c in p) for p in raw["points"])
     if len(pts) != 3 or any(len(p) != 3 for p in pts):
-        raise ProjectFormatError("Face braucht genau drei Punkte")
+        raise ProjectFormatError(tr("Face braucht genau drei Punkte"))
     return Face(
         points=pts,  # type: ignore[arg-type]
         material=raw.get("material", "TOOLS/TOOLSNODRAW"),
@@ -201,11 +202,11 @@ def _read_object(raw: dict[str, Any]) -> MapObject:
 
 def from_dict(data: dict[str, Any]) -> MapDocument:
     if data.get("format") != FORMAT_NAME:
-        raise ProjectFormatError("Keine Rampenschmiede-Projektdatei")
+        raise ProjectFormatError(tr("Keine Rampenschmiede-Projektdatei"))
     version = data.get("schema_version")
     if not isinstance(version, int) or version > SCHEMA_VERSION:
         raise ProjectFormatError(
-            f"Projektversion {version} ist neuer als dieses Programm (unterstützt bis {SCHEMA_VERSION})"
+            tr('Projektversion {0} ist neuer als dieses Programm (unterstützt bis {1})').format(version, SCHEMA_VERSION)
         )
     doc = MapDocument()
     doc.world_keyvalues = tuple((str(k), str(v)) for k, v in data.get("world", {}).get("keyvalues", []))
@@ -231,5 +232,5 @@ def load(path: str | os.PathLike[str]) -> MapDocument:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except json.JSONDecodeError as exc:
-        raise ProjectFormatError(f"Datei ist kein gültiges JSON: {exc}") from exc
+        raise ProjectFormatError(tr('Datei ist kein gültiges JSON: {0}').format(exc)) from exc
     return from_dict(data)

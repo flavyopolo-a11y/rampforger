@@ -13,6 +13,7 @@ from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 
 from ...core.mathutil import BBox
+from ...i18n import tr
 from .base import Tool, box_lines
 
 if TYPE_CHECKING:
@@ -134,7 +135,7 @@ class CordonTool(Tool):
         box, _ = self.editor.cordon()
         if box is not None:
             size = " × ".join(f"{b - a:.0f}" for a, b in zip(box.mins, box.maxs))
-            self.editor.status_message.emit(f"Bereich {size}: beim Kompilieren wird nur er gebaut")
+            self.editor.status_message.emit(tr('Bereich {0}: beim Kompilieren wird nur er gebaut').format(size))
 
     def cursor_2d(self, vp: "Viewport", pos: QPointF) -> Qt.CursorShape:
         hit = self._edges(vp, pos)
@@ -154,7 +155,7 @@ class CordonTool(Tool):
     # ---- 3D -------------------------------------------------------------------------------
     def press_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
         if e.button() == Qt.LeftButton:
-            self.editor.status_message.emit("Den Bereich in einer 2D-Ansicht ziehen")
+            self.editor.status_message.emit(tr("Den Bereich in einer 2D-Ansicht ziehen"))
 
     # ---- Tasten ---------------------------------------------------------------------------
     def wants_key(self, key: int) -> bool:
@@ -164,7 +165,7 @@ class CordonTool(Tool):
         if e.key() == Qt.Key_Delete:
             if self.editor.cordon()[0] is not None:
                 self.editor.set_cordon(None)
-                self.editor.status_message.emit("Bereich gelöscht: es wird wieder die ganze Map gebaut")
+                self.editor.status_message.emit(tr("Bereich gelöscht: es wird wieder die ganze Map gebaut"))
             return True
         if e.key() == Qt.Key_Escape:
             if self.drag is not None:

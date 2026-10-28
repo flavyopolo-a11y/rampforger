@@ -19,6 +19,7 @@ from PySide6.QtGui import QColor, QKeyEvent, QMouseEvent, QPainter
 from ...core.commands import AddObjects, solids_from_faces
 from ...core.geometry.walls import wall_faces, wall_outlines
 from ...core.organize import new_group_id
+from ...i18n import tr
 from .base import Tool, pick_3d
 
 if TYPE_CHECKING:
@@ -77,9 +78,9 @@ class WallTool(Tool):
         if self.options.group and len(solids) > 1:
             gid = new_group_id(ed.doc)
             solids = [s.replace(editor=dataclasses.replace(s.editor, group_id=gid)) for s in solids]
-        ed.run(AddObjects(solids, "Wände malen"))
+        ed.run(AddObjects(solids, tr("Wände malen")))
         ed.set_selection([s.id for s in solids])
-        ed.status_message.emit(f"{len(solids)} Wände gebaut" + (" (Raum geschlossen)" if closed else ""))
+        ed.status_message.emit(tr('{0} Wände gebaut').format(len(solids)) + (tr(" (Raum geschlossen)") if closed else ""))
         ed.redraw_requested.emit()
         return [s.id for s in solids]
 
@@ -106,7 +107,7 @@ class WallTool(Tool):
         if e.button() != Qt.LeftButton:
             return
         if not self._top(vp):
-            self.editor.status_message.emit("Wände in der Ansicht „Oben“ oder in 3D zeichnen")
+            self.editor.status_message.emit(tr("Wände in der Ansicht „Oben“ oder in 3D zeichnen"))
             return
         x, y = vp.to_world(e.position())
         first = vp.to_screen(*self.points[0]) if self.points else None

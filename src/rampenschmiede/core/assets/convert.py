@@ -13,6 +13,7 @@ import numpy as np
 from PIL import Image
 from srctools import vtf
 
+from ...i18n import tr
 from ..materials.authoring import PREFIX, safe_name
 
 FOLDER = "frei"
@@ -21,7 +22,7 @@ TEXTURE_SIZE = 1024
 SKY_FACE = 1024
 #: Reihenfolge und Richtung der Skybox-Bilder wie in der Engine (siehe sky.glsl)
 SKY_SUFFIXES = ("rt", "lf", "bk", "ft", "up", "dn")
-LICENSE_TEXT = ("Diese Dateien stammen von Poly Haven (https://polyhaven.com) und stehen unter CC0:\n"
+LICENSE_TEXT = tr("Diese Dateien stammen von Poly Haven (https://polyhaven.com) und stehen unter CC0:\n"
                 "frei nutzbar, auch kommerziell, ohne Namensnennung. Umgewandelt von der Rampenschmiede.\n")
 #: Oberfläche (Schritte, Einschläge) nach Kategorie
 SURFACEPROPS = (("brick", "brick"), ("concrete", "concrete"), ("metal", "metal"), ("wood", "wood"),

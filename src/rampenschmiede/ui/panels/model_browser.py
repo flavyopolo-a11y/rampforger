@@ -45,6 +45,7 @@ from ...core.models.props import (
     is_model_entity,
     new_prop,
 )
+from ...i18n import tr
 from ...render.model_preview import render_preview
 from ..editor import EditorContext
 from ..widgets.preview_3d import Preview3D, model_groups
@@ -466,9 +467,9 @@ def describe(model: LoadedModel | None, name: str) -> str:
     kinds = []
     kinds.append("statisch" if model.static_prop else "nur dynamisch")
     if model.has_physics:
-        kinds.append("Physik möglich")
+        kinds.append(tr("Physik möglich"))
     lines = [f"<b>{short_name(name)}</b>", f"<span style='color:#9aa0a6'>{name}</span>",
-             f"Größe {size} Units", f"{model.triangle_count} Dreiecke · {', '.join(kinds)}"]
+             tr('Größe {0} Units').format(size), tr('{0} Dreiecke · {1}').format(model.triangle_count, ', '.join(kinds))]
     if model.skin_count > 1:
         lines.append(f"{model.skin_count} Skins")
     if model.problem:

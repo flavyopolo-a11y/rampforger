@@ -15,6 +15,7 @@ import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ...i18n import tr
 from ..geometry.brush import face_polygons, vmf_points_from_loop
 from ..mathutil import Plane
 from ..model import EditorInfo, Entity, Face, MapDocument, MapObject, Output, Solid, TexAxis
@@ -66,7 +67,7 @@ def load_bsp(path: str | os.PathLike[str]) -> tuple[MapDocument, BspReport]:
         no_texture = _untextured_sides(bsp)
         report_disp = len(bsp.lumps[BSP_LUMPS.DISPINFO].data) // DISPINFO_SIZE
     except Exception as exc:  # srctools wirft je nach Schaden verschiedene Fehler
-        raise BspError(f"BSP konnte nicht gelesen werden: {exc}") from exc
+        raise BspError(tr('BSP konnte nicht gelesen werden: {0}').format(exc)) from exc
     doc = MapDocument()
     report = BspReport(displacements=report_disp)
     objs: list[MapObject] = []
@@ -121,9 +122,9 @@ def load_bsp(path: str | os.PathLike[str]) -> tuple[MapDocument, BspReport]:
 
     doc._insert(objs)
     if report.displacements:
-        report.warnings.append(f"{report.displacements} Displacements sind als flache Brushes übernommen")
+        report.warnings.append(tr('{0} Displacements sind als flache Brushes übernommen').format(report.displacements))
     if report.broken:
-        report.warnings.append(f"{report.broken} Brushes ließen sich nicht zurückrechnen und fehlen")
+        report.warnings.append(tr('{0} Brushes ließen sich nicht zurückrechnen und fehlen').format(report.broken))
     return doc, report
 
 
@@ -264,7 +265,7 @@ def _static_props(bsp, report: BspReport) -> list[Entity]:
     try:
         props = list(bsp.props)
     except Exception as exc:
-        report.warnings.append(f"Statische Props nicht lesbar: {exc}")
+        report.warnings.append(tr('Statische Props nicht lesbar: {0}').format(exc))
         return []
     out = []
     for p in props:

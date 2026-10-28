@@ -11,6 +11,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ...i18n import tr
 from ..profiles import GameProfile
 from .settings import CompileSettings
 
@@ -132,7 +133,7 @@ def build_plan(profile: GameProfile, vmf_path: str | Path, settings: CompileSett
             continue
         program = profile.tool_path(tool)
         if program is None:
-            plan.problems.append(f"{tool} nicht gefunden (Spielprofil prüfen)")
+            plan.problems.append(tr('{0} nicht gefunden (Spielprofil prüfen)').format(tool))
             continue
         plan.steps.append(ToolStep(tool.upper(), tool, str(program), [*game, *split_args(extra), base], cwd))
     if pack_files and settings.run_vbsp:
@@ -147,13 +148,13 @@ def build_plan(profile: GameProfile, vmf_path: str | Path, settings: CompileSett
                                        ["-addlist", plan.bsp_path, listfile, plan.bsp_path], cwd,
                                        {"VPROJECT": profile.game_dir}))
         else:
-            plan.notes.append("bspzip nicht gefunden: eigene Texturen werden nur ins Spiel kopiert, "
-                              "nicht in die Map gepackt")
+            plan.notes.append(tr("bspzip nicht gefunden: eigene Texturen werden nur ins Spiel kopiert, "
+                              "nicht in die Map gepackt"))
             if settings.copy_to_game:
-                plan.steps.append(CopyFilesStep("Eigene Texturen", [
+                plan.steps.append(CopyFilesStep(tr("Eigene Texturen"), [
                     (outer, str(Path(profile.game_dir) / inner)) for inner, outer in pack_files]))
     if not (Path(profile.game_dir) / "gameinfo.txt").is_file():
-        plan.problems.append("Spielordner mit gameinfo.txt fehlt (Spielprofil prüfen)")
+        plan.problems.append(tr("Spielordner mit gameinfo.txt fehlt (Spielprofil prüfen)"))
 
     if settings.copy_to_game:
         target = profile.maps_dir / f"{plan.map_name}.bsp"
@@ -168,14 +169,14 @@ def build_plan(profile: GameProfile, vmf_path: str | Path, settings: CompileSett
         if settings.build_cubemaps:
             # Spiegelungen ohne Glanz bauen (sonst spiegelt sich der Glanz mit), danach schließt das Spiel
             launch_args += CUBEMAP_ARGS
-            plan.notes.append("Das Spiel baut die Cubemaps und schließt sich danach. Danach normal starten.")
+            plan.notes.append(tr("Das Spiel baut die Cubemaps und schließt sich danach. Danach normal starten."))
         launch_args += ["+map", plan.map_name]
         if profile.launch_via_steam and profile.steam_exe and profile.app_id:
-            plan.steps.append(LaunchStep("Spiel starten", profile.steam_exe,
+            plan.steps.append(LaunchStep(tr("Spiel starten"), profile.steam_exe,
                                          ["-applaunch", str(profile.app_id), *launch_args]))
         elif profile.game_exe:
-            plan.steps.append(LaunchStep("Spiel starten", profile.game_exe,
+            plan.steps.append(LaunchStep(tr("Spiel starten"), profile.game_exe,
                                          ["-game", profile.game_dir, *launch_args]))
         else:
-            plan.problems.append("Weder Steam noch Spiel-Exe bekannt, Starten nicht möglich")
+            plan.problems.append(tr("Weder Steam noch Spiel-Exe bekannt, Starten nicht möglich"))
     return plan

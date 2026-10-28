@@ -19,23 +19,24 @@ from ...core.commands import ReplaceObjects
 from ...core.geometry.displacement import BRUSH_MODES, is_displacement_solid, solid_ray_face
 from ...core.model import Solid
 from ...core.terrain import TerrainError, convert, flatten, sew_all, stroke, terrain_solids
+from ...i18n import tr
 from .base import Tool, _visible
 
 if TYPE_CHECKING:
     from ..viewports.viewport import Viewport
 
 MODE_LABELS = {
-    "heben": "Heben", "senken": "Senken", "glaetten": "Glätten", "rauschen": "Rauschen", "ebnen": "Ebnen",
-    "alpha": "Textur malen", "alpha_weg": "Textur weg",
+    "heben": tr("Heben"), "senken": tr("Senken"), "glaetten": tr("Glätten"), "rauschen": tr("Rauschen"), "ebnen": tr("Ebnen"),
+    "alpha": tr("Textur malen"), "alpha_weg": tr("Textur weg"),
 }
 MODE_HELP = {
-    "heben": "Hebt das Gelände unter dem Pinsel an (Shift: senken)",
-    "senken": "Senkt das Gelände (Shift: heben)",
-    "glaetten": "Gleicht Kanten und Spitzen aus",
-    "rauschen": "Macht die Fläche unruhig, wie Felsen oder Erde",
-    "ebnen": "Zieht alles unter dem Pinsel auf eine Höhe",
-    "alpha": "Malt die zweite Textur eines Überblend-Materials (z. B. Gras auf Kies) auf (Shift: weg)",
-    "alpha_weg": "Nimmt die zweite Textur wieder weg (Shift: malen)",
+    "heben": tr("Hebt das Gelände unter dem Pinsel an (Shift: senken)"),
+    "senken": tr("Senkt das Gelände (Shift: heben)"),
+    "glaetten": tr("Gleicht Kanten und Spitzen aus"),
+    "rauschen": tr("Macht die Fläche unruhig, wie Felsen oder Erde"),
+    "ebnen": tr("Zieht alles unter dem Pinsel auf eine Höhe"),
+    "alpha": tr("Malt die zweite Textur eines Überblend-Materials (z. B. Gras auf Kies) auf (Shift: weg)"),
+    "alpha_weg": tr("Nimmt die zweite Textur wieder weg (Shift: malen)"),
 }
 INVERSE = {"heben": "senken", "senken": "heben", "alpha": "alpha_weg", "alpha_weg": "alpha"}
 RING_COLOR = (0.35, 0.95, 0.45)
@@ -92,11 +93,11 @@ class TerrainTool(Tool):
                 new.append(converted)
         if new:
             ed.run(ReplaceObjects(new, "Zu Gelände machen"))
-            ed.status_message.emit(f"{len(new)} Brush(es) sind jetzt Gelände. Darüber ziehen formt es.")
+            ed.status_message.emit(tr('{0} Brush(es) sind jetzt Gelände. Darüber ziehen formt es.').format(len(new)))
         elif problems:
             ed.status_message.emit(problems[0])
         else:
-            ed.status_message.emit("Erst einen oder mehrere Brushes auswählen")
+            ed.status_message.emit(tr("Erst einen oder mehrere Brushes auswählen"))
         return len(new)
 
     def flatten_selection(self) -> int:
@@ -110,8 +111,8 @@ class TerrainTool(Tool):
         changed = sew_all(self.editor.doc)
         if changed:
             self.editor.run(ReplaceObjects(changed, "Nähte schließen"))
-        self.editor.status_message.emit(f"Nähte geschlossen ({len(changed)} Brush(es) angepasst)"
-                                        if changed else "Alle Nähte sind schon geschlossen")
+        self.editor.status_message.emit(tr('Nähte geschlossen ({0} Brush(es) angepasst)').format(len(changed))
+                                        if changed else tr("Alle Nähte sind schon geschlossen"))
         return len(changed)
 
     # ---- Pinsel ---------------------------------------------------------------------------
@@ -129,7 +130,7 @@ class TerrainTool(Tool):
         changed = stroke(self._targets(), center, self.radius, self.strength, self.current_mode(),
                          ignore_axis=ignore_axis, seed=int(next(_strokes)))
         if changed:
-            self.editor.run(ReplaceObjects(changed, "Gelände formen", self._stroke))
+            self.editor.run(ReplaceObjects(changed, tr("Gelände formen"), self._stroke))
             for s in changed:
                 self._touched[s.id] = s
         return len(changed)
@@ -162,7 +163,7 @@ class TerrainTool(Tool):
             latest = [s for s in (self.editor.doc.get(i) for i in ids) if isinstance(s, Solid)]
             sewn = sew_all(self.editor.doc, latest)
             if sewn:
-                self.editor.run(ReplaceObjects(sewn, "Gelände formen", self._stroke))
+                self.editor.run(ReplaceObjects(sewn, tr("Gelände formen"), self._stroke))
         self._stroke = None
         self._last = None
         self._touched = {}
@@ -225,7 +226,7 @@ class TerrainTool(Tool):
             return
         hit = self._hit_3d(vp, e.position())
         if hit is None:
-            self.editor.status_message.emit("Hier ist kein Gelände. Brushes auswählen und „Zu Gelände machen“")
+            self.editor.status_message.emit(tr("Hier ist kein Gelände. Brushes auswählen und „Zu Gelände machen“"))
             return
         self.hover, self.hover_normal = hit
         self.ignore_axis = None
@@ -264,7 +265,7 @@ class TerrainTool(Tool):
         sizes = list(RADIUS_STEPS)
         k = min(range(len(sizes)), key=lambda i: abs(sizes[i] - self.radius))
         self.radius = float(sizes[max(0, min(len(sizes) - 1, k + steps))])
-        self.editor.status_message.emit(f"Pinselgröße {int(self.radius)} Units")
+        self.editor.status_message.emit(tr('Pinselgröße {0} Units').format(int(self.radius)))
         if self.on_change is not None:
             self.on_change()
         self.editor.redraw_requested.emit()

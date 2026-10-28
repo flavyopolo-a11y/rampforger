@@ -77,4 +77,4 @@ def test_problems_report_overlay_in_the_air():
     air = make_overlay(doc, (64, 64, 300), (0, 0, 1), "overlays/road", 64, 64)
     doc._insert([ok, air])
     hits = [p for p in find_problems(doc) if p.area == "Aufkleber"]
-    assert len(hits) == 1 and hits[0].ids == (air.id,) and hits[0].text.startswith("1 Overlay ohne")
+    assert len(hits) == 1 and hits[0].ids == (air.id,) and hits[0].text.startswith("Overlays ohne Fläche darunter: 1.")

@@ -18,6 +18,7 @@ from ...core.commands import AddObjects
 from ...core.decals import DEFAULT_DECAL, LIFT, basis, make_decal, make_overlay
 from ...core.materials.sizes import texture_size
 from ...core.model import DEFAULT_MATERIAL, Solid
+from ...i18n import tr
 from .base import Tool, hit_solid_face, pick_3d
 
 if TYPE_CHECKING:
@@ -113,7 +114,7 @@ class StickerTool(Tool):
             return
         hit = self._hit(vp, e.position())
         if hit is None:
-            self.editor.status_message.emit("Auf eine Fläche klicken")
+            self.editor.status_message.emit(tr("Auf eine Fläche klicken"))
             return
         self.place(*hit)
 
@@ -129,7 +130,7 @@ class StickerTool(Tool):
         ed.run(AddObjects([ent], "Aufkleber"))
         ed.set_selection([ent.id])
         kind = "Decal" if self.options.mode == "decal" else "Overlay"
-        note = "" if material == (ed.current_material or "").lower() else " (Standard-Decal: im Browser ein decals/-Material wählen)"
+        note = "" if material == (ed.current_material or "").lower() else tr(" (Standard-Decal: im Browser ein decals/-Material wählen)")
         ed.status_message.emit(f"{kind} {material} gesetzt{note}")
         return ent.id
 
@@ -155,7 +156,7 @@ class StickerTool(Tool):
     # ---- 2D -------------------------------------------------------------------------------
     def press_2d(self, vp: "Viewport", e: QMouseEvent) -> None:
         if e.button() == Qt.LeftButton:
-            self.editor.status_message.emit("Aufkleber in der 3D-Ansicht auf eine Fläche klicken")
+            self.editor.status_message.emit(tr("Aufkleber in der 3D-Ansicht auf eine Fläche klicken"))
 
     # ---- Tasten ---------------------------------------------------------------------------
     def wants_key(self, key: int) -> bool:

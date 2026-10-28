@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core import search
+from ...i18n import N_
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow
@@ -39,7 +40,7 @@ class FindDialog(QDialog):
         self.ent_text = QLineEdit()
         self.ent_text.setPlaceholderText(self.tr("z. B. trigger_teleport, stage2_dest, door_*"))
         self.ent_field = QComboBox()
-        for key, label in (("alle", "Klasse, Name und alle Werte"), ("klasse", "Klasse"), ("name", "Name")):
+        for key, label in (("alle", N_("Klasse, Name und alle Werte")), ("klasse", N_("Klasse")), ("name", N_("Name"))):
             self.ent_field.addItem(self.tr(label), key)
         self.ent_whole = QCheckBox(self.tr("Ganzer Wert"))
         self.ent_new = QLineEdit()

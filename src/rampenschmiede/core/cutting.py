@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Iterable, Literal
 
+from ..i18n import tr
 from .blocks import MEMBER_KEY, is_block_root
 from .commands import Command, SwapObjects
 from .geometry import primitives
@@ -75,7 +76,7 @@ def carve_with(doc: MapDocument, cutter_ids: Iterable[int]) -> tuple[Command | N
                 for c in doc.children(o.id) if isinstance(c, Solid)]
     skip = {c.id for c in cutters}
     targets = [s for s in doc.solids() if s.id not in skip and cuttable(doc, s)]
-    return _carve(doc, targets, [c.faces for c in cutters], "Aushöhlen")
+    return _carve(doc, targets, [c.faces for c in cutters], tr("Aushöhlen"))
 
 
 def _carve(doc: MapDocument, targets: list[Solid], cutters: list[tuple], description: str) -> tuple[Command | None, list[int]]:

@@ -11,6 +11,7 @@ import tempfile
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
+from ...i18n import tr
 from .steam import find_game_folders, steam_executable, steam_roots
 
 
@@ -84,15 +85,15 @@ class GameProfile:
         """Was fehlt, damit Kompilieren und Testen klappt (leer = alles gut)."""
         out = []
         if not self.game_dir or not (Path(self.game_dir) / "gameinfo.txt").is_file():
-            out.append("Spielordner mit gameinfo.txt fehlt")
+            out.append(tr("Spielordner mit gameinfo.txt fehlt"))
         for tool in ("vbsp", "vvis", "vrad"):
             if self.tool_path(tool) is None:
-                out.append(f"{tool} nicht gefunden")
+                out.append(tr('{0} nicht gefunden').format(tool))
         if self.launch_via_steam:
             if not self.steam_exe or not Path(self.steam_exe).is_file() or not self.app_id:
-                out.append("Steam oder App-ID fehlt zum Starten")
+                out.append(tr("Steam oder App-ID fehlt zum Starten"))
         elif not self.game_exe or not Path(self.game_exe).is_file():
-            out.append("Spiel-Exe fehlt zum Starten")
+            out.append(tr("Spiel-Exe fehlt zum Starten"))
         return out
 
     def to_dict(self) -> dict:

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from ...core.model import MapDocument
 from ...core.validation.stats import map_stats
+from ...i18n import tr
 
 LEVEL_COLORS = {"ok": "#3a3", "knapp": "#d80", "zu viel": "#d33"}
 
@@ -46,7 +47,7 @@ class StatsDialog(QDialog):
                 bar = QProgressBar()
                 bar.setRange(0, st.limit)
                 bar.setValue(min(st.value, st.limit))
-                bar.setFormat(f"{st.share * 100:.0f} % von {st.limit:,}".replace(",", "."))
+                bar.setFormat(tr('{0:.0f} % von {1:,}').format(st.share * 100, st.limit).replace(",", "."))
                 bar.setToolTip(st.hint)
                 self.table.setCellWidget(row, 2, bar)
             self.table.setItem(row, 0, name)

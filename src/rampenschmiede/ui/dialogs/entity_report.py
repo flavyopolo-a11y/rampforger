@@ -23,11 +23,12 @@ from PySide6.QtWidgets import (
 from ...core.commands import RemoveObjects
 from ...core.entities.io import entity_center
 from ...core.model import Entity
+from ...i18n import N_
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 
-KINDS = (("alle", "Alle"), ("punkt", "Punkt-Entities"), ("brush", "Brush-Entities"))
+KINDS = (("alle", N_("Alle")), ("punkt", N_("Punkt-Entities")), ("brush", N_("Brush-Entities")))
 
 
 def report_rows(doc, text: str = "", classname: str = "", kind: str = "alle") -> list[Entity]:

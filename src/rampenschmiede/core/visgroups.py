@@ -11,6 +11,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from ..i18n import tr
 from .commands import Command, MacroCommand, ReplaceObjects
 from .model import ChangeSet, MapDocument, MapObject
 
@@ -110,7 +111,7 @@ def create(doc: MapDocument, name: str, ids: Iterable[int]) -> tuple[Command, in
     groups = visgroups(doc)
     gid = max((g.id for g in groups), default=0) + 1
     color = COLORS[(gid - 1) % len(COLORS)]
-    groups = [*groups, Visgroup(gid, name.strip() or f"Gruppe {gid}", color)]
+    groups = [*groups, Visgroup(gid, name.strip() or tr('Gruppe {0}').format(gid), color)]
     changed = [o.replace(editor=dataclasses.replace(o.editor, visgroup_ids=(*o.editor.visgroup_ids, gid)))
                for o in _with_ids(doc, ids)]
     cmds: list[Command] = [SetVisgroups(groups, "Sichtgruppe anlegen")]
@@ -128,7 +129,7 @@ def add(doc: MapDocument, gid: int, ids: Iterable[int]) -> Command | None:
             if group is not None and not group.shown:
                 e = dataclasses.replace(e, hidden=True)
             changed.append(o.replace(editor=e))
-    return ReplaceObjects(changed, "Zur Sichtgruppe hinzufügen") if changed else None
+    return ReplaceObjects(changed, tr("Zur Sichtgruppe hinzufügen")) if changed else None
 
 
 def remove_from(doc: MapDocument, gid: int, ids: Iterable[int]) -> Command | None:
@@ -139,7 +140,7 @@ def remove_from(doc: MapDocument, gid: int, ids: Iterable[int]) -> Command | Non
             rest = tuple(v for v in o.editor.visgroup_ids if v != gid)
             changed.append(o.replace(editor=dataclasses.replace(
                 o.editor, visgroup_ids=rest, hidden=bool(hidden & set(rest)))))
-    return ReplaceObjects(changed, "Aus Sichtgruppe nehmen") if changed else None
+    return ReplaceObjects(changed, tr("Aus Sichtgruppe nehmen")) if changed else None
 
 
 def set_shown(doc: MapDocument, gid: int, shown: bool) -> Command | None:
@@ -175,11 +176,11 @@ def delete(doc: MapDocument, gid: int) -> Command | None:
     if not any(g.id == gid for g in groups):
         return None
     rest = [g for g in groups if g.id != gid]
-    cmds: list[Command] = [SetVisgroups(rest, "Sichtgruppe löschen")]
+    cmds: list[Command] = [SetVisgroups(rest, tr("Sichtgruppe löschen"))]
     change = remove_from(doc, gid, members(doc, gid))
     if change is not None:
         cmds.append(change)
-    return MacroCommand(cmds, "Sichtgruppe löschen")
+    return MacroCommand(cmds, tr("Sichtgruppe löschen"))
 
 
 __all__ = ["KEY", "Visgroup", "add", "create", "delete", "members", "raw_node", "remove_from", "rename",

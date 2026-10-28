@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QWidgetAction,
 )
 
-from .. import __version__
+from .. import __version__, i18n
 from ..core import organize, search
 from ..core.blocks import clone_objects, is_block_root, upgrade_roots
 from ..core.commands import AddObjects, Command, MacroCommand, RemoveObjects
@@ -52,6 +52,7 @@ from ..core.validation.problems import find_problems
 from ..core.validation.seal import check_seal
 from ..core.validation.seal import describe as describe_seal
 from ..core.zones import collect_zones, momentum_zones, zone_problems
+from ..i18n import N_
 from .autosave import DEFAULT_MINUTES, Autosaver, backup_before_save, backups_dir, latest_autosave
 from .compile_controller import CompileController, load_pointfile, load_portalfile
 from .dialogs.compile_dialog import CompileDialog
@@ -114,22 +115,22 @@ QToolButton:hover { background: rgba(255, 255, 255, 0.08); }
 QToolButton:checked { background: rgba(255, 140, 40, 0.25); border: 1px solid #ff8c28; color: #ffb070; }
 """
 FILE_FILTER = "Rampenschmiede-Projekt (*.rsmap)"
-OPEN_FILTER = ("Maps (*.rsmap *.vmf *.bsp);;Rampenschmiede-Projekt (*.rsmap);;Hammer-Map (*.vmf);;"
-               "Kompilierte Map (*.bsp)")
-BSP_FILTER = "Kompilierte Map (*.bsp)"
-VMF_FILTER = "Hammer-Map (*.vmf)"
+OPEN_FILTER = (N_("Maps (*.rsmap *.vmf *.bsp);;Rampenschmiede-Projekt (*.rsmap);;Hammer-Map (*.vmf);;"
+               "Kompilierte Map (*.bsp)"))
+BSP_FILTER = N_("Kompilierte Map (*.bsp)")
+VMF_FILTER = N_("Hammer-Map (*.vmf)")
 MAX_RECENT = 8
 #: Steigt, wenn neue Panels dazukommen: Alte gespeicherte Anordnungen werden dann verworfen
 LAYOUT_VERSION = 6
 DOCK_MIN_WIDTH = 340
 #: Tempo der 3D-Kamera beim Fliegen (Units pro Sekunde)
-CAMERA_SPEEDS = ((250, "Langsam"), (600, "Normal"), (1200, "Schnell"), (2500, "Sehr schnell"))
+CAMERA_SPEEDS = ((250, N_("Langsam")), (600, N_("Normal")), (1200, N_("Schnell")), (2500, N_("Sehr schnell")))
 #: Gemerkte Kameras in `doc.extra`
 CAMERAS_KEY = "kameras"
 #: Bildgröße der Stile im Stil-Knopf oben
 STYLE_THUMB = QSize(150, 96)
 
-CONTROLS_HELP = """
+CONTROLS_HELP = N_("""
 <h3>Kamera</h3>
 <table>
 <tr><td><b>3D</b>: rechte Maustaste halten</td><td>Umsehen, dazu W A S D fliegen, Q/E runter/hoch</td></tr>
@@ -199,7 +200,7 @@ CONTROLS_HELP = """
 <tr><td>Strg+F / Strg+Shift+G</td><td>Suchen und Ersetzen / Gehe zu ID</td></tr>
 <tr><td>Shift+M</td><td>Messen: Abstand, Versatz und Steigung</td></tr>
 </table>
-"""
+""")
 
 
 class MainWindow(QMainWindow):
@@ -542,6 +543,16 @@ class MainWindow(QMainWindow):
             sub.addAction(a)
         self.cameras_menu = m.addMenu(self.tr("&Kameras"))
         self.cameras_menu.aboutToShow.connect(self._fill_cameras_menu)
+        # zweisprachig, damit man das Menü auch in einer fremden Sprache findet
+        title = self.tr("Sprache")
+        self.language_menu = m.addMenu(icon("language"), title if title == "Language" else f"{title} / Language")
+        group = QActionGroup(self)
+        for code, name in i18n.LANGUAGES.items():
+            a = self.language_menu.addAction(name)
+            a.setCheckable(True)
+            a.setChecked(code == i18n.saved_language())
+            a.triggered.connect(lambda _=False, c=code: self.choose_language(c))
+            group.addAction(a)
         m.addSeparator()
         m.addAction(self.tool_dock.toggleViewAction())
         m.addAction(self.sel_dock.toggleViewAction())
@@ -569,6 +580,14 @@ class MainWindow(QMainWindow):
         m = mb.addMenu(self.tr("&Hilfe"))
         m.addAction(self.act_controls)
         m.addAction(self.act_about)
+
+    def choose_language(self, lang: str) -> None:
+        """Sprache merken; sie gilt nach dem Neustart (alle Texte werden beim Start übersetzt)."""
+        if lang == i18n.saved_language():
+            return
+        i18n.save_language(lang)
+        QMessageBox.information(self, self.tr("Sprache"), self.tr(
+            "Die Sprache wird beim nächsten Start gewechselt. Bitte die Rampenschmiede neu starten."))
 
     def _set_icons(self) -> None:
         for action, name in ((self.act_new, "new"), (self.act_open, "open"), (self.act_save, "save"),

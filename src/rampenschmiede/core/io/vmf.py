@@ -18,6 +18,7 @@ from typing import Any, Iterable
 
 from srctools.keyvalues import Keyvalues
 
+from ...i18n import tr
 from ..decals import is_auto_overlay, overlay_sides
 from ..model import EditorInfo, Entity, Face, MapDocument, MapObject, Output, Solid, TexAxis
 from ..visgroups import KEY as VISGROUPS_KEY
@@ -70,12 +71,12 @@ _AXIS_RE = re.compile(r"\[\s*([^\]]+?)\s*\]\s*([-+0-9.eE]+)")
 def parse_plane(text: str) -> tuple[tuple[float, float, float], ...]:
     groups = _PLANE_RE.findall(text)
     if len(groups) != 3:
-        raise VmfError(f"Ungültige Ebene: {text!r}")
+        raise VmfError(tr('Ungültige Ebene: {0!r}').format(text))
     pts = []
     for g in groups:
         nums = [float(c) for c in g.split()]
         if len(nums) != 3:
-            raise VmfError(f"Ungültiger Punkt in Ebene: {text!r}")
+            raise VmfError(tr('Ungültiger Punkt in Ebene: {0!r}').format(text))
         pts.append((nums[0], nums[1], nums[2]))
     return tuple(pts)
 
@@ -87,10 +88,10 @@ def format_plane(points: Iterable[tuple[float, float, float]]) -> str:
 def parse_axis(text: str) -> TexAxis:
     m = _AXIS_RE.match(text.strip())
     if not m:
-        raise VmfError(f"Ungültige Texturachse: {text!r}")
+        raise VmfError(tr('Ungültige Texturachse: {0!r}').format(text))
     nums = [float(c) for c in m.group(1).split()]
     if len(nums) != 4:
-        raise VmfError(f"Ungültige Texturachse: {text!r}")
+        raise VmfError(tr('Ungültige Texturachse: {0!r}').format(text))
     return TexAxis(nums[0], nums[1], nums[2], nums[3], float(m.group(2)))
 
 
@@ -150,7 +151,7 @@ def _parse_side(kv: Keyvalues) -> Face:
         else:
             raw.append(kv_to_raw(c))
     if "plane" not in vals:
-        raise VmfError("Seite ohne Ebene")
+        raise VmfError(tr("Seite ohne Ebene"))
     extra: dict[str, Any] = {"raw": raw} if raw else {}
     return Face(
         points=parse_plane(vals["plane"]),  # type: ignore[arg-type]
@@ -263,7 +264,7 @@ def parse_vmf(text: str, filename: str = "") -> tuple[MapDocument, ImportReport]
     try:
         root = Keyvalues.parse(text, filename, allow_escapes=False)
     except Exception as exc:  # srctools wirft eigene Fehlerklassen
-        raise VmfError(f"VMF konnte nicht gelesen werden: {exc}") from exc
+        raise VmfError(tr('VMF konnte nicht gelesen werden: {0}').format(exc)) from exc
     doc = MapDocument()
     report = ImportReport()
     objs: list[MapObject] = []
@@ -311,7 +312,7 @@ def parse_vmf(text: str, filename: str = "") -> tuple[MapDocument, ImportReport]
         else:
             layout.append(kv_to_raw(block))
     if not world_seen:
-        raise VmfError("Die Datei enthält keinen world-Block")
+        raise VmfError(tr("Die Datei enthält keinen world-Block"))
     if not entities_marked:
         layout.insert(layout.index(WORLD_MARK) + 1, ENTITIES_MARK)
     doc.extra["vmf_layout"] = layout
@@ -322,7 +323,7 @@ def parse_vmf(text: str, filename: str = "") -> tuple[MapDocument, ImportReport]
         if isinstance(o, Solid):
             report.solids += 1
             if not o.is_valid():
-                report.warnings.append(f"Brush {o.vmf_id}: ungültige Geometrie (wird trotzdem übernommen)")
+                report.warnings.append(tr('Brush {0}: ungültige Geometrie (wird trotzdem übernommen)').format(o.vmf_id))
         else:
             report.entities += 1
     return doc, report

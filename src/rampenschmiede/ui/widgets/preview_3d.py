@@ -17,11 +17,12 @@ from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
 from ...core.materials import MaterialLibrary
 from ...core.materials.library import TextureImage
+from ...i18n import tr
 
 BACKGROUND = (0.118, 0.122, 0.133)
 NO_TEXTURE = (0.69, 0.69, 0.67)
 FOV = 35.0
-SHAPES = {"kugel": "Kugel", "wuerfel": "Würfel", "rampe": "Rampe"}
+SHAPES = {"kugel": tr("Kugel"), "wuerfel": tr("Würfel"), "rampe": tr("Rampe")}
 
 _VERT = """
 #version 330

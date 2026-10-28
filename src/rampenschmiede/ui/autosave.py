@@ -16,6 +16,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QTimer
 
 from ..core.io import rsmap
+from ..i18n import tr
 from .paths import data_dir
 
 KEEP_AUTOSAVES = 10
@@ -102,7 +103,7 @@ class Autosaver(QObject):
         self.dirty = False
         self.last_path = target
         _prune(stem, AUTO_TAG, KEEP_AUTOSAVES)
-        self.editor.status_message.emit(f"Automatisch gesichert ({time.strftime('%H:%M')})")
+        self.editor.status_message.emit(tr("Automatisch gesichert ({0})").format(time.strftime("%H:%M")))
         return target
 
 

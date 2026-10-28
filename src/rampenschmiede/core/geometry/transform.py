@@ -15,6 +15,7 @@ import dataclasses
 import math
 from typing import Callable
 
+from ...i18n import tr
 from ..mathutil import Point, add, dot, length, round_point, sub
 from ..model.objects import Entity, Face, MapObject, Solid, TexAxis
 from .brush import best_triangle, is_valid_solid
@@ -63,7 +64,7 @@ def _transform_solid(solid: Solid, point_fn: Callable[[Point], Point],
         new_faces.append(nf)
     result = solid.replace(faces=tuple(new_faces))
     if not is_valid_solid(result):
-        raise TransformError("Die Form würde dabei entarten")
+        raise TransformError(tr("Die Form würde dabei entarten"))
     return result
 
 
@@ -154,7 +155,7 @@ def scale_obj(obj: MapObject, pivot: Point, factors: Point, texture_lock: bool =
         return dataclasses.replace(ax, scale=new_scale, offset=off)
 
     if any(f <= 0 for f in factors):
-        raise TransformError("Skalierung muss größer als null sein")
+        raise TransformError(tr("Skalierung muss größer als null sein"))
     return _transform_solid(obj, fn, tex if texture_lock else None)
 
 
@@ -177,7 +178,7 @@ def mirror(obj: MapObject, pivot: Point, axis: int) -> MapObject:
         faces.append(dataclasses.replace(f, points=(p1, p3, p2), uaxis=u, vaxis=v))  # type: ignore[arg-type]
     result = obj.replace(faces=tuple(faces))
     if not is_valid_solid(result):
-        raise TransformError("Die Form würde dabei entarten")
+        raise TransformError(tr("Die Form würde dabei entarten"))
     return result
 
 

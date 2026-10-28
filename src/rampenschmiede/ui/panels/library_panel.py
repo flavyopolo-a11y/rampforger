@@ -66,6 +66,7 @@ from ...core.surf.catalog import (
 )
 from ...core.surf.nature_templates import DEFAULT_LAVA, DEFAULT_WATER, find_water
 from ...core.surf.sweep import Materials
+from ...i18n import tr
 from ..editor import EditorContext
 from ..icons import icon
 from ..paths import prefabs_dir, textures_dir
@@ -78,14 +79,14 @@ CATEGORY_ICONS = {"Rampen": "ramp", "Kurven": "curve", "Spezial": "halfpipe", "B
                   "Gelände": "terrain", "Natur": "tree"}
 #: Einzelne Natur-Props in der Bibliothek: Schlüssel -> (Name, Beschreibung, Modell-Muster)
 NATURE_PROPS = {
-    "baum": ("Baum", "Ein zufälliger Baum aus dem Spiel. Nochmal einfügen gibt einen anderen.",
+    "baum": (tr("Baum"), tr("Ein zufälliger Baum aus dem Spiel. Nochmal einfügen gibt einen anderen."),
              ("models/props_foliage/*tree*", "models/props/de_inferno/tree*", "models/props/cs_militia/tree*")),
-    "busch": ("Busch", "Ein zufälliger Busch oder Strauch.",
+    "busch": (tr("Busch"), tr("Ein zufälliger Busch oder Strauch."),
               ("models/props_foliage/*bush*", "models/props_foliage/*shrub*", "models/props/de_inferno/bush*",
                "models/props/pi_shrub*")),
-    "palme": ("Palme", "Eine Palme (Dust, Aztec, HL2).",
+    "palme": (tr("Palme"), tr("Eine Palme (Dust, Aztec, HL2)."),
               ("models/props_foliage/*palm*", "models/props/de_dust/*palm*", "models/props/de_aztec/*palm*")),
-    "fels": ("Felsen", "Ein zufälliger Felsbrocken.",
+    "fels": (tr("Felsen"), tr("Ein zufälliger Felsbrocken."),
              ("models/props_wasteland/rock*", "models/props_foliage/rock*", "models/props_canal/rock*",
               "models/props_nature/rock*")),
 }
@@ -488,10 +489,10 @@ class LibraryPanel(QWidget):
             params: list[Param] = list(template.params)
             if at is not None:
                 params = [
-                    Param("_yaw", "Richtung", float(at.yaw), -360, 360, 15, "°", hint="0° = +X, 90° = +Y"),
-                    Param("_x", "Anker X", int(at.x), -32768, 32768, 16, "u"),
-                    Param("_y", "Anker Y", int(at.y), -32768, 32768, 16, "u"),
-                    Param("_z", "Anker Z", int(at.z), -32768, 32768, 16, "u"),
+                    Param("_yaw", tr("Richtung"), float(at.yaw), -360, 360, 15, "°", hint=tr("0° = +X, 90° = +Y")),
+                    Param("_x", tr("Anker X"), int(at.x), -32768, 32768, 16, "u"),
+                    Param("_y", tr("Anker Y"), int(at.y), -32768, 32768, 16, "u"),
+                    Param("_z", tr("Anker Z"), int(at.z), -32768, 32768, 16, "u"),
                 ] + params
             for p in params:
                 widget, read, write, changed = _editor_for(p, self.editor)

@@ -12,6 +12,7 @@ from pathlib import PurePosixPath
 
 import numpy as np
 
+from ...i18n import tr
 from ..materials import MaterialLibrary, normalize
 from .mdl import (
     VTX_SUFFIXES,
@@ -152,7 +153,7 @@ class ModelLibrary:
         vvd = self._read(stem + ".vvd")
         vtx = next((d for d in (self._read(stem + s) for s in VTX_SUFFIXES) if d is not None), None)
         if vvd is None or vtx is None:
-            problem = "VVD/VTX fehlt"
+            problem = tr("VVD/VTX fehlt")
         else:
             try:
                 geometry = build_geometry(header, vvd, vtx)

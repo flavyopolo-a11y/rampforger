@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ...i18n import tr
 from ..geometry.displacement import has_displacement
 from ..model import Entity, MapDocument
 
@@ -55,18 +56,18 @@ def map_stats(doc: MapDocument) -> list[Stat]:
     bb = doc.bbox()
     extent = 0 if bb is None else int(max(max(abs(v) for v in bb.mins), max(abs(v) for v in bb.maxs)))
     return [
-        Stat("brushes", "Brushes", len(solids), 8192, "MAX_MAP_BRUSHES"),
-        Stat("sides", "Brush-Seiten", sides, 65536, "MAX_MAP_BRUSHSIDES"),
-        Stat("entities", "Entities", len(entities), 8192, "MAX_MAP_ENTITIES"),
-        Stat("edicts", "Davon im Spiel vernetzt (ca.)", networked, 2048,
-             "Edict-Limit der Engine; darüber stürzt die Map beim Laden ab"),
-        Stat("brush_entities", "Brush-Entities", len(brush_ents)),
-        Stat("props", "Props (prop_static)", props),
-        Stat("lights", "Lichter", lights),
-        Stat("overlays", "Overlays", overlays, 512, "MAX_MAP_OVERLAYS"),
-        Stat("displacements", "Displacements", disps, 2048, "MAX_MAP_DISPINFO"),
-        Stat("materials", "Verschiedene Materialien", len(materials), 2048, "MAX_MAP_TEXDATA"),
-        Stat("extent", "Größte Koordinate", extent, MAP_EXTENT, "Weiter draußen wird nichts mehr gezeichnet"),
+        Stat("brushes", tr("Brushes"), len(solids), 8192, "MAX_MAP_BRUSHES"),
+        Stat("sides", tr("Brush-Seiten"), sides, 65536, "MAX_MAP_BRUSHSIDES"),
+        Stat("entities", tr("Entities"), len(entities), 8192, "MAX_MAP_ENTITIES"),
+        Stat("edicts", tr("Davon im Spiel vernetzt (ca.)"), networked, 2048,
+             tr("Edict-Limit der Engine; darüber stürzt die Map beim Laden ab")),
+        Stat("brush_entities", tr("Brush-Entities"), len(brush_ents)),
+        Stat("props", tr("Props (prop_static)"), props),
+        Stat("lights", tr("Lichter"), lights),
+        Stat("overlays", tr("Overlays"), overlays, 512, "MAX_MAP_OVERLAYS"),
+        Stat("displacements", tr("Displacements"), disps, 2048, "MAX_MAP_DISPINFO"),
+        Stat("materials", tr("Verschiedene Materialien"), len(materials), 2048, "MAX_MAP_TEXDATA"),
+        Stat("extent", tr("Größte Koordinate"), extent, MAP_EXTENT, tr("Weiter draußen wird nichts mehr gezeichnet")),
     ]
 
 

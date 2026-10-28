@@ -25,6 +25,7 @@ from ...core.geometry import transform
 from ...core.geometry.transform import TransformError
 from ...core.mathutil import BBox
 from ...core.model import Entity, MapObject, object_bbox
+from ...i18n import tr
 from .base import Tool, pick_2d, pick_3d
 
 if TYPE_CHECKING:
@@ -216,7 +217,7 @@ class SelectTool(Tool):
         delta[v] = self.editor.snap(d.bbox.mins[v] + d.current[1] - d.start[1]) - d.bbox.mins[v]
         lock = self.editor.texture_lock
         self._replace(d, lambda o: transform.translate(o, tuple(delta), lock),  # type: ignore[arg-type]
-                      "Kopieren und verschieben" if d.clone else "Verschieben")
+                      tr("Kopieren und verschieben") if d.clone else tr("Verschieben"))
 
     def _apply_scale(self, vp: "Viewport", d: _Drag) -> None:
         bb, handle = d.bbox, d.handle
@@ -455,7 +456,7 @@ class SelectTool(Tool):
                 d.current = (delta[0], delta[1])
                 lock = self.editor.texture_lock
                 self._replace(d, lambda o: transform.translate(o, delta, lock),
-                              "Kopieren und verschieben" if d.clone else "Verschieben")
+                              tr("Kopieren und verschieben") if d.clone else tr("Verschieben"))
                 self.editor.status_message.emit(f"X {delta[0]:+g}  Y {delta[1]:+g}")
             vp.update()
             return
@@ -472,7 +473,7 @@ class SelectTool(Tool):
             d.current = (delta[d.axis], 0.0)
             lock = self.editor.texture_lock
             self._replace(d, lambda o: transform.translate(o, tuple(delta), lock),  # type: ignore[arg-type]
-                          "Kopieren und verschieben" if d.clone else "Verschieben")
+                          tr("Kopieren und verschieben") if d.clone else tr("Verschieben"))
             self.editor.status_message.emit(f"{AXIS_NAMES[d.axis]} {delta[d.axis]:+g}")
             vp.update()
             return

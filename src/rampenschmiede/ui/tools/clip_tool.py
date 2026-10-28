@@ -19,6 +19,7 @@ from ...core.cutting import Keep, clip, cuttable, hole
 from ...core.geometry.csg import split
 from ...core.mathutil import BBox
 from ...core.model import Solid
+from ...i18n import tr
 from .base import Tool, box_lines
 
 if TYPE_CHECKING:
@@ -28,7 +29,7 @@ LINE_COLOR = (1.0, 0.85, 0.2)
 KEEP_COLOR = (1.0, 1.0, 1.0)
 DROP_COLOR = (1.0, 0.25, 0.25)
 KEEP_MODES: tuple[Keep, ...] = ("both", "back", "front")
-KEEP_LABELS = {"both": "Beide Teile behalten", "back": "Nur Seite 1 behalten", "front": "Nur Seite 2 behalten"}
+KEEP_LABELS = {"both": tr("Beide Teile behalten"), "back": tr("Nur Seite 1 behalten"), "front": tr("Nur Seite 2 behalten")}
 
 
 class _Signals(QObject):
@@ -111,14 +112,14 @@ class ClipTool(Tool):
     def apply(self) -> bool:
         pts = self.points()
         if pts is None:
-            self.editor.status_message.emit("Erst eine Schnittlinie in einer 2D-Ansicht ziehen")
+            self.editor.status_message.emit(tr("Erst eine Schnittlinie in einer 2D-Ansicht ziehen"))
             return False
         if not _selected_solids(self.editor):
-            self.editor.status_message.emit("Erst Brushes auswählen. Bausteine vorher lösen.")
+            self.editor.status_message.emit(tr("Erst Brushes auswählen. Bausteine vorher lösen."))
             return False
         cmd, ids = clip(self.editor.doc, self.editor.selection, pts, self.keep)  # type: ignore[arg-type]
         if cmd is None:
-            self.editor.status_message.emit("Die Linie geht durch keinen der ausgewählten Brushes")
+            self.editor.status_message.emit(tr("Die Linie geht durch keinen der ausgewählten Brushes"))
             return False
         self.editor.run(cmd)
         self.editor.set_selection(ids)
@@ -243,19 +244,19 @@ class HoleTool(Tool):
 
     def apply(self) -> bool:
         if self.rect is None or self.axes is None:
-            self.editor.status_message.emit("Erst ein Rechteck in einer 2D-Ansicht aufziehen")
+            self.editor.status_message.emit(tr("Erst ein Rechteck in einer 2D-Ansicht aufziehen"))
             return False
         if not _selected_solids(self.editor):
-            self.editor.status_message.emit("Erst Brushes auswählen. Bausteine vorher lösen.")
+            self.editor.status_message.emit(tr("Erst Brushes auswählen. Bausteine vorher lösen."))
             return False
         cmd, ids = hole(self.editor.doc, self.editor.selection, self.axes, self.rect)
         if cmd is None:
-            self.editor.status_message.emit("Das Rechteck trifft keinen der ausgewählten Brushes")
+            self.editor.status_message.emit(tr("Das Rechteck trifft keinen der ausgewählten Brushes"))
             return False
         self.editor.run(cmd)
         self.editor.set_selection(ids)
         self.clear()
-        self.editor.status_message.emit("Loch geschnitten")
+        self.editor.status_message.emit(tr("Loch geschnitten"))
         return True
 
     def press_2d(self, vp: "Viewport", e: QMouseEvent) -> None:
@@ -278,7 +279,7 @@ class HoleTool(Tool):
     def release_2d(self, vp: "Viewport", e: QMouseEvent) -> None:
         self._start = None
         if self.rect is not None:
-            self.editor.status_message.emit("Enter schneidet das Loch, Esc verwirft das Rechteck")
+            self.editor.status_message.emit(tr("Enter schneidet das Loch, Esc verwirft das Rechteck"))
 
     def cursor_2d(self, vp: "Viewport", pos: QPointF) -> Qt.CursorShape:
         return Qt.CrossCursor

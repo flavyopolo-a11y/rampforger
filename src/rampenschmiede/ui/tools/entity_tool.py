@@ -13,6 +13,7 @@ from PySide6.QtGui import QMouseEvent
 
 from ...core.commands import AddObjects
 from ...core.model import Entity, Solid
+from ...i18n import tr
 from .base import Tool, pick_3d
 
 if TYPE_CHECKING:
@@ -23,18 +24,18 @@ DEFAULT_LIFT = 16
 
 # Klassenname -> (Anzeigename, Standard-Keyvalues, Höhe des Ursprungs über der Fläche)
 POINT_ENTITIES: dict[str, tuple[str, tuple[tuple[str, str], ...], int]] = {
-    "info_player_counterterrorist": ("Spawn CT", (("angles", "0 0 0"),), 0),
-    "info_player_terrorist": ("Spawn T", (("angles", "0 0 0"),), 0),
-    "info_player_start": ("Spawn (Momentum)", (("angles", "0 0 0"),), 0),
-    "light": ("Licht (Punkt)", (("_light", "255 255 255 200"), ("_lightHDR", "-1 -1 -1 1"),
+    "info_player_counterterrorist": (tr("Spawn CT"), (("angles", "0 0 0"),), 0),
+    "info_player_terrorist": (tr("Spawn T"), (("angles", "0 0 0"),), 0),
+    "info_player_start": (tr("Spawn (Momentum)"), (("angles", "0 0 0"),), 0),
+    "light": (tr("Licht (Punkt)"), (("_light", "255 255 255 200"), ("_lightHDR", "-1 -1 -1 1"),
                                  ("_quadratic_attn", "1"), ("style", "0")), 32),
-    "light_spot": ("Licht (Spot)", (("_light", "255 255 255 400"), ("_lightHDR", "-1 -1 -1 1"),
+    "light_spot": (tr("Licht (Spot)"), (("_light", "255 255 255 400"), ("_lightHDR", "-1 -1 -1 1"),
                                      ("angles", "-90 0 0"), ("pitch", "-90"), ("_inner_cone", "30"),
                                      ("_cone", "45"), ("_exponent", "1"), ("_quadratic_attn", "1")), 64),
-    "light_environment": ("Sonne (light_environment)", (("_light", "255 240 220 300"),
+    "light_environment": (tr("Sonne (light_environment)"), (("_light", "255 240 220 300"),
                                                         ("_ambient", "150 170 200 40"),
                                                         ("angles", "-50 45 0"), ("pitch", "-50")), 32),
-    "env_cubemap": ("Cubemap", (("cubemapsize", "0"),), 64),
+    "env_cubemap": (tr("Cubemap"), (("cubemapsize", "0"),), 64),
     "info_teleport_destination": ("Teleport-Ziel", (("angles", "0 0 0"),), 0),
 }
 

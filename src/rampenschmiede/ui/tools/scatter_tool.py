@@ -23,6 +23,7 @@ from ...core.models.scatter import (
     props_in_circle,
     scatter,
 )
+from ...i18n import tr
 from .base import Tool, _visible, pick_3d
 
 if TYPE_CHECKING:
@@ -97,17 +98,17 @@ class ScatterTool(Tool):
             self._stroke = ("scatter", next(_strokes))
         models = self.models()
         if not models:
-            ed.status_message.emit("Erst im Modell-Browser ein Modell anklicken oder links ein Kit wählen"
-                                   if self.source == FROM_BROWSER else "Im Kit ist kein Modell gewählt")
+            ed.status_message.emit(tr("Erst im Modell-Browser ein Modell anklicken oder links ein Kit wählen")
+                                   if self.source == FROM_BROWSER else tr("Im Kit ist kein Modell gewählt"))
             return 0
         if self._erase:
             gone = props_in_circle(ed.doc, center, self.settings.radius, models)
             if gone:
-                ed.run(SwapObjects(gone, [], "Props streuen", self._stroke))
+                ed.run(SwapObjects(gone, [], tr("Props streuen"), self._stroke))
             return len(gone)
         new = scatter(ed.doc, self._ground(), center, models, ed.models, self.settings, self._rng)
         if new:
-            ed.run(SwapObjects([], new, "Props streuen", self._stroke))
+            ed.run(SwapObjects([], new, tr("Props streuen"), self._stroke))
         return len(new)
 
     def begin(self, center, erase: bool = False) -> int:
@@ -152,7 +153,7 @@ class ScatterTool(Tool):
         if e.button() != Qt.LeftButton:
             return
         if point is None:
-            self.editor.status_message.emit("Props streut man in 3D oder in der Ansicht von oben")
+            self.editor.status_message.emit(tr("Props streut man in 3D oder in der Ansicht von oben"))
             return
         self.hover = point
         self.begin(point, bool(e.modifiers() & Qt.ShiftModifier))

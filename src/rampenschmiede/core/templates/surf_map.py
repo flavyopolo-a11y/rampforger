@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ...i18n import tr
 from ..attach import SITS_ON, fit_on, link
 from ..blocks import build_block
 from ..geometry import primitives
@@ -71,7 +72,7 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
     """Alle Objekte der Map. Die Rampen laufen entlang +X, Spieler starten im Westen.
     Die Map wird um den Nullpunkt gelegt. ValueError, wenn sie zu groß für Source wäre."""
     if s.stages < 1 or s.ramps_per_stage < 1:
-        raise ValueError("Mindestens eine Stage mit einer Rampe")
+        raise ValueError(tr("Mindestens eine Stage mit einer Rampe"))
     length = total_length(s)
     kind = s.ramp_kind if s.ramp_kind in CATALOG else "gerade"
     ramp_values = {"laenge": s.ramp_length, "breite": s.ramp_width, "winkel": s.angle}
@@ -140,7 +141,6 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
     if any(abs(c) > MAP_LIMIT - 600 for c in (*bounds.mins, *bounds.maxs)):
         size = round(max(bounds.size)) + 2 * 528
         raise ValueError(
-            f"Die Map wäre mit Hülle etwa {size} Units lang; Source erlaubt höchstens {2 * MAP_LIMIT}. "
-            "Weniger Stages, weniger oder kürzere Rampen wählen.")
+            tr('Die Map wäre mit Hülle etwa {0} Units lang; Source erlaubt höchstens {1}. Weniger Stages, weniger oder kürzere Rampen wählen.').format(size, 2 * MAP_LIMIT))
     objs += enclose_map(doc, margin=512, bounds=bounds)
     return objs

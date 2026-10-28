@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from ..i18n import tr
 from .blocks import block_info, is_block_root, rebuild
 from .commands import Command, MacroCommand, ReplaceObjects, SwapObjects
 from .geometry.displacement import is_displacement_solid
@@ -89,7 +90,7 @@ def follow_supports(doc: MapDocument) -> Command | None:
         if support is None:
             # Block gelöscht: Zone bleibt, wo sie ist
             extra = {k: v for k, v in e.extra.items() if k != SITS_ON}
-            cmds.append(ReplaceObjects([e.replace(extra=extra)], "Zone lösen"))
+            cmds.append(ReplaceObjects([e.replace(extra=extra)], tr("Zone lösen")))
             continue
         box = doc.bbox([support.id])
         if box is None:
@@ -101,10 +102,10 @@ def follow_supports(doc: MapDocument) -> Command | None:
         values, at = fit_on(box, bi["placement"][3] if bi else 0.0)
         new, _gen = rebuild(doc, e, values, at)
         new[0] = new[0].replace(extra={**new[0].extra, SITS_ON: link(support.id, box)})
-        cmds.append(SwapObjects([e.id] + [s.id for s in doc.attached([e.id])], new, "Zone folgt dem Block"))
+        cmds.append(SwapObjects([e.id] + [s.id for s in doc.attached([e.id])], new, tr("Zone folgt dem Block")))
     if not cmds:
         return None
-    return MacroCommand(cmds, "Zone folgt dem Block")
+    return MacroCommand(cmds, tr("Zone folgt dem Block"))
 
 
 __all__ = ["SITS_ON", "ZONE_TEMPLATES", "fit_on", "follow_supports", "is_zone_template", "link", "support_below"]

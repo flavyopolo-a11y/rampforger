@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ...i18n import tr
 from ..commands import AddObjects, Command, MacroCommand, ReplaceObjects, SetWorldKeyvalues
 from ..model import Entity, MapDocument
 from .library import MaterialLibrary, normalize
@@ -47,49 +48,49 @@ class WorldStyle:
 
 
 STYLES: tuple[WorldStyle, ...] = (
-    WorldStyle("tag", "Sonniger Tag", "Klarer Himmel, warmes Sonnenlicht, helle Rampen mit blauen Linien.",
+    WorldStyle("tag", tr("Sonniger Tag"), tr("Klarer Himmel, warmes Sonnenlicht, helle Rampen mit blauen Linien."),
                ("sky_day01_01", "sky_day01_05"), "255 244 220 350", "150 175 210 60", -55, 30, None,
                (214, 218, 224), (47, 111, 214), (120, 124, 130),
                ("concrete/concretewall001a", "concrete/concretefloor001a"), (("concrete", "wall"), ("concrete",))),
-    WorldStyle("abend", "Sonnenuntergang", "Tiefe Sonne, oranges Licht, leichter warmer Dunst.",
+    WorldStyle("abend", tr("Sonnenuntergang"), tr("Tiefe Sonne, oranges Licht, leichter warmer Dunst."),
                ("sky_day02_09", "sky_day01_08", "sky_day02_06"), "255 170 110 260", "120 100 140 50", -20, 200,
                Fog("255 170 120", 2048, 16384), (60, 40, 70), (255, 140, 60), (95, 72, 80),
                ("brick/brickwall001a", "brick/brickwall003a"), (("brick", "wall"), ("brick",))),
-    WorldStyle("nacht", "Nacht", "Dunkler Himmel, kühles Mondlicht, leuchtende Linien.",
+    WorldStyle("nacht", tr("Nacht"), tr("Dunkler Himmel, kühles Mondlicht, leuchtende Linien."),
                ("sky_day01_09", "sky_borealis01", "sky_day02_10"), "140 160 255 120", "40 50 90 40", -70, 120,
                Fog("20 25 50", 1024, 12000), (24, 26, 40), (80, 200, 255), (40, 44, 60),
                ("metal/metalwall001a", "metal/metalwall048a"), (("metal", "wall"), ("metal",))),
-    WorldStyle("wueste", "Wüste", "Grelle Sonne, sandige Farben, weiter Dunst.",
+    WorldStyle("wueste", tr("Wüste"), tr("Grelle Sonne, sandige Farben, weiter Dunst."),
                ("sky_dust", "sky_cs15_daylight02_hdr", "sky_day01_04"), "255 230 190 400", "200 180 150 70",
                -60, 60, Fog("230 210 170", 4096, 24000), (200, 170, 120), (140, 80, 40), (190, 160, 120),
                ("de_dust/stonewall02", "de_dust/sitebwall01"), (("dust", "wall"), ("sand",), ("plaster",))),
-    WorldStyle("industrie", "Industrie", "Bedeckter Himmel, Metall und Beton, gelbe Warnlinien.",
+    WorldStyle("industrie", tr("Industrie"), tr("Bedeckter Himmel, Metall und Beton, gelbe Warnlinien."),
                ("sky_day02_05", "sky_day01_06"), "220 225 235 200", "130 135 145 60", -65, 300,
                Fog("120 125 130", 2048, 16000), (110, 112, 118), (255, 200, 40), (80, 82, 88),
                ("metal/metalfloor001a", "metal/metalwall048a"), (("metal", "floor"), ("metal",))),
-    WorldStyle("neon", "Neon", "Nachthimmel, violettes Licht, Rampen mit pinken Linien.",
+    WorldStyle("neon", tr("Neon"), tr("Nachthimmel, violettes Licht, Rampen mit pinken Linien."),
                ("sky_day01_09", "sky_borealis01"), "120 60 255 100", "60 20 90 50", -80, 0,
                Fog("30 10 50", 1536, 12000), (27, 27, 43), (255, 43, 214), (42, 36, 64)),
-    WorldStyle("eis", "Eis", "Kalter, klarer Himmel, weiße Rampen mit eisblauen Linien, frostiger Dunst.",
+    WorldStyle("eis", tr("Eis"), tr("Kalter, klarer Himmel, weiße Rampen mit eisblauen Linien, frostiger Dunst."),
                ("cs_tibet", "sky_day01_04", "sky_day01_01"), "235 245 255 320", "170 200 230 70", -45, 140,
                Fog("205 222 240", 3072, 20000), (226, 238, 246), (70, 160, 230), (175, 192, 206),
                ("nature/snowfloor001a", "nature/snowwall001a"), (("snow",), ("ice",))),
-    WorldStyle("dschungel", "Dschungel", "Feuchte Luft, grünes Licht, moosige Rampen mit gelben Linien.",
+    WorldStyle("dschungel", tr("Dschungel"), tr("Feuchte Luft, grünes Licht, moosige Rampen mit gelben Linien."),
                ("jungle", "vietnam", "sky_day02_05"), "255 240 200 250", "90 120 80 60", -60, 80,
                Fog("120 140 100", 1024, 12000), (70, 110, 60), (230, 200, 60), (80, 95, 60),
                ("nature/rockwall004a", "nature/rockwall001a"), (("rock", "wall"), ("rock",), ("stone",))),
-    WorldStyle("retro", "Retro (Synthwave)", "Abendrot in Pink und Lila, dunkle Rampen mit türkisen Linien.",
+    WorldStyle("retro", tr("Retro (Synthwave)"), tr("Abendrot in Pink und Lila, dunkle Rampen mit türkisen Linien."),
                ("sky_day02_09", "sky_day01_08"), "255 120 200 220", "80 30 120 60", -15, 180,
                Fog("60 20 90", 2048, 16000), (22, 12, 40), (0, 240, 230), (40, 20, 70)),
-    WorldStyle("weltraum", "Weltraum", "Sternenhimmel ohne Dunst, fast schwarze Rampen mit weißen Linien.",
+    WorldStyle("weltraum", tr("Weltraum"), tr("Sternenhimmel ohne Dunst, fast schwarze Rampen mit weißen Linien."),
                ("sky_borealis01", "sky_day01_09"), "200 210 255 160", "20 20 40 30", -75, 45, None,
                (34, 37, 50), (245, 245, 255), (25, 27, 35),
                ("metal/metalwall048a", "metal/metalwall001a"), (("metal", "wall"), ("metal",))),
-    WorldStyle("inferno", "Inferno", "Glühend rotes Licht, dichter roter Dunst, Rampen mit Lava-Linien.",
+    WorldStyle("inferno", tr("Inferno"), tr("Glühend rotes Licht, dichter roter Dunst, Rampen mit Lava-Linien."),
                ("sky_day02_09", "sky_day01_08"), "255 90 40 260", "120 30 10 60", -35, 250,
                Fog("120 30 10", 1024, 10000), (50, 20, 15), (255, 110, 20), (60, 30, 25),
                ("brick/brickwall003a", "brick/brickwall001a"), (("brick", "wall"), ("brick",))),
-    WorldStyle("pastell", "Pastell", "Freundlich und hell: zarte Farben, weiches Licht, kein Dunst.",
+    WorldStyle("pastell", tr("Pastell"), tr("Freundlich und hell: zarte Farben, weiches Licht, kein Dunst."),
                ("sky_day01_01", "sky_day01_05"), "255 250 240 330", "220 200 230 80", -55, 20, None,
                (248, 200, 222), (110, 190, 240), (230, 225, 240)),
 )
@@ -139,13 +140,13 @@ def _anchor(doc: MapDocument) -> tuple[int, int, int]:
 
 def sky_command(doc: MapDocument, sky: str) -> Command:
     """Nur den Himmel der Map wechseln (ein Undo-Schritt)."""
-    return SetWorldKeyvalues(_set_kv(doc.world_keyvalues, "skyname", sky), "Himmel ändern")
+    return SetWorldKeyvalues(_set_kv(doc.world_keyvalues, "skyname", sky), tr("Himmel ändern"))
 
 
 def style_command(doc: MapDocument, style: WorldStyle, sky: str, theme: Theme) -> Command:
     """Himmel, Sonne, Nebel und Thema in einem Undo-Schritt setzen. Vorhandene Sonne und
     Nebel-Steuerung werden angepasst, fehlende neu angelegt."""
-    cmds: list[Command] = [SetWorldKeyvalues(_set_kv(doc.world_keyvalues, "skyname", sky), "Himmel")]
+    cmds: list[Command] = [SetWorldKeyvalues(_set_kv(doc.world_keyvalues, "skyname", sky), tr("Himmel"))]
     x, y, z = _anchor(doc)
     entities = [o for o in doc.objects() if isinstance(o, Entity)]
     changed: list[Entity] = []
@@ -180,9 +181,9 @@ def style_command(doc: MapDocument, style: WorldStyle, sky: str, theme: Theme) -
         changed += [f.with_keyvalue("fogenable", "0") for f in fogs]
 
     if changed:
-        cmds.append(ReplaceObjects(changed, "Licht und Nebel"))
+        cmds.append(ReplaceObjects(changed, tr("Licht und Nebel")))
     if added:
-        cmds.append(AddObjects(added, "Licht und Nebel"))
+        cmds.append(AddObjects(added, tr("Licht und Nebel")))
     cmds.append(SetTheme(theme))
     themed = apply_theme(doc, theme)
     if themed is not None:

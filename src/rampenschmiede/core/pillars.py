@@ -12,6 +12,7 @@ import json
 import math
 from typing import Iterable
 
+from ..i18n import tr
 from .blocks import block_info, is_block_root
 from .commands import AddObjects, Command, MacroCommand, RemoveObjects, ReplaceObjects
 from .geometry import primitives
@@ -206,7 +207,7 @@ def set_pillars(doc: MapDocument, root_ids: Iterable[int], on: bool, spacing: in
                 cmds.append(RemoveObjects(old))
         if extra != root.extra:
             cmds.append(ReplaceObjects([root.replace(extra=extra)]))
-    return MacroCommand(cmds, "Stützen an" if on else "Stützen aus") if cmds else None
+    return MacroCommand(cmds, tr("Stützen an") if on else tr("Stützen aus")) if cmds else None
 
 
 def follow_pillars(doc: MapDocument) -> Command | None:
@@ -230,7 +231,7 @@ def follow_pillars(doc: MapDocument) -> Command | None:
         if new:
             cmds.append(AddObjects(new))
         cmds.append(ReplaceObjects([root.replace(extra={**root.extra, CONFIG: {**cfg, "sig": sig}})]))
-    return MacroCommand(cmds, "Stützen anpassen") if cmds else None
+    return MacroCommand(cmds, tr("Stützen anpassen")) if cmds else None
 
 
 __all__ = ["CONFIG", "DEFAULT_CONFIG", "PILLAR", "follow_pillars", "has_pillars", "pillar_faces", "set_pillars"]

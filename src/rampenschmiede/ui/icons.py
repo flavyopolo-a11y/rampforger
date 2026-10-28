@@ -57,6 +57,8 @@ _SHAPES: dict[str, str] = {
     "hole": '<path d="M3 4h18v16H3z" fill="currentColor" fill-opacity="0.25"/><path d="M8.5 8.5h7v7h-7z"/>',
     "carve": '<path d="M3 9h18v10H3z" fill="currentColor" fill-opacity="0.25"/>'
              '<path d="M8 4h8v10H8z" stroke-dasharray="2 2"/>',
+    "language": '<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity="0.15"/>'
+                '<path d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9c-2.6-2.6-3.8-5.6-3.8-9S9.4 5.6 12 3z"/>',
     # Formen
     "shape_block": '<path d="M12 3 L20.5 7.5 L20.5 16.5 L12 21 L3.5 16.5 L3.5 7.5 Z"/>'
                    '<path d="M3.5 7.5 L12 12 L20.5 7.5 M12 12 L12 21"/>'

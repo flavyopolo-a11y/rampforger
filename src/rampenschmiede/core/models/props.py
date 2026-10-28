@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 
+from ...i18n import tr
 from ..mathutil import BBox, Point
 from ..model import Entity
 from .library import Bounds, LoadedModel, ModelLibrary, normalize_model
@@ -21,14 +22,14 @@ MODEL_CLASSES = frozenset(PROP_CLASSES) | {
     "prop_detail", "prop_door_rotating", "cycler",
 }
 PROP_LABELS = {
-    "prop_static": "Statisch",
-    "prop_dynamic": "Dynamisch",
-    "prop_physics": "Physik",
+    "prop_static": tr("Statisch"),
+    "prop_dynamic": tr("Dynamisch"),
+    "prop_physics": tr("Physik"),
 }
 PROP_HELP = {
-    "prop_static": "Fest in die Map gebacken, wirft Schatten, kostet im Spiel am wenigsten.",
-    "prop_dynamic": "Kann sich bewegen, animieren oder ausgeblendet werden.",
-    "prop_physics": "Fällt, rollt und lässt sich anschießen.",
+    "prop_static": tr("Fest in die Map gebacken, wirft Schatten, kostet im Spiel am wenigsten."),
+    "prop_dynamic": tr("Kann sich bewegen, animieren oder ausgeblendet werden."),
+    "prop_physics": tr("Fällt, rollt und lässt sich anschießen."),
 }
 
 Matrix3 = tuple[Point, Point, Point]
@@ -100,10 +101,10 @@ def class_problem(classname: str, model: LoadedModel | None) -> str:
         return ""
     c = classname.lower()
     if c == "prop_static" and not model.static_prop:
-        return ("Das Modell ist kein statisches Modell: vbsp löscht diesen prop_static beim Kompilieren. "
-                "Nimm prop_dynamic.")
+        return (tr("Das Modell ist kein statisches Modell: vbsp löscht diesen prop_static beim Kompilieren. "
+                "Nimm prop_dynamic."))
     if c in ("prop_physics", "prop_physics_multiplayer") and not model.has_physics:
-        return "Das Modell hat kein Kollisionsmodell (.phy): Als prop_physics erscheint es im Spiel nicht."
+        return tr("Das Modell hat kein Kollisionsmodell (.phy): Als prop_physics erscheint es im Spiel nicht.")
     return ""
 
 
@@ -157,7 +158,7 @@ def prop_problems(doc, library: ModelLibrary | None) -> list[tuple[Entity, str]]
             continue
         name = entity_model(ent)
         model = library.load(name)
-        problem = "Modell fehlt im Spiel" if model is None else class_problem(ent.classname, model)
+        problem = tr("Modell fehlt im Spiel") if model is None else class_problem(ent.classname, model)
         if problem and (name, ent.classname + problem) not in seen:
             seen.add((name, ent.classname + problem))
             out.append((ent, f"{ent.classname} {name}: {problem}"))

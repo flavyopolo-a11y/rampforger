@@ -6,9 +6,10 @@ from __future__ import annotations
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QPushButton, QWidget
 
 from ...core.materials.apply import SCOPE_ALL, SCOPE_ONE
+from ...i18n import N_
 from ..icons import ACTIVE
 
-SCOPES = ((SCOPE_ALL, "Alle Rampen"), (SCOPE_ONE, "Nur diese Rampe"))
+SCOPES = ((SCOPE_ALL, N_("Alle Rampen")), (SCOPE_ONE, N_("Nur diese Rampe")))
 STYLE = (f"QPushButton {{ padding: 3px 10px; }} QPushButton:checked {{ background: {ACTIVE}; color: #111; "
          "font-weight: bold; border: 1px solid #ffb070; }")
 
