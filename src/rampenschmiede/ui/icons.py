@@ -45,6 +45,9 @@ _SHAPES: dict[str, str] = {
             '<circle cx="12" cy="4" r="1.5" fill="currentColor"/><circle cx="21" cy="8" r="1.5" fill="currentColor"/>',
     "measure": '<path d="M2.5 15.5 L15.5 2.5 L21.5 8.5 L8.5 21.5 Z" fill="currentColor" fill-opacity="0.2"/>'
                '<path d="M6 12l2 2M9 9l3 3M12 6l2 2M15 3.5l2.5 2.5"/>',
+    "tree": '<path d="M12 2.5l6 8h-3l4 6H5l4-6H6z" fill="currentColor" fill-opacity="0.25"/><path d="M12 16.5v5"/>',
+    "water": '<path d="M2.5 9c2.5-2 4-2 6.5 0s4 2 6.5 0 4-2 6 0M2.5 14c2.5-2 4-2 6.5 0s4 2 6.5 0 4-2 6 0'
+             'M2.5 19c2.5-2 4-2 6.5 0s4 2 6.5 0 4-2 6 0"/>',
     "decal": '<path d="M4 4h12l4 4v12H4z" fill="currentColor" fill-opacity="0.2"/><path d="M16 4v4h4"/>'
              '<circle cx="10" cy="12" r="2.5"/><path d="M7 18l3-3 2 2 3-3 2 2"/>',
     "cordon": '<path d="M5 5h14v14H5z" stroke-dasharray="3 2"/><path d="M9 9h6v6H9z" fill="currentColor" '

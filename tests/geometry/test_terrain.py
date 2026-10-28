@@ -18,7 +18,7 @@ from rampenschmiede.core.surf.terrain_templates import MAX_TILE, value_noise
 from rampenschmiede.core.terrain import TerrainError, convert, flatten, sew_all, stroke, top_face
 from rampenschmiede.core.validation.seal import seals
 
-TERRAIN_KEYS = [k for k, t in CATALOG.items() if t.world]
+TERRAIN_KEYS = [k for k, t in CATALOG.items() if t.world and t.category == "Gelände"]
 
 
 def block(doc, lo, hi):

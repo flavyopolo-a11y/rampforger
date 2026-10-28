@@ -38,7 +38,8 @@ def _pow2(n: int) -> int:
     return max(p, 4)
 
 
-def write_texture(root: str | Path, name: str, image: Image.Image, surfaceprop: str = "") -> str:
+def write_texture(root: str | Path, name: str, image: Image.Image, surfaceprop: str = "",
+                  params: Iterable[tuple[str, str]] = ()) -> str:
     """Bild als VTF+VMT unter root/materials/rampenschmiede/<name> speichern. Seiten werden
     auf Zweierpotenzen gebracht (Pflicht in Source). Liefert den Materialnamen."""
     name = safe_name(name)
@@ -61,6 +62,8 @@ def write_texture(root: str | Path, name: str, image: Image.Image, surfaceprop: 
         lines.append(f'    "$surfaceprop" "{surfaceprop}"')
     if has_alpha:
         lines.append('    "$alphatest" "1"')
+    for key, value in params:
+        lines.append(f'    "{key}" "{value}"')
     lines.append('    "%keywords" "rampenschmiede"')
     lines.append("}")
     (folder / f"{name}.vmt").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -95,6 +98,39 @@ def wall_image(color: RGB, size: int = 256) -> Image.Image:
     edge = _shade(color, 0.72)
     d.rectangle([0, 0, size - 1, size - 1], outline=edge)
     return img
+
+
+def lava_image(size: int = 256, seed: int = 3) -> Image.Image:
+    """Lava: glühendes Orange mit dunklen, erkalteten Schollen (kachelbar)."""
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    total = np.zeros((size, size))
+    for cells, weight in ((4, 1.0), (8, 0.5), (16, 0.25), (32, 0.12)):
+        grid = rng.random((cells, cells))
+        # Bilinear und kachelbar hochrechnen
+        t = np.arange(size) * cells / size
+        i0 = np.floor(t).astype(int) % cells
+        i1 = (i0 + 1) % cells
+        f = t - np.floor(t)
+        f = f * f * (3 - 2 * f)
+        rows = grid[i0][:, None, :] * (1 - f)[:, None, None] + grid[i1][:, None, :] * f[:, None, None]
+        rows = rows[:, 0, :]
+        layer = rows[:, i0] * (1 - f)[None, :] + rows[:, i1] * f[None, :]
+        total += weight * layer
+    total = (total - total.min()) / (np.ptp(total) or 1.0)
+    heat = np.clip((total - 0.35) / 0.4, 0, 1)
+    dark = np.array([60, 18, 8], dtype=float)
+    hot = np.array([255, 140, 30], dtype=float)
+    white = np.array([255, 230, 120], dtype=float)
+    rgb = dark + (hot - dark) * heat[..., None]
+    rgb += (white - hot) * np.clip((total - 0.8) / 0.2, 0, 1)[..., None]
+    return Image.fromarray(np.clip(rgb, 0, 255).astype("uint8"), "RGB")
+
+
+def lava_material(root: str | Path) -> str:
+    """Leuchtende Lava-Textur (selbstleuchtend, kein Licht nötig)."""
+    return write_texture(root, "lava", lava_image(), "slime", (("$selfillum", "1"),))
 
 
 def ramp_image(color: RGB, lines: RGB, size: int = 512) -> Image.Image:

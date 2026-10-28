@@ -103,6 +103,14 @@ Im Spiel erscheint sie 16-mal so groß rings um die Map hinter dem Himmel, im Ne
 neuer Klick ersetzt sie, dort lässt sie sich auch entfernen. Die mitwachsende Hülle lässt den
 Raum außen vor.
 
+**Natur (Bibliothek → Natur).** *Wasser* ist echtes Source-Wasser (Spiegelung, Schwimmen): Unterkante
+auf den Boden legen, Länge, Breite und Tiefe per Regler; „Tod im Wasser“ macht eine Todesfalle
+daraus. *Lava* leuchtet von selbst und tötet bei Berührung. *Kill-Zone (Grube)* legt man unten in
+Gruben und Abgründe: Wer hineinfällt, stirbt oder landet wieder am Start (das Teleport-Ziel wird
+in der Startzone angelegt). *Baum*, *Busch*, *Palme* und *Felsen* setzen ein zufälliges passendes
+Modell aus dem Spiel, jeder Klick ein anderes. Wasser und Lava sind Welt-Brushes (nur so zeigt
+Source Wasser); ihr Trigger hängt als Gruppe daran.
+
 **Automatische Sicherung.** Alle 5 Minuten wird eine geänderte Map in den Ordner `sicherungen` im
 Datenordner geschrieben (je Map die letzten 10), und vor jedem Speichern landet die alte Fassung
 dort (die letzten 5). *Datei → Sicherung öffnen* zeigt den Ordner. Stürzt das Programm ab, bietet

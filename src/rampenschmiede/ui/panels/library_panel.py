@@ -7,6 +7,7 @@ ausgewählt ist, für diesen Baustein. Jede Änderung baut ihn sofort neu.
 """
 from __future__ import annotations
 
+import random
 from pathlib import Path
 from typing import Any, Callable
 
@@ -44,8 +45,10 @@ from ...core.blocks import (
 )
 from ...core.commands import AddObjects
 from ...core.io.rsmap import ProjectFormatError
+from ...core.materials.authoring import lava_material
 from ...core.materials.theme import block_defaults
 from ...core.model import Entity
+from ...core.models.scatter import DetailKit, kit_models
 from ...core.pillars import CONFIG as PILLAR_CONFIG
 from ...core.pillars import DEFAULT_CONFIG as DEFAULT_PILLARS
 from ...core.pillars import set_pillars
@@ -60,16 +63,32 @@ from ...core.surf.catalog import (
     generate,
     surf_angles,
 )
+from ...core.surf.nature_templates import DEFAULT_LAVA, DEFAULT_WATER, find_water
 from ...core.surf.sweep import Materials
 from ..editor import EditorContext
 from ..icons import icon
-from ..paths import prefabs_dir
+from ..paths import prefabs_dir, textures_dir
 from ..tools.shape_tool import SHAPE_HINTS, SHAPES
 from ..widgets.material_field import MaterialField
 
 #: Symbol je Gruppe in der Bibliothek
 CATEGORY_ICONS = {"Rampen": "ramp", "Kurven": "curve", "Spezial": "halfpipe", "Bhop": "bhop", "Zonen": "flag",
-                  "Gelände": "terrain"}
+                  "Gelände": "terrain", "Natur": "tree"}
+#: Einzelne Natur-Props in der Bibliothek: Schlüssel -> (Name, Beschreibung, Modell-Muster)
+NATURE_PROPS = {
+    "baum": ("Baum", "Ein zufälliger Baum aus dem Spiel. Nochmal einfügen gibt einen anderen.",
+             ("models/props_foliage/*tree*", "models/props/de_inferno/tree*", "models/props/cs_militia/tree*")),
+    "busch": ("Busch", "Ein zufälliger Busch oder Strauch.",
+              ("models/props_foliage/*bush*", "models/props_foliage/*shrub*", "models/props/de_inferno/bush*",
+               "models/props/pi_shrub*")),
+    "palme": ("Palme", "Eine Palme (Dust, Aztec, HL2).",
+              ("models/props_foliage/*palm*", "models/props/de_dust/*palm*", "models/props/de_aztec/*palm*")),
+    "fels": ("Felsen", "Ein zufälliger Felsbrocken.",
+             ("models/props_wasteland/rock*", "models/props_foliage/rock*", "models/props_canal/rock*",
+              "models/props_nature/rock*")),
+}
+NATURE_PREFIX = "natur:"
+MATERIAL_ICONS = {"wasser": "water", "lava": "water"}
 MIME_TEMPLATE = "application/x-rampenschmiede-vorlage"
 PREFAB_PREFIX = "prefab:"
 SHAPE_PREFIX = "shape:"
@@ -168,9 +187,16 @@ class LibraryPanel(QWidget):
                 g.setFlags(g.flags() & ~Qt.ItemIsDragEnabled)
                 g.setExpanded(True)
             item = QTreeWidgetItem(g, [self.tr(t.name)])
-            item.setIcon(0, icon(CATEGORY_ICONS.get(t.category, "shape")))
+            item.setIcon(0, icon(MATERIAL_ICONS.get(t.key, CATEGORY_ICONS.get(t.category, "shape"))))
             item.setData(0, Qt.UserRole, t.key)
             item.setToolTip(0, self.tr(t.description))
+        nature = groups.get("Natur")
+        if nature is not None:
+            for key, (name, desc, _patterns) in NATURE_PROPS.items():
+                item = QTreeWidgetItem(nature, [self.tr(name)])
+                item.setIcon(0, icon("tree"))
+                item.setData(0, Qt.UserRole, NATURE_PREFIX + key)
+                item.setToolTip(0, self.tr(desc))
         self.shape_group = QTreeWidgetItem(self.tree, [self.tr("Formen")])
         self.shape_group.setIcon(0, icon("shape"))
         self.shape_group.setFlags(self.shape_group.flags() & ~Qt.ItemIsDragEnabled)
@@ -279,7 +305,7 @@ class LibraryPanel(QWidget):
                 self.editor.set_tool("shape")
                 self.editor.tools["shape"].set_shape(key[len(SHAPE_PREFIX):])  # type: ignore[attr-defined]
             return
-        if key.startswith(PREFAB_PREFIX):
+        if key.startswith((PREFAB_PREFIX, NATURE_PREFIX)):
             return
         if "paint" in self.editor.tools:
             self.editor.set_selection(set())
@@ -354,7 +380,7 @@ class LibraryPanel(QWidget):
             for w in (self.pillar_check, self.pillar_spacing):
                 w.blockSignals(False)
         key = self.current_key()
-        self.insert_btn.setEnabled(template is not None or bool(key and key.startswith((PREFAB_PREFIX, SHAPE_PREFIX))))
+        self.insert_btn.setEnabled(template is not None or bool(key and key.startswith((PREFAB_PREFIX, SHAPE_PREFIX, NATURE_PREFIX))))
         if root is None and key and key.startswith(SHAPE_PREFIX):
             self._clear_form()
             shape = key[len(SHAPE_PREFIX):]
@@ -362,6 +388,14 @@ class LibraryPanel(QWidget):
             self.description.setText(self.tr(SHAPE_HINTS[shape]) + "\n\n" + self.tr(
                 "In einer Ansicht ein Rechteck aufziehen, Enter baut die Form. Einfügen oder Ziehen setzt sie in "
                 "der zuletzt benutzten Größe ab. Seiten, Stufen usw. rechts unter Werkzeug."))
+            self.angle_label.setText("")
+            return
+        if root is None and key and key.startswith(NATURE_PREFIX):
+            self._clear_form()
+            name, desc, _patterns = NATURE_PROPS[key[len(NATURE_PREFIX):]]
+            self.box.setTitle(self.tr(name))
+            self.description.setText(self.tr(desc) + "\n\n" + self.tr(
+                "Einfügen oder in eine Ansicht ziehen. Größe und Drehung danach wie bei jedem Prop."))
             self.angle_label.setText("")
             return
         if root is None and key and key.startswith(PREFAB_PREFIX):
@@ -485,7 +519,22 @@ class LibraryPanel(QWidget):
 
     def insert_values(self, template: Template) -> dict:
         """Werte fürs nächste Einfügen: Map-Thema, darüber die selbst gestellten Regler."""
-        return {**block_defaults(self.editor.doc, template), **self.next_values.get(template.key, {})}
+        values = {**block_defaults(self.editor.doc, template), **self.next_values.get(template.key, {})}
+        return self._resolve_materials(template, values)
+
+    def _resolve_materials(self, template: Template, values: dict) -> dict:
+        """Natur-Vorlagen: Wasser aus dem Spiel suchen, Lava-Textur erzeugen."""
+        v = template.values(values)
+        if "mat_wasser" in v and v["mat_wasser"] == DEFAULT_WATER:
+            values = {**values, "mat_wasser": find_water(self.editor.materials)}
+        if v.get("mat_lava") == DEFAULT_LAVA:
+            try:
+                mat = lava_material(textures_dir()).upper()
+            except OSError:
+                return values
+            self.editor.refresh_materials()
+            values = {**values, "mat_lava": mat}
+        return values
 
     def refresh(self) -> None:
         """Formular neu aufbauen, z. B. nachdem sich das Map-Thema geändert hat."""
@@ -503,6 +552,8 @@ class LibraryPanel(QWidget):
             return self._insert_prefab(Path(key[len(PREFAB_PREFIX):]), point)
         if key.startswith(SHAPE_PREFIX):
             return self._insert_shape(key[len(SHAPE_PREFIX):], point)
+        if key.startswith(NATURE_PREFIX):
+            return self._insert_nature_prop(key[len(NATURE_PREFIX):], point)
         template = CATALOG.get(key)
         if template is None:
             return None
@@ -533,12 +584,30 @@ class LibraryPanel(QWidget):
             return None
         # Gelände sind lose Welt-Brushes: alle auswählen
         self.editor.set_selection({o.id for o in objs} if template.world else {objs[0].id})
-        if template.world:
+        if template.world and template.category == "Gelände":
             self.editor.status_message.emit(self.tr("Gelände eingefügt. Mit dem Gelände-Werkzeug (Shift+G) weiter formen"))
+        elif template.world:
+            self.editor.status_message.emit(self.tr("{0} eingefügt (Welt-Brushes, eine Gruppe)").format(
+                self.tr(template.name)))
         if gen.warnings:
             self.editor.status_message.emit(" · ".join(self.tr(w) for w in gen.warnings))
         self.inserted.emit(objs[0].id)
         return objs[0].id
+
+    def _insert_nature_prop(self, key: str, point: tuple[float, float, float]) -> int | None:
+        """Zufälliges passendes Modell des Spiels als Prop setzen."""
+        name, _desc, patterns = NATURE_PROPS[key]
+        lib = self.editor.models
+        models = kit_models(DetailKit(key, name, "", patterns), lib.names()) if lib is not None else []
+        if not models:
+            self.editor.status_message.emit(self.tr(
+                "{0}: keine passenden Modelle gefunden. Dafür braucht es ein Spielprofil mit CS:S oder HL2 "
+                "(Testen → Spielprofile)").format(self.tr(name)))
+            return None
+        model = random.choice(models)
+        self.editor.model_dropped.emit(model, point)
+        sel = sorted(self.editor.selection)
+        return sel[0] if len(sel) == 1 else None
 
     # ---- Eigene Prefabs ----------------------------------------------------------------
     def refresh_prefabs(self) -> None:

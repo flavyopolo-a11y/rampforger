@@ -52,11 +52,10 @@ def seals(solid: Solid) -> bool:
         return False
     if any(f.extra.get("raw") for f in solid.faces) and is_displacement_solid(solid):
         return False  # Gelände (Displacements) dichtet in vbsp nicht ab
-    for f in solid.faces:
-        m = f.material.upper()
-        if m not in NON_SEALING and "WATER" not in m:
-            return True
-    return False
+    # Eine Wasser-Seite macht in vbsp den ganzen Brush zu Wasser (auch mit Nodraw ringsum)
+    if any("WATER" in f.material.upper() for f in solid.faces):
+        return False
+    return any(f.material.upper() not in NON_SEALING for f in solid.faces)
 
 
 SPAWNS = frozenset({"info_player_start", "info_player_counterterrorist", "info_player_terrorist",
