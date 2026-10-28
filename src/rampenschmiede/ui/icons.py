@@ -34,6 +34,9 @@ _SHAPES: dict[str, str] = {
     "paint": '<path d="M14.5 4.5l5 5L10 19H5v-5z" fill="currentColor" fill-opacity="0.25"/><path d="M12.5 6.5l5 5"/>',
     "terrain": '<path d="M2.5 19 L8 10 L11.5 14 L15.5 6.5 L21.5 19 Z" fill="currentColor" fill-opacity="0.25"/>'
                '<path d="M2.5 19h19 M13.2 10.8 L15.5 13 L17.5 11"/>',
+    "scatter": '<path d="M7 20v-4M7 16l-3 0 3-6 3 6z" fill="currentColor" fill-opacity="0.25"/>'
+               '<path d="M17 20v-5M17 15h-3.5L17 7l3.5 8z" fill="currentColor" fill-opacity="0.25"/>'
+               '<circle cx="12" cy="5" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="20" cy="4" r="1"/>',
     "clip": '<path d="M4 6h10v14H4z" fill="currentColor" fill-opacity="0.25"/>'
             '<path d="M14 6h6v14h-6" stroke-dasharray="2 2"/><path d="M14 2.5v19"/>',
     "hole": '<path d="M3 4h18v16H3z" fill="currentColor" fill-opacity="0.25"/><path d="M8.5 8.5h7v7h-7z"/>',

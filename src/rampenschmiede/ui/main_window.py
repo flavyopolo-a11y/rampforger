@@ -68,6 +68,7 @@ from .tools.clip_tool import ClipTool, HoleTool
 from .tools.entity_tool import EntityTool
 from .tools.face_tool import FaceTool
 from .tools.paint_tool import PaintTool
+from .tools.scatter_tool import ScatterTool
 from .tools.select_tool import SelectTool
 from .tools.shape_tool import ShapeTool
 from .tools.terrain_tool import TerrainTool
@@ -76,7 +77,7 @@ from .viewports.viewport import MAP_SUFFIXES, dropped_maps
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
-TOOL_ORDER = ("select", "paint", "shape", "terrain", "entity", "face", "clip", "hole")
+TOOL_ORDER = ("select", "paint", "shape", "terrain", "scatter", "entity", "face", "clip", "hole")
 #: Werkzeugleiste links: aktives Werkzeug orange hinterlegt, wie in Hammer eingedrückt
 TOOLBAR_STYLE = """
 QToolButton { min-width: 58px; padding: 4px 2px; border: 1px solid transparent; border-radius: 5px; }
@@ -113,10 +114,11 @@ CONTROLS_HELP = """
 <tr><td>H / Strg+H / U</td><td>Auswahl ausblenden / Rest ausblenden / alles einblenden</td></tr>
 <tr><td>Enter / Esc</td><td>Form erstellen / Rahmen oder Auswahl verwerfen</td></tr>
 </table>
-<h3>Gelände (Shift+G)</h3>
+<h3>Gelände (Shift+G) und Streuen (Shift+D)</h3>
 <table>
 <tr><td>Ziehen über Gelände</td><td>formen mit der gewählten Pinsel-Art</td></tr>
-<tr><td>Shift + Ziehen</td><td>umgekehrt: Senken statt Heben, Textur weg statt malen</td></tr>
+<tr><td>Shift + Ziehen</td><td>umgekehrt: Senken statt Heben, Textur weg statt malen; beim Streuen: Props entfernen</td></tr>
+<tr><td>[ und ]</td><td>Pinsel bzw. Streu-Kreis kleiner / größer</td></tr>
 </table>
 <h3>Bibliothek</h3>
 <table>
@@ -220,6 +222,8 @@ class MainWindow(QMainWindow):
         self.model_dock.setObjectName("dock_models")
         self.model_browser = ModelBrowser(self.editor, self._insert_point)
         self.model_dock.setWidget(self.model_browser)
+        self.editor.register_tool(ScatterTool(self.editor, self.model_browser))
+        self.tool_options.add_scatter_page()
         self.addDockWidget(Qt.BottomDockWidgetArea, self.mat_dock)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
         self.tabifyDockWidget(self.mat_dock, self.model_dock)
@@ -926,6 +930,7 @@ class MainWindow(QMainWindow):
         self.editor.refresh_materials()
         self.editor.run(style_command(self.editor.doc, style, pick_sky(style, lib), theme))
         self.library.refresh()
+        self.tool_options.suggest_kit(style.key)
         self.editor.status_message.emit(self.tr("Welt-Stil „{0}“ angewendet").format(self.tr(style.name)))
         return True
 

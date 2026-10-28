@@ -9,7 +9,8 @@ spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 > ohne Verluste, Kompilieren und Testen mit einem Tastendruck (F9) für CS:S und Momentum Mod,
 > Startraum mit Dicht-Prüfung, Rampen-Bibliothek mit 20 Vorlagen, deren Regler sich jederzeit
 > ändern lassen, eigene Prefabs und der Assistent „Neue Surf-Map“, Texturen und Welt-Stile,
-> Entities mit FGD-Feldern und I/O, BSPs öffnen, Licht-Vorschau und Himmel, Props mit Modell-Browser.
+> Entities mit FGD-Feldern und I/O, BSPs öffnen, Licht-Vorschau und Himmel, Props mit Modell-Browser,
+> Gelände (Displacements) mit Pinsel und Vorlagen, Props streuen mit Detail-Kits.
 
 ![Rampenschmiede, Etappe 3: Rampen-Bibliothek mit Reglern einer Kurve](docs/bilder/etappe3.png)
 
@@ -127,6 +128,25 @@ Modell (statisch mit einem dynamischen Modell löscht vbsp, Physik ohne Kollisio
 nicht), steht dort warum, und vor dem Kompilieren kommt eine Warnung ins Log. Sind Props
 ausgewählt, tauscht *Für Auswahl übernehmen* (oder Doppelklick) ihr Modell. Props erscheinen in
 3D texturiert und gedreht, in 2D als Umriss, auch in geöffneten BSPs.
+
+**Gelände (Werkzeug „Gelände“, Shift+G).** Brushes auswählen und *Zu Gelände machen*: ihre
+Oberseite wird ein Displacement (4 × 4, 8 × 8 oder 16 × 16 Felder). Darüber ziehen formt es, in 3D
+oder von oben: *Heben*, *Senken*, *Glätten*, *Rauschen*, *Ebnen*. Shift kehrt um, [ und ]
+ändern die Pinselgröße, ein Strich ist ein Rückgängig-Schritt. *Textur malen* blendet bei
+Überblend-Materialien (zwei Texturen, z. B. `nature/blendgrassgravel001a`) zur zweiten Textur
+über, wie im Spiel. Nach jedem Strich werden die Nähte zu benachbarten Gelände-Flächen
+geschlossen, damit keine Lücken entstehen. Fertige Formen stehen in der Bibliothek unter
+**Gelände**: Hügel, Berg, Felsen, Insel und Klippe, in Kacheln bis 1024 Units, an steilen
+Stellen schon mit der zweiten Textur. Gelände dichtet die Map nicht ab (wie in vbsp); darunter
+muss die Hülle geschlossen bleiben.
+
+**Props streuen (Werkzeug „Streuen“, Shift+D).** Klicken oder ziehen verteilt Props zufällig im
+Kreis auf Boden und Gelände, mit Mindestabstand und zufälliger Drehung; zu steile Stellen (Wände,
+Surf-Rampen) bleiben frei. Gestreut wird das Modell aus dem Modell-Browser oder ein
+**Detail-Kit**: Wald und Wiese, Felsen und Geröll, Wüste, Industrie, Stadt. Ein Kit nimmt die
+passenden Modelle, die es im Spiel gibt (einzelne lassen sich abwählen); nach einem Welt-Stil ist
+das passende Kit vorgewählt. Felsen kippen mit dem Hang, Bäume bleiben aufrecht. Shift entfernt
+die Props dieser Modelle im Kreis.
 
 | Weitere Tasten | |
 | --- | --- |
@@ -305,8 +325,11 @@ Im Experten-Modus (Strg+Shift+X) lassen sich die Parameter von VBSP, VVIS und VR
 - Die Dicht-Prüfung arbeitet mit einem Raster (8 Units, bei großen Maps gröber). Spalte, die
   schmaler als eine Rasterzelle sind, findet nur vbsp.
 
-- Displacements werden importiert und wieder exportiert, aber noch als flache Fläche angezeigt
-  und sind nicht bearbeitbar (Etappe 8).
+- Gelände: Ecken verschieben, Unterteilen und Nähen über verschiedene Power-Stufen gibt es noch
+  nicht (Nähte schließen nur zwischen gleich feinen Flächen). Displacements in geöffneten BSPs
+  bleiben normale Brushes. Die Detail-Kits nennen Namensmuster von CS:S- und HL2-Modellen; welche
+  es gibt, hängt von der Installation ab, und gestreute Modelle können ineinander ragen, wenn der
+  Mindestabstand kleiner als die Modelle ist.
 - Props zeigen die Grundpose ihres Modells (keine Animation) und die erste Variante jeder
   Bodygroup. Modelle ab MDL-Version 52 (neuere Strata-Modelle) erscheinen als Kasten.
   Eigene Modelle werden noch nicht in die BSP gepackt; Spielmodelle brauchen das nicht.
