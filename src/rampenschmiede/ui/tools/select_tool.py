@@ -6,7 +6,8 @@ Bedienung wie in Hammer:
 - Erneuter Klick auf die Auswahl wechselt zwischen Skalier- und Drehgriffen
 - Drehen rastet in 15°-Schritten ein, mit Shift frei
 - Pfeiltasten verschieben um eine Rasterweite
-- In 3D: an den farbigen Pfeilen (X rot, Y grün, Z blau) entlang einer Achse ziehen, Shift kopiert;
+- In 3D: ein Objekt anfassen und ziehen schiebt es waagrecht (Shift kopiert);
+  an den farbigen Pfeilen (X rot, Y grün, Z blau) entlang einer Achse ziehen, Shift kopiert;
   am orangen Ring um die Hochachse drehen (15°-Schritte, mit Shift frei)
 """
 from __future__ import annotations
@@ -47,7 +48,7 @@ HANDLES = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
 
 @dataclass
 class _Drag:
-    kind: str  # pending | move | scale | rotate | marquee | axis | spin
+    kind: str  # pending | move | scale | rotate | marquee | axis | spin | pending3d | slide
     press_pos: QPointF
     start: tuple[float, float]
     current: tuple[float, float]
@@ -423,8 +424,41 @@ class SelectTool(Tool):
                            clone=bool(e.modifiers() & Qt.ShiftModifier), axis=axis, along=along)
         return True
 
+    def _slide_point(self, vp: "Viewport", pos: QPointF, z: float) -> tuple[float, float] | None:
+        origin, direction = vp.ray(pos)
+        if abs(direction[2]) < 1e-6:
+            return None
+        t = (z - origin[2]) / direction[2]
+        if t <= 0:
+            return None
+        return float(origin[0] + direction[0] * t), float(origin[1] + direction[1] * t)
+
     def move_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
         d = self._drag
+        if d is not None and d.kind == "pending3d":
+            moved = e.position() - d.press_pos
+            if abs(moved.x()) + abs(moved.y()) < DRAG_THRESHOLD_PX or not self.editor.selection:
+                return
+            if d.clone:
+                self.editor.duplicate(self.editor.selected_objects(), (0, 0, 0))
+            d.kind = "slide"
+            d.originals = self._targets()
+            d.bbox = self.editor.selection_bbox()
+        if d is not None and d.kind == "slide" and d.bbox is not None:
+            pt = self._slide_point(vp, e.position(), d.along)
+            if pt is None:
+                return
+            snap = self.editor.snap
+            delta = (snap(d.bbox.mins[0] + pt[0] - d.start[0]) - d.bbox.mins[0],
+                     snap(d.bbox.mins[1] + pt[1] - d.start[1]) - d.bbox.mins[1], 0.0)
+            if (delta[0], delta[1]) != d.current:
+                d.current = (delta[0], delta[1])
+                lock = self.editor.texture_lock
+                self._replace(d, lambda o: transform.translate(o, delta, lock),
+                              "Kopieren und verschieben" if d.clone else "Verschieben")
+                self.editor.status_message.emit(f"X {delta[0]:+g}  Y {delta[1]:+g}")
+            vp.update()
+            return
         if d is not None and d.kind == "spin":
             self._apply_spin(vp, d, e.position(), free=bool(e.modifiers() & Qt.ShiftModifier))
             vp.update()
@@ -450,13 +484,16 @@ class SelectTool(Tool):
             vp.update()
 
     def release_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
-        if self._drag is not None and self._drag.kind in ("axis", "spin"):
+        if self._drag is not None and self._drag.kind == "pending3d":
+            self._drag = None
+            return
+        if self._drag is not None and self._drag.kind in ("axis", "spin", "slide"):
             self._drag = None
             self.editor.stack.end_merge()
             self.editor.redraw_requested.emit()
 
     def cursor_3d(self, vp: "Viewport", pos: QPointF) -> Qt.CursorShape:
-        if self._drag is not None and self._drag.kind in ("axis", "spin"):
+        if self._drag is not None and self._drag.kind in ("axis", "spin", "slide"):
             return Qt.ClosedHandCursor
         return Qt.OpenHandCursor if self.hover_axis is not None else Qt.ArrowCursor
 
@@ -509,8 +546,14 @@ class SelectTool(Tool):
         obj = hit[0]
         if ctrl:
             self.editor.set_selection(self.editor.selection ^ {obj.id})
-        else:
+            return
+        if obj.id not in self.editor.selection:
             self.editor.set_selection({obj.id})
+        # Gedrückt halten und ziehen schiebt die Auswahl waagrecht über den Boden (am Raster),
+        # Shift beim Losziehen kopiert; hoch und runter geht über den blauen Pfeil
+        p = np.asarray(origin, dtype=float) + np.asarray(direction, dtype=float) * hit[1]
+        self._drag = _Drag("pending3d", e.position(), (float(p[0]), float(p[1])), (float(p[0]), float(p[1])),
+                           clone=bool(e.modifiers() & Qt.ShiftModifier), along=float(p[2]))
 
     def lines_3d(self, vp: "Viewport") -> np.ndarray | None:
         return None

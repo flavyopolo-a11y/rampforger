@@ -156,7 +156,12 @@ def rebuild(doc: MapDocument, root: Entity, values: dict | None = None,
     merged = {**info["values"], **(values or {})}
     kids = doc.children(root.id)
     color = kids[0].editor.color if kids else None
-    return build_block(doc, info["template"], merged, at or placement_of(info), root.id, root.editor, color)
+    objs, gen = build_block(doc, info["template"], merged, at or placement_of(info), root.id, root.editor, color)
+    # Weitere Zusatzdaten der Wurzel (z. B. „sitzt_auf“ einer Zone) überleben den Neubau
+    keep = {k: v for k, v in root.extra.items() if k != BLOCK_KEY}
+    if keep and objs and isinstance(objs[0], Entity):
+        objs[0] = objs[0].replace(extra={**keep, **objs[0].extra})
+    return objs, gen
 
 
 def change_block(doc: MapDocument, root_id: int, values: dict | None = None, at: Placement | None = None,

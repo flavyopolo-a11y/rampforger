@@ -40,6 +40,9 @@ _SHAPES: dict[str, str] = {
     "vertex": '<path d="M5 18 L9 6 L19 9 L17 19 Z" fill="currentColor" fill-opacity="0.2"/>'
               '<rect x="3" y="16" width="4" height="4" fill="currentColor"/><rect x="7" y="4" width="4" height="4"/>'
               '<rect x="17" y="7" width="4" height="4"/><rect x="15" y="17" width="4" height="4"/>',
+    "wall": '<path d="M3 20 V8 L12 4 L21 8 V20" fill="none"/><path d="M6 20 V9.5 L12 7 L18 9.5 V20" '
+            'fill="currentColor" fill-opacity="0.2"/><circle cx="3" cy="8" r="1.5" fill="currentColor"/>'
+            '<circle cx="12" cy="4" r="1.5" fill="currentColor"/><circle cx="21" cy="8" r="1.5" fill="currentColor"/>',
     "measure": '<path d="M2.5 15.5 L15.5 2.5 L21.5 8.5 L8.5 21.5 Z" fill="currentColor" fill-opacity="0.2"/>'
                '<path d="M6 12l2 2M9 9l3 3M12 6l2 2M15 3.5l2.5 2.5"/>',
     "clip": '<path d="M4 6h10v14H4z" fill="currentColor" fill-opacity="0.25"/>'

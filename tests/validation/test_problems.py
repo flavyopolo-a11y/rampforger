@@ -25,9 +25,9 @@ def _areas(problems):
     return [(p.level, p.area) for p in problems]
 
 
-def test_starter_room_is_clean():
+def test_starter_room_only_misses_the_end_zone():
     doc, _ = _doc()
-    assert find_problems(doc) == []
+    assert [p.text for p in find_problems(doc)] == ["Hauptstrecke: Zielzone fehlt"]
 
 
 def test_no_spawn_is_an_error():
@@ -69,7 +69,7 @@ def test_io_target_and_empty_brush_entity():
     empty = Entity(id=doc.new_id(), classname="trigger_multiple")
     _add(doc, stack, [relay, empty])
     probs = find_problems(doc)
-    assert sum("fehlt" in p.text for p in probs) == 1
+    assert sum("„fehlt“" in p.text for p in probs) == 1
     leer = next(p for p in probs if "ohne Brushes" in p.text)
     stack.push(fix_all(doc, [leer]))
     assert empty.id not in doc
