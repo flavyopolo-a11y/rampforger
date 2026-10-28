@@ -127,14 +127,14 @@ class Viewport(QOpenGLWidget):
                 # Zuletzt gezeichnete 3D-Kamera, z. B. zum Ausrichten von Lichtern
                 self.editor.camera3d = self.cam3d
                 extra = _join_lines(tool.lines_3d(self) if tool else None, self.editor.leak_lines,
-                                    self.editor.io_lines(), self.editor.light_lines())
+                                    self.editor.io_lines(), self.editor.light_lines(), self.editor.cordon_lines())
                 lit = self.render_mode == "lit"
                 sky = self.editor.sky_images() if self.render_mode in SKY_MODES else None
                 self.renderer.draw_3d(fbo, self.cam3d, w, h, self.render_mode, extra, pixels,
                                       self.editor.lights() if lit else None, sky)
             else:
                 extra = _join_lines(tool.lines_2d(self) if tool else None, self.editor.leak_lines,
-                                    self.editor.io_lines(), self.editor.light_lines())
+                                    self.editor.io_lines(), self.editor.light_lines(), self.editor.cordon_lines())
                 self.renderer.draw_2d(fbo, self.cam2d, w, h, self.editor.grid, extra, pixels)
             self.ctx.disable(moderngl.DEPTH_TEST)
         finally:
