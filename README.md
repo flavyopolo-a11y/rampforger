@@ -4,13 +4,11 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Etappe 7 von 11** – Fenster, 3D- und 2D-Ansichten, Grundformen, Auswählen,
-> Verschieben, Drehen, Skalieren, Undo/Redo, Speichern als `.rsmap`, VMF-Import und -Export
-> ohne Verluste, Kompilieren und Testen mit einem Tastendruck (F9) für CS:S und Momentum Mod,
-> Startraum mit Dicht-Prüfung, Rampen-Bibliothek mit 20 Vorlagen, deren Regler sich jederzeit
-> ändern lassen, eigene Prefabs und der Assistent „Neue Surf-Map“, Texturen und Welt-Stile,
-> Entities mit FGD-Feldern und I/O, BSPs öffnen, Licht-Vorschau und Himmel, Props mit Modell-Browser,
-> Gelände (Displacements) mit Pinsel und Vorlagen, Props streuen mit Detail-Kits.
+> **Stand: Version 0.20.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
+> Rampen-Bibliothek mit Reglern, Assistent „Neue Surf-Map“, Zeitnahme-Zonen für CS:S-Timer und Momentum,
+> Kompilieren und Testen mit F9, Texturen und Welt-Stile, Entities mit FGD und I/O, Licht-Vorschau,
+> Himmel und 3D-Skybox, Props, Gelände, Natur, Cordon, Instanzen, automatische Sicherung, Oberfläche
+> auf Englisch, Deutsch oder Russisch.
 
 ![Rampenschmiede, Etappe 3: Rampen-Bibliothek mit Reglern einer Kurve](docs/bilder/etappe3.png)
 
@@ -276,8 +274,8 @@ die Props dieser Modelle im Kreis.
 | Strg+S | Speichern als `.rsmap` |
 | Strg+Shift+E | Als `.vmf` exportieren |
 
-**Startraum.** Jede neue Map beginnt mit einem Spawn (für CS:S CT und T, für Momentum
-`info_player_start`), einer Sonne und einer dichten Skybox-Hülle von 8192 × 8192 × 3072 Units. Die Hülle wächst mit:
+**Startraum.** Jede neue Map beginnt mit Spawns (für CS:S je 32 für CT und T, weil CS:S nur so
+viele Spieler in ein Team lässt, wie es Spawns hat; für Momentum ein `info_player_start`), einer Sonne und einer dichten Skybox-Hülle von 8192 × 8192 × 3072 Units. Die Hülle wächst mit:
 Ragt etwas aus ihr heraus oder kommt ihr näher als 512 Units, wird sie im selben Undo-Schritt größer.
 F9 kompiliert also sofort ohne Leck. Die sechs Hüllen-Brushes sind normale Brushes: verschieben,
 vergrößern oder löschen. *Datei → Neu (leer)* startet ohne Inhalt, *Datei → Neue Maps mit

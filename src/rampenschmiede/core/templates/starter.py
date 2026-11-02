@@ -35,6 +35,11 @@ SPAWN_CLASSES: dict[str, tuple[str, ...]] = {
     "momentum": ("info_player_start",),
 }
 ALL_SPAWNS = ("info_player_start", "info_player_counterterrorist", "info_player_terrorist")
+#: CS:S lässt nur so viele Spieler in ein Team, wie es Spawns dafür gibt; Surf-Server haben
+#: meist 32 bis 64 Plätze, also 32 je Team. Momentum braucht nur einen info_player_start.
+TEAM_SPAWNS = 32
+#: Abstand der Spawns im Raster (Spieler sind 32 Units breit)
+SPAWN_SPACING = 48
 
 
 def _box(doc: MapDocument, mins: Point, maxs: Point, material: str, side: str) -> Solid:
@@ -70,6 +75,36 @@ def start_zone_on(doc: MapDocument, block: Solid, yaw: float = 0.0) -> list[MapO
     return objs
 
 
+def spawn_entities(doc: MapDocument, game: str | None, center: tuple[float, float], z: float,
+                   yaw: float = 0.0, size: float = 512) -> list[Entity]:
+    """Spawns für `game` als Raster um `center`, auf Höhe `z`, als eine Gruppe. Das Raster
+    bleibt in einem Quadrat der Kantenlänge `size` (z. B. dem Startblock).
+
+    CS:S bekommt TEAM_SPAWNS je Team (sonst sind die Teams nach wenigen Spielern „voll“),
+    Momentum einen info_player_start."""
+    classes = SPAWN_CLASSES.get(game or "", ALL_SPAWNS)
+    kinds = [cls for cls in classes for _ in range(1 if cls == "info_player_start" else TEAM_SPAWNS)]
+    cols = math.ceil(math.sqrt(len(kinds)))
+    rows = math.ceil(len(kinds) / cols)
+    spacing = min(SPAWN_SPACING, (size - 48) / max(cols - 1, 1))
+    a = math.radians(yaw)
+    fx, fy = math.cos(a), math.sin(a)      # Blickrichtung
+    sx, sy = -fy, fx                       # quer dazu
+    group = None
+    if len(kinds) > 1:
+        group = max((g for o in doc.objects() if (g := o.editor.group_id) is not None), default=0) + 1
+    out: list[Entity] = []
+    for i, cls in enumerate(kinds):
+        row, col = divmod(i, cols)
+        along = (row - (rows - 1) / 2) * spacing
+        across = (col - (cols - 1) / 2) * spacing
+        x = round(center[0] + fx * along + sx * across)
+        y = round(center[1] + fy * along + sy * across)
+        out.append(Entity(id=doc.new_id(), classname=cls, editor=EditorInfo(group_id=group),
+                          keyvalues=(("origin", f"{x} {y} {round(z)}"), ("angles", f"0 {yaw:g} 0"))))
+    return out
+
+
 def starter_room(doc: MapDocument, game: str | None = None, half_size: int = 4096, height: int = 3072) -> list[MapObject]:
     """Innenraum von (-half, -half, 0) bis (half, half, height), Boden-Oberkante bei z = 0."""
     inner = BBox((-half_size, -half_size, 0), (half_size, half_size, height))
@@ -81,11 +116,7 @@ def starter_room(doc: MapDocument, game: str | None = None, half_size: int = 409
                                                           FLOOR)[0], editor=EditorInfo(color=START_COLOR))
     objs.append(block)
     objs += start_zone_on(doc, block, yaw=90)
-    classes = SPAWN_CLASSES.get(game or "", ALL_SPAWNS)
-    for i, cls in enumerate(classes):
-        x = cx - 64 + i * 64
-        objs.append(Entity(id=doc.new_id(), classname=cls,
-                           keyvalues=(("origin", f"{x} {cy - 64} 40"), ("angles", "0 90 0"))))
+    objs += spawn_entities(doc, game, (cx, cy), 40, yaw=90, size=START_BLOCK)
     objs.append(Entity(id=doc.new_id(), classname="light_environment", keyvalues=(
         ("origin", f"0 0 {height - 64}"), ("_light", "255 240 220 300"), ("_ambient", "150 170 200 40"),
         ("angles", "-50 45 0"), ("pitch", "-50"))))

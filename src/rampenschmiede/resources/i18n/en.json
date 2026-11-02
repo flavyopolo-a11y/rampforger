@@ -733,6 +733,7 @@
  "Nur in der Auswahl": "Only in selection",
  "Nur info_player_start: CS:S-Server brauchen T- oder CT-Spawns": "Only info_player_start: CS:S servers need T or CT spawns",
  "Nur viereckige Seiten können Gelände werden": "Only four-sided faces can become terrain",
+ "Nur {0} {1}-Spawns: CS:S lässt nur so viele Spieler in dieses Team, Surf-Server brauchen meist {2} je Team": "Only {0} {1} spawns: CS:S only lets that many players join this team, surf servers usually need {2} per team",
  "Nähte geschlossen ({0} Brush(es) angepasst)": "Seams closed ({0} brush(es) adjusted)",
  "Nähte schließen": "Close seams",
  "Oben (X/Y)": "Top (X/Y)",

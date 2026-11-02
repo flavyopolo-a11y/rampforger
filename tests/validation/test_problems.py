@@ -131,3 +131,12 @@ def test_missing_texture_is_replaced_with_default():
     assert all(f.material != "GIBTS/NICHT" for f in doc.get(s.id).faces)
 
 
+
+
+def test_too_few_team_spawns_warns():
+    doc = MapDocument()
+    doc._insert([Entity(id=doc.new_id(), classname=cls, keyvalues=(("origin", f"{i * 64} 0 16"),))
+                 for i, cls in enumerate(["info_player_terrorist"] * 3 + ["info_player_counterterrorist"] * 32)])
+    probs = [p for p in find_problems(doc) if p.area == "Spawns"]
+    assert len(probs) == 1 and probs[0].level == WARNING and len(probs[0].ids) == 3
+    assert "Nur 3 T-Spawns" in probs[0].text
