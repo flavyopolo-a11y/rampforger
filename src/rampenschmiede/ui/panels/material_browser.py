@@ -249,8 +249,23 @@ class MaterialBrowser(QWidget):
         self.view.setDragDropMode(QListView.DragOnly)
         self.view.setToolTip(self.tr("Klick wählt, Doppelklick legt auf die Auswahl, "
                                      "Ziehen auf eine Fläche in der 3D-Ansicht legt es genau dort hin"))
+        # Ohne Spiel gibt es keine Texturen: statt einer leeren Fläche sagen, was zu tun ist
+        self.empty = QWidget()
+        empty_lay = QVBoxLayout(self.empty)
+        empty_lay.addStretch(1)
+        hint = QLabel(self.tr("Noch kein Spiel eingerichtet. Wähle Counter-Strike: Source oder Momentum Mod, "
+                              "dann erscheinen hier alle Texturen des Spiels."))
+        hint.setWordWrap(True)
+        hint.setAlignment(Qt.AlignCenter)
+        empty_lay.addWidget(hint)
+        self.setup_button = QPushButton(self.tr("Spiel einrichten …"))
+        self.setup_button.clicked.connect(self._setup_game)
+        empty_lay.addWidget(self.setup_button, 0, Qt.AlignCenter)
+        empty_lay.addStretch(1)
+        self.empty.hide()
         middle = QHBoxLayout()
         middle.addWidget(self.view, 1)
+        middle.addWidget(self.empty, 1)
         # Rechts: das gewählte Material in 3D auf Kugel, Würfel oder Rampe
         side = QVBoxLayout()
         self.preview3d = Preview3D()
@@ -289,6 +304,11 @@ class MaterialBrowser(QWidget):
         self.reload()
         self._show_current(editor.current_material)
 
+    def _setup_game(self) -> None:
+        win = self.window()
+        if hasattr(win, "edit_profiles"):
+            win.edit_profiles()
+
     def add_actions(self, actions) -> None:
         """Menü „Eigene Texturen“ füllen (Rampen-Assistent, Import, Texturpakete)."""
         menu = self.more_button.menu()
@@ -302,6 +322,8 @@ class MaterialBrowser(QWidget):
         self.model.set_library(lib)
         self._all = []
         self.model.set_names([])
+        self.empty.setVisible(lib is None)
+        self.view.setVisible(lib is not None)
         if lib is None:
             self.count_label.setText(self.tr("kein Spielprofil"))
             return

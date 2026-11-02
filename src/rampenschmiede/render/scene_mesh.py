@@ -13,7 +13,7 @@ import dataclasses
 import itertools
 import math
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import numpy as np
@@ -499,6 +499,8 @@ class SceneArrays:
     lines_sel: np.ndarray   # (k, 6): Kanten der Auswahl für die 3D-Ansicht
     lines3d: np.ndarray     # (j, 6): Kanten für die 3D-Ansicht (ohne weiche Knicke)
     version: int
+    #: Flächen von Triggern und Zonen: werden in 3D halbdurchsichtig gezeichnet (wie in Hammer)
+    faces_translucent: np.ndarray = field(default_factory=lambda: np.zeros((0, FACE_COLUMNS), dtype=np.float32))
 
 
 class SceneMesh:
@@ -559,6 +561,7 @@ class SceneMesh:
         if self._arrays is not None and self._arrays.version == self.version:
             return self._arrays
         faces_unsel, faces_sel, lines_unsel, lines_sel2d, lines_sel3d, edges3d = [], [], [], [], [], []
+        faces_glass: list[np.ndarray] = []
         for obj in self.doc.objects():
             if obj.editor.hidden:
                 continue
@@ -574,7 +577,10 @@ class SceneMesh:
                 continue
             selected = obj.id in self._selection or (owner is not None and owner in self._selection)
             tris, lines = mesh.variant(selected)
-            (faces_sel if selected else faces_unsel).append(tris)
+            if is_translucent(obj):
+                faces_glass.append(tris)
+            else:
+                (faces_sel if selected else faces_unsel).append(tris)
             (lines_sel2d if selected else lines_unsel).append(lines)
             edges3d.append(mesh.edges_3d())
             if selected:
@@ -589,8 +595,19 @@ class SceneMesh:
             lines_sel=cat(lines_sel3d, 6),
             lines3d=cat(edges3d, 6),
             version=self.version,
+            faces_translucent=cat(faces_glass, FACE_COLUMNS),
         )
         return self._arrays
+
+
+#: Werkzeug-Texturen, durch die man in 3D hindurchsieht (Trigger, Zonen, Teleporter)
+TRANSLUCENT_MATERIALS = frozenset({"TOOLS/TOOLSTRIGGER"})
+
+
+def is_translucent(obj: MapObject) -> bool:
+    """Brush, der nur aus Trigger-Flächen besteht: in 3D halbdurchsichtig, damit er nichts verdeckt."""
+    return isinstance(obj, Solid) and bool(obj.faces) and all(
+        f.material.upper() in TRANSLUCENT_MATERIALS for f in obj.faces)
 
 
 def _same_look(old: MapObject, new: MapObject) -> bool:

@@ -11,6 +11,7 @@ from ...core.geometry.brush import ray_intersect_solid
 from ...core.geometry.displacement import is_displacement_solid, solid_ray_face, surfaces
 from ...core.mathutil import BBox
 from ...core.model import Entity, MapObject, Solid, object_bbox, owner_id
+from ...render.scene_mesh import is_translucent
 
 if TYPE_CHECKING:
     from ..editor import EditorContext
@@ -156,8 +157,9 @@ def pick_3d(editor: "EditorContext", origin: np.ndarray, direction: np.ndarray,
     o = (float(origin[0]), float(origin[1]), float(origin[2]))
     d = (float(direction[0]), float(direction[1]), float(direction[2]))
     brush_entities = _brush_entity_ids(editor)
+    skip_triggers = not getattr(editor, "show_triggers_3d", True)
     for obj in editor.doc.objects():
-        if not _visible(editor, obj):
+        if not _visible(editor, obj) or (skip_triggers and is_translucent(obj)):
             continue
         bb = object_bbox(obj)
         if bb is None:

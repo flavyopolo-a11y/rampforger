@@ -138,6 +138,8 @@ class EditorContext(QObject):
         self.ignore_groups = False
         #: Leck-Spur aus der letzten .lin-Datei, als Linienpaare für die Ansichten
         self.leak_lines: np.ndarray | None = None
+        #: Trigger und Zonen in der 3D-Ansicht zeigen (halbdurchsichtig); aus: unsichtbar und nicht anklickbar
+        self.show_triggers_3d = True
         #: Portale aus der letzten .prt-Datei (Umrisse als Linienpaare)
         self.portal_lines: np.ndarray | None = None
         self.portal_count = 0

@@ -18,6 +18,8 @@ uniform vec3 u_sun_color;
 uniform vec3 u_ambient;
 // Himmel
 uniform float u_has_sky;
+// Deckkraft (Trigger und Zonen werden halbdurchsichtig gezeichnet)
+uniform float u_alpha;
 uniform vec3 u_eye;
 in vec3 v_pos;
 in vec3 v_normal;
@@ -136,5 +138,6 @@ void main() {
         color = min(base * preview_light(n), vec3(1.0));
     }
     color = mix(color, vec3(1.0, 0.25, 0.2), v_selected * tint);
-    f_color = vec4(color, 1.0);
+    // Ausgewählte Trigger deutlicher zeigen
+    f_color = vec4(color, min(1.0, u_alpha + v_selected * 0.25));
 }
