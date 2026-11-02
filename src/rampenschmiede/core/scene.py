@@ -142,7 +142,16 @@ def label(obj: MapObject) -> str:
         info = obj.extra.get("block")
         if isinstance(info, dict):
             template = CATALOG.get(str(info.get("template")))
-            return f"{template.name if template else info.get('template', 'Baustein')} #{obj.id}"
+            text = template.name if template else str(info.get("template", "Baustein"))
+            values = info.get("values", {}) if isinstance(info.get("values"), dict) else {}
+            if str(info.get("template", "")).startswith("zone_"):
+                if values.get("bonus"):
+                    text += f" · Bonus {values['bonus']}"
+                if info.get("template") == "zone_stage":
+                    text += f" · Stage {values.get('nummer', '')}"
+                if values.get("name"):
+                    text += f" · {values['name']}"
+            return f"{text} #{obj.id}"
         if obj.classname.lower() in LIGHTS and not name:
             # Ohne Namen sehen alle Lichter gleich aus: Farbe und Helligkeit unterscheiden sie
             light = obj.get("_light").split()

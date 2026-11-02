@@ -39,6 +39,8 @@ class Zone:
     bottom: float
     height: float
     yaw: float
+    #: Frei gewählter Name (Regler „Name“ der Zone), z. B. „Lava-Raum“
+    title: str = ""
 
     @property
     def center(self) -> tuple[float, float]:
@@ -50,8 +52,10 @@ class Zone:
     def label(self) -> str:
         where = f"Bonus {self.track} " if self.track else ""
         if self.kind == "stage":
-            return f"{where}Stage {self.number}"
-        return where + ("Startzone" if self.kind == "start" else "Zielzone")
+            text = f"{where}Stage {self.number}"
+        else:
+            text = where + ("Startzone" if self.kind == "start" else "Zielzone")
+        return f"{text} „{self.title}“" if self.title else text
 
 
 def parse_zone_name(name: str) -> tuple[str, int, int] | None:
@@ -87,6 +91,14 @@ def _hull_2d(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
     return lower[:-1] + upper[:-1]
 
 
+def zone_title(ent: Entity) -> str:
+    """Frei gewählter Name einer Zone (steht in den Reglern des Bausteins)."""
+    block = ent.extra.get("block")
+    if isinstance(block, dict):
+        return str(block.get("values", {}).get("name", "") or "").strip()
+    return ""
+
+
 def _yaw_of(ent: Entity) -> float:
     block = ent.extra.get("block")
     if block:
@@ -114,7 +126,7 @@ def collect_zones(doc: MapDocument) -> list[Zone]:
         top = max(v[2] for v in verts)
         kind, track, number = parsed
         out.append(Zone(ent.id, ent.get("targetname"), kind, track, number, tuple(hull),
-                        bottom, top - bottom, _yaw_of(ent)))
+                        bottom, top - bottom, _yaw_of(ent), zone_title(ent)))
     return out
 
 
@@ -197,13 +209,14 @@ def momentum_zones(zones: list[Zone], timestamp_ms: int | None = None) -> dict |
     for z in sorted(zones, key=lambda z: z.number):
         if z.kind == "stage" and z.track == 0:
             stages.setdefault(z.number, z)
-    segments = [_segment(start)] + [_segment(stages[n]) for n in sorted(stages)]
+    segments = [_segment(start, start.title or None)] + [_segment(stages[n], stages[n].title or None)
+                                                          for n in sorted(stages)]
     bonuses = []
     for track in sorted({z.track for z in zones if z.track})[:MOMENTUM_MAX_BONUS]:
         b_start, b_end = _first(zones, "start", track), _first(zones, "end", track)
         if b_start is None or b_end is None:
             continue
-        bonuses.append({"zones": {"segments": [_segment(b_start, f"Bonus {track}")],
+        bonuses.append({"zones": {"segments": [_segment(b_start, b_start.title or f"Bonus {track}")],
                                   "end": {"regions": [_region(b_end, tele=False)]}}})
     return {
         "formatVersion": MOMENTUM_FORMAT,
@@ -223,5 +236,6 @@ __all__ = [
     "collect_zones",
     "momentum_zones",
     "parse_zone_name",
+    "zone_title",
     "zone_problems",
 ]
