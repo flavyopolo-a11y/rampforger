@@ -4,7 +4,7 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Version 0.22.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
+> **Stand: Version 0.23.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
 > Rampen-Bibliothek mit Reglern, Assistent „Neue Surf-Map“, Zeitnahme-Zonen für CS:S-Timer und Momentum,
 > Kompilieren und Testen mit F9, Texturen und Welt-Stile, Entities mit FGD und I/O, Licht-Vorschau,
 > Himmel und 3D-Skybox, Props, Gelände, Natur, Cordon, Instanzen, automatische Sicherung, Oberfläche
@@ -360,6 +360,12 @@ läuft also auf CS:S ohne Nacharbeit. Für Momentum schreibt F9 beim Momentum-Pr
 die Zonendatei `<map>.json` neben die BSP und nach `maps/zones/local` im Spielordner. Stage 1
 ist die Startzone, die erste Stage-Zone ist Stage 2. Vor dem Kompilieren meldet das Log
 fehlende Start-/Zielzonen und Lücken in den Nummern.
+
+**Boni und Stages benennen.** Für einen Bonus eine Startzone und eine Zielzone mit derselben
+*Bonus-Nummer* (1 bis 8) setzen; beliebig viele getrennte Räume sind so Bonus 1, Bonus 2 …
+Startzonen und Stage-Zonen haben ein Feld *Name* (z. B. „Lava-Raum“, „Wellen“): Er steht in der
+Szenen-Liste und wird in Momentum als Name des Bonus bzw. der Stage angezeigt. Die Namen der
+Trigger bleiben beim `mod_zone`-Standard, weil CS:S-Timer nur nach Nummern zählen.
 
 **Eigene Prefabs.** Auswahl treffen, in der Bibliothek *Als Prefab speichern …*, Namen
 eingeben. Das Prefab erscheint unter *Eigene Prefabs* und lässt sich wie jede Vorlage einfügen

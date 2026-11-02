@@ -158,3 +158,27 @@ def test_runner_writes_zone_files(tmp_path):
     plan.steps = [WriteStep("Momentum-Zonen", [str(target)], '{"formatVersion": 1}')]
     result = CompileRunner(plan).run()
     assert result.ok and json.loads(target.read_text(encoding="utf-8")) == {"formatVersion": 1}
+
+
+def test_zones_can_be_named_freely():
+    from rampenschmiede.core.scene import label
+
+    doc = MapDocument()
+    start = add(doc, "zone_start", Placement(0, 0, 0, 0), name="Eingang")
+    add(doc, "zone_stage", Placement(2000, 0, 0, 0), nummer=2, name="Wellen")
+    add(doc, "zone_ende", Placement(9000, 0, 0, 0))
+    for b, title in ((1, "Lava-Raum"), (2, "")):
+        add(doc, "zone_start", Placement(0, 2000 * b, 0, 90), bonus=b, name=title)
+        add(doc, "zone_ende", Placement(0, 2000 * b + 1000, 0, 90), bonus=b)
+    zones = collect_zones(doc)
+    assert zone_problems(zones) == []
+    # Die Namen für die CS:S-Timer bleiben beim Standard
+    assert {z.name for z in zones} >= {"mod_zone_start", "mod_zone_checkpoint_2", "mod_zone_bonus_1_start",
+                                       "mod_zone_bonus_2_start"}
+    data = momentum_zones(zones, timestamp_ms=1)
+    main = data["tracks"]["main"]["zones"]["segments"]
+    assert [s.get("name") for s in main] == ["Eingang", "Wellen"]
+    names = [b["zones"]["segments"][0]["name"] for b in data["tracks"]["bonuses"]]
+    assert names == ["Lava-Raum", "Bonus 2"]
+    assert "Eingang" in label(start) and "Bonus 1" in label(doc.get(next(
+        z.entity_id for z in zones if z.track == 1 and z.kind == "start")))

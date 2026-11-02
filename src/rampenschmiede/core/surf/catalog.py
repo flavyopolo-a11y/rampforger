@@ -538,7 +538,9 @@ ZONE_PARAMS = (
     Param("breite", tr("Breite"), 384, 32, 16384, 16, "u"),
     Param("hoehe", tr("Höhe"), 128, 16, 4096, 16, "u"),
 )
-BONUS = Param("bonus", tr("Bonus-Nummer"), 0, 0, 9, hint=tr("0 = Hauptstrecke, 1–9 = Bonus"))
+BONUS = Param("bonus", tr("Bonus-Nummer"), 0, 0, 8, hint=tr("0 = Hauptstrecke, 1–8 = Bonus (so viele kennt shavit)"))
+ZONE_TITLE = Param("name", tr("Name"), "", hint=tr("Frei wählbar, z. B. „Lava-Raum“. Steht in der Szene und in "
+                                                  "Momentum; CS:S-Timer zählen nur nach der Nummer"))
 
 
 def zone_name(kind: str, bonus: int = 0, number: int = 0) -> str:
@@ -559,12 +561,12 @@ def _zone_entity(kind: str) -> Callable[[dict, Placement], tuple[str, tuple[tupl
 
 _add(Template("zone_start", tr("Startzone"), N_("Zonen"), tr("Hier startet die Zeit, sobald man die Zone verlässt. "
               "CS:S-Timer erkennen sie am Namen, für Momentum wird eine Zonendatei erzeugt."),
-              (*ZONE_PARAMS, BONUS), build_trigger_box, check_angles=False, entity=_zone_entity("start")))
+              (*ZONE_PARAMS, BONUS, ZONE_TITLE), build_trigger_box, check_angles=False, entity=_zone_entity("start")))
 _add(Template("zone_ende", tr("Zielzone"), N_("Zonen"), tr("Hier stoppt die Zeit."),
               (*ZONE_PARAMS, BONUS), build_trigger_box, check_angles=False, entity=_zone_entity("end")))
 _add(Template("zone_stage", tr("Stage-Zone"), N_("Zonen"), tr("Beginn einer Stage auf der Hauptstrecke. "
               "Stage 1 ist die Startzone, die erste Stage-Zone ist also Stage 2."),
-              (*ZONE_PARAMS, Param("nummer", tr("Stage"), 2, 2, 99)),
+              (*ZONE_PARAMS, Param("nummer", tr("Stage"), 2, 2, 99), ZONE_TITLE),
               build_trigger_box, check_angles=False, entity=_zone_entity("stage")))
 
 
