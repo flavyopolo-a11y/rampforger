@@ -224,3 +224,15 @@ def test_old_func_brush_roots_are_upgraded():
     new = doc.get(root.id)
     assert new.classname == "func_detail" and not new.get("Solidity")
     assert upgrade_roots(doc) == 0
+
+
+def test_ramp_faces_get_lightmap_scale_from_slider():
+    from rampenschmiede.core.blocks import build_block
+    from rampenschmiede.core.model import MapDocument, Solid
+
+    for value in (None, 64):
+        doc = MapDocument()
+        objs, _ = build_block(doc, "gerade", {} if value is None else {"lightmap": value})
+        visible = [f for o in objs if isinstance(o, Solid) and o.parent_id is not None for f in o.faces
+                   if not f.material.upper().startswith("TOOLS/")]
+        assert visible and {f.lightmapscale for f in visible} == {value or 32}

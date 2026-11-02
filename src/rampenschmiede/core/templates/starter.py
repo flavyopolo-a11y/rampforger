@@ -75,6 +75,12 @@ def start_zone_on(doc: MapDocument, block: Solid, yaw: float = 0.0) -> list[MapO
     return objs
 
 
+def cubemap(doc: MapDocument, at: tuple[float, float, float]) -> Entity:
+    """env_cubemap auf Augenhöhe: Wasser, Glas und glänzende Materialien spiegeln sonst falsch."""
+    return Entity(id=doc.new_id(), classname="env_cubemap",
+                  keyvalues=(("origin", " ".join(str(round(c)) for c in at)), ("cubemapsize", "0")))
+
+
 def spawn_entities(doc: MapDocument, game: str | None, center: tuple[float, float], z: float,
                    yaw: float = 0.0, size: float = 512) -> list[Entity]:
     """Spawns für `game` als Raster um `center`, auf Höhe `z`, als eine Gruppe. Das Raster
@@ -117,9 +123,10 @@ def starter_room(doc: MapDocument, game: str | None = None, half_size: int = 409
     objs.append(block)
     objs += start_zone_on(doc, block, yaw=90)
     objs += spawn_entities(doc, game, (cx, cy), 40, yaw=90, size=START_BLOCK)
+    objs.append(cubemap(doc, (cx, cy, 32 + 128)))
     objs.append(Entity(id=doc.new_id(), classname="light_environment", keyvalues=(
         ("origin", f"0 0 {height - 64}"), ("_light", "255 240 220 300"), ("_ambient", "150 170 200 40"),
-        ("angles", "-50 45 0"), ("pitch", "-50"))))
+        ("angles", "-50 45 0"), ("pitch", "-50"), ("SunSpreadAngle", "5"))))
     return objs
 
 

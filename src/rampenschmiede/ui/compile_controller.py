@@ -19,6 +19,7 @@ from ..core.compile import (
     map_name_for,
     resolve,
 )
+from ..core.compile.extras import build_extras
 from ..core.cordon import CordonResult, active_cordon, apply_cordon
 from ..core.instances import collapse_instances
 from ..core.io.vmf import ExportResult, save_vmf
@@ -89,12 +90,15 @@ class CompileController(QObject):
         if self.running:
             return False
         doc = doc if doc is not None else self.build_doc()[0]
+        doc, extras = build_extras(doc, settings.vrad_args, settings.run_vrad and settings.run_vbsp)
         plan = self.prepare(profile, settings, doc)
         self.editor.set_leak_path([])
         self.plan = plan
         self.started.emit(plan)
         for note in notes or ():
             self.line.emit(note)
+        for text in extras:
+            self.line.emit(LogLine(text))
         for text in self.instance_problems:
             self.line.emit(LogLine(text, Level.WARNING))
         if not plan.problems:

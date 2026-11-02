@@ -1,12 +1,12 @@
 """Probleme suchen: jede Prüfung meldet, springt zu den Objekten und repariert, wo es geht."""
 import dataclasses
 
-from rampenschmiede.core.commands import AddObjects, CommandStack, solids_from_faces
+from rampenschmiede.core.commands import AddObjects, CommandStack, RemoveObjects, solids_from_faces
 from rampenschmiede.core.geometry import primitives
 from rampenschmiede.core.geometry.vertex_edit import off_grid
 from rampenschmiede.core.model import Entity, MapDocument, Output
 from rampenschmiede.core.templates import starter_room
-from rampenschmiede.core.validation.problems import ERROR, WARNING, find_problems, fix_all
+from rampenschmiede.core.validation.problems import ERROR, INFO, WARNING, find_problems, fix_all
 
 
 def _doc(*objs_fn):
@@ -140,3 +140,11 @@ def test_too_few_team_spawns_warns():
     probs = [p for p in find_problems(doc) if p.area == "Spawns"]
     assert len(probs) == 1 and probs[0].level == WARNING and len(probs[0].ids) == 3
     assert "Nur 3 T-Spawns" in probs[0].text
+
+
+def test_missing_cubemap_is_a_hint():
+    doc, stack = _doc()
+    cube = next(e for e in doc.entities() if e.classname == "env_cubemap")
+    stack.push(RemoveObjects([cube.id]))
+    probs = [p for p in find_problems(doc) if "env_cubemap" in p.text]
+    assert len(probs) == 1 and probs[0].level == INFO

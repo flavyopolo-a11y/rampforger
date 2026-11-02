@@ -81,7 +81,7 @@ def test_spawn_reported_before_other_entities():
     r = check_seal(doc)
     assert not r.sealed
     assert doc.get(r.entity_id).classname == "info_player_start"
-    assert len(r.leaking_ids) == 2  # Spawn und Sonne
+    assert len(r.leaking_ids) == 3  # Spawn, Cubemap und Sonne
 
 
 def test_large_map_uses_coarser_cells_and_still_seals():
