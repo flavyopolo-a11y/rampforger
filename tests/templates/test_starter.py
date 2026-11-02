@@ -115,3 +115,13 @@ def test_css_gets_enough_spawns_per_team_on_the_start_block():
     single = [o for o in starter_room(MapDocument(), "momentum") if isinstance(o, Entity)
               and o.classname.startswith("info_player")]
     assert len(single) == 1 and single[0].editor.group_id is None
+
+
+def test_new_maps_have_cubemap_and_soft_sun():
+    from rampenschmiede.core.templates import SurfMapSettings, new_surf_map
+
+    for objs in (starter_room(MapDocument(), "css"), new_surf_map(MapDocument(), SurfMapSettings(stages=2))):
+        ents = [o for o in objs if isinstance(o, Entity)]
+        assert any(e.classname == "env_cubemap" for e in ents)
+        sun = next(e for e in ents if e.classname == "light_environment")
+        assert float(sun.get("SunSpreadAngle")) > 0

@@ -17,6 +17,8 @@ from .theme import SetTheme, Theme, apply_theme
 
 RGB = tuple[int, int, int]
 DEFAULT_SKY = "sky_day01_01"
+#: Weiche Sonnenschatten: vrad streut die Sonne über so viele Grad (0 = harte, treppige Kanten)
+SUN_SPREAD = "5"
 #: Ordner, die als Wand-Material nie in Frage kommen
 _NOT_WALLS = ("tools/", "skybox/", "decals/", "overlays/", "effects/", "models/", "sprites/", "particle/",
               "dev/", "editor/", "console/", "vgui/", "debug/", "water/", "liquids/", "lights/", "glass/")
@@ -153,7 +155,7 @@ def style_command(doc: MapDocument, style: WorldStyle, sky: str, theme: Theme) -
     added: list[Entity] = []
 
     sun_kvs = (("_light", style.sun), ("_ambient", style.ambient), ("pitch", str(style.pitch)),
-               ("angles", f"{style.pitch} {style.yaw} 0"))
+               ("angles", f"{style.pitch} {style.yaw} 0"), ("SunSpreadAngle", SUN_SPREAD))
     suns = [e for e in entities if e.classname == "light_environment"]
     if suns:
         for sun in suns:

@@ -329,6 +329,14 @@ def _spawns(doc: MapDocument) -> list[Problem]:
     return out
 
 
+def _cubemaps(doc: MapDocument) -> list[Problem]:
+    if any(e.classname.lower() == "env_cubemap" for e in doc.entities()) or not any(True for _ in doc.solids()):
+        return []
+    return [Problem(INFO, tr("Licht"), tr("Keine env_cubemap: Wasser, Glas und glänzende Materialien spiegeln im "
+                                          "Spiel falsch. Eine Cubemap je Bereich auf Augenhöhe setzen und im "
+                                          "Kompilier-Dialog „Cubemaps bauen“ anhaken"))]
+
+
 def _zones(doc: MapDocument) -> list[Problem]:
     zones = collect_zones(doc)
     out = []
@@ -377,7 +385,7 @@ def find_problems(doc: MapDocument, materials: "MaterialLibrary | None" = None,
                   seal: "SealResult | None" = None) -> list[Problem]:
     """Alle Prüfungen; Fehler zuerst."""
     found = (_seal(doc, seal) + _spawns(doc) + _entities(doc, catalog) + _brushes(doc) + _ramps(doc)
-             + _limits(doc) + _zones(doc) + _materials(doc, materials) + _models(doc, models))
+             + _limits(doc) + _zones(doc) + _cubemaps(doc) + _materials(doc, materials) + _models(doc, models))
     order = {ERROR: 0, WARNING: 1, INFO: 2}
     return sorted(found, key=lambda p: order[p.level])
 

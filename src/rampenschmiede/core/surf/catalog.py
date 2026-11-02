@@ -174,6 +174,9 @@ MATERIAL_PARAMS = (
     SURF_MATERIAL,
     SIDE_MATERIAL,
     Param("unterseite_nodraw", tr("Unterseite unsichtbar (Nodraw)"), True),
+    Param("lightmap", tr("Lightmap-Skalierung"), 32, 8, 128, 8, "",
+          hint=tr("Units je Lichtpunkt auf der Rampe. 32 ist für Surf-Rampen üblich: kleinere BSP und schnelleres "
+                  "vrad; 16 für scharfe Schatten, 64 für Rampen weit weg")),
     Param("kollision", tr("Kollision"), "clip", choices=(
         ("clip", tr("Playerclip + func_detail (empfohlen)")), ("detail", tr("Nur func_detail")))),
     Param("textur", tr("Textur"), "einpassen", choices=(

@@ -18,7 +18,7 @@ from ..geometry import primitives
 from ..mathutil import BBox
 from ..model import EditorInfo, Entity, MapDocument, MapObject, Solid, object_bbox
 from ..surf.catalog import CATALOG, Placement, ramp_height
-from .starter import enclose_map, spawn_entities
+from .starter import cubemap, enclose_map, spawn_entities
 
 #: Source-Maps dürfen von -16384 bis 16384 reichen
 MAP_LIMIT = 16384
@@ -94,6 +94,7 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
             objs += _zone(doc, "zone_start", platform)
         else:
             objs += _zone(doc, "zone_stage", platform, nummer=stage + 1)
+        objs.append(cubemap(doc, (x + s.platform // 2, 0, top + 128)))
         name = f"stage_{stage + 1}"
         objs.append(Entity(id=doc.new_id(), classname="info_teleport_destination", keyvalues=(
             ("targetname", name), ("origin", f"{x + 128} 0 {top + 8}"), ("angles", "0 0 0"))))
@@ -116,6 +117,7 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
     platform = _platform(doc, x, top, s.platform)
     objs.append(platform)
     objs += _zone(doc, "zone_ende", platform)
+    objs.append(cubemap(doc, (x + s.platform // 2, 0, top + 128)))
     objs.append(Entity(id=doc.new_id(), classname="info_target", keyvalues=(
         ("targetname", "ziel"), ("origin", f"{x + s.platform // 2} 0 {top + 32}"))))
     end_x = x + s.platform
@@ -132,7 +134,7 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
     objs.append(_box(doc, (first_x - 256, -width // 2 - 256, floor - 32), (end_x + 256, width // 2 + 256, floor)))
     objs.append(Entity(id=doc.new_id(), classname="light_environment", keyvalues=(
         ("origin", f"0 0 {top + 256}"), ("_light", "255 240 220 300"), ("_ambient", "150 170 200 40"),
-        ("angles", "-50 45 0"), ("pitch", "-50"))))
+        ("angles", "-50 45 0"), ("pitch", "-50"), ("SunSpreadAngle", "5"))))
 
     bounds = BBox.union(object_bbox(o) for o in objs)
     assert bounds is not None

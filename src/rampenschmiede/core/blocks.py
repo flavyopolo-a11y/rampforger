@@ -67,11 +67,14 @@ def _root_entity(root_id: int, collision: str, info: dict, editor: EditorInfo | 
 SURF_SMOOTHING = 1
 
 
-def _smooth(faces: tuple) -> tuple:
+def _smooth(faces: tuple, lightmapscale: int | None = None) -> tuple:
     """Schräge Flächen (Surf-Flächen) bekommen eine gemeinsame Glättungsgruppe, damit Kurven
-    im Spiel ohne helle und dunkle Streifen an den Segmentgrenzen beleuchtet werden."""
+    im Spiel ohne helle und dunkle Streifen an den Segmentgrenzen beleuchtet werden.
+    `lightmapscale` gilt für alle sichtbaren Seiten (Regler „Lightmap-Skalierung“)."""
     out = []
     for f in faces:
+        if lightmapscale and not f.material.upper().startswith("TOOLS/"):
+            f = dataclasses.replace(f, lightmapscale=int(lightmapscale))
         nz = abs(f.plane.normal[2])
         if 0.05 < nz < 0.95 and not f.material.upper().startswith("TOOLS/"):
             f = dataclasses.replace(f, smoothing_groups=f.smoothing_groups | SURF_SMOOTHING)
@@ -117,7 +120,7 @@ def build_block(doc: MapDocument, template: str, values: dict | None = None, at:
     # sichtbare Rampe darf dann ungerundet und damit splitterfrei glatt sein
     visible = generate(t, v, at, exact=True) if collision == "clip" else gen
     for faces in visible.face_sets:
-        objs.append(Solid(id=doc.new_id(), faces=_smooth(faces), parent_id=root.id, editor=EditorInfo(color=color)))
+        objs.append(Solid(id=doc.new_id(), faces=_smooth(faces, v.get("lightmap")), parent_id=root.id, editor=EditorInfo(color=color)))
     if collision == "clip":
         for faces in gen.face_sets:
             clip = tuple(dataclasses.replace(f, material=PLAYERCLIP) for f in faces)

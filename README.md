@@ -4,7 +4,7 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Version 0.20.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
+> **Stand: Version 0.21.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
 > Rampen-Bibliothek mit Reglern, Assistent „Neue Surf-Map“, Zeitnahme-Zonen für CS:S-Timer und Momentum,
 > Kompilieren und Testen mit F9, Texturen und Welt-Stile, Entities mit FGD und I/O, Licht-Vorschau,
 > Himmel und 3D-Skybox, Props, Gelände, Natur, Cordon, Instanzen, automatische Sicherung, Oberfläche
@@ -227,6 +227,14 @@ gar kein Licht, ist sie hell wie im Spiel (fullbright). Ein ausgewähltes Licht 
 Reichweite als Kugel, ein Spot seinen Kegel, die Sonne einen Pfeil in Leuchtrichtung. Die Kästchen
 der Lichter haben ihre Lichtfarbe. Spot und Sonne lassen sich direkt ausrichten: in der 3D-Ansicht
 dorthin schauen, wohin das Licht soll, und im Panel *In Blickrichtung der 3D-Kamera ausrichten*.
+
+**Final-Build.** Was eine Map im Spiel gut aussehen lässt, ergänzt die Rampenschmiede selbst:
+Neue Maps haben eine Sonne mit weichen Schatten (`SunSpreadAngle` 5) und eine `env_cubemap` am Start
+(der Surf-Assistent eine je Stage). Beim Kompilieren kommt, falls die Map keinen eigenen hat, ein
+`shadow_control` dazu, damit die Schatten von Spielern und Props in Richtung der Sonne fallen, und bei
+einem HDR-Build (Final) ein `env_tonemap_controller` mit ruhiger Belichtung, damit helle Himmel nicht
+überstrahlen. Die Map selbst bleibt dabei unverändert. Rampen haben die Lightmap-Skalierung 32 (Regler
+in der Bibliothek): kleinere BSP und schnelleres Licht, wie bei Surf-Maps üblich.
 
 **Himmel (Texturen → Himmel).** Alle Skyboxen des Spiels mit Bild zum Aussuchen. In *Texturiert*
 und *Licht-Vorschau* zeigt die 3D-Ansicht den Himmel im Hintergrund und auf allen Skybox-Flächen,
