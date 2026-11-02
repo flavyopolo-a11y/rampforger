@@ -36,3 +36,21 @@ def test_other_templates_take_direction_only():
     t = CATALOG["pyramide"]
     values, at = fit_stroke(t, {}, (0, 0, 0), (-300, 0))
     assert values == {} and at.yaw == pytest.approx(180)
+
+
+def test_straight_ramp_snaps_to_axis():
+    t = CATALOG["gerade"]
+    # leicht schräger Strich: Rampe läuft trotzdem genau nach +Y, Länge entlang der Achse
+    values, at = fit_stroke(t, {}, (0, 0, 0), (130, 1020), snap=lambda v: round(v / 64) * 64)
+    assert at.yaw == 90 and values["laenge"] == 1024
+    values, at = fit_stroke(t, {}, (0, 0, 0), (-900, -100))
+    assert at.yaw == 180
+    # frei (Umschalttaste): 15°-Schritte
+    _values, at = fit_stroke(t, {}, (0, 0, 0), (700, 700), axis_step=15.0)
+    assert at.yaw == 45
+
+
+def test_curve_is_not_forced_onto_axis():
+    t = CATALOG["kurve"]
+    _values, at = fit_stroke(t, {}, (0, 0, 0), (1000.0, 600.0), snap=lambda v: v)
+    assert at.yaw % 90 != 0

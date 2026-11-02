@@ -4,7 +4,7 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Version 0.24.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
+> **Stand: Version 0.25.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
 > Rampen-Bibliothek mit Reglern, Assistent „Neue Surf-Map“, Zeitnahme-Zonen für CS:S-Timer und Momentum,
 > Kompilieren und Testen mit F9, Texturen und Welt-Stile, Entities mit FGD und I/O, Licht-Vorschau,
 > Himmel und 3D-Skybox, Props, Gelände, Natur, Cordon, Instanzen, automatische Sicherung, Oberfläche
@@ -84,7 +84,9 @@ Eine Form aus der Bibliothek in eine Ansicht ziehen setzt sie in der zuletzt ben
 **Rampen malen (Shift+R).** Vorlage links in der Bibliothek anklicken, Regler nach Wunsch stellen,
 dann in einer Ansicht vom Anfang zum Ende der Rampe ziehen. Die Vorschau hängt am Mauszeiger,
 beim Loslassen wird gebaut. Der Strich bestimmt Länge und Richtung, bei Kurven Radius und
-Richtung. Ein Klick ohne Ziehen setzt die Vorlage so ab, wie sie ist. Esc beendet das Malen. Jede Vorlage hat
+Richtung. Gerade Rampen liegen dabei immer auf dem Raster: Anfang und Länge rasten ein, die Richtung
+nur auf die Achsen. Mit gedrückter Umschalttaste geht es schräg in 15°-Schritten. Kurven folgen
+dem Strich frei. Ein Klick ohne Ziehen setzt die Vorlage so ab, wie sie ist. Esc beendet das Malen. Jede Vorlage hat
 ein Bild: in der Bibliothek, groß über den Reglern (ändert sich sofort mit) und rechts in der
 Galerie des Malen-Werkzeugs, wo man auch direkt eine andere Rampe anklicken kann. In 3D schwebt
 die Rampe halbdurchsichtig dort, wo sie landen würde.
@@ -337,7 +339,9 @@ Eine eingefügte Rampe ist ein **Baustein**: Ist sie ausgewählt, zeigt das Pane
 Anker …). Jede Änderung baut die Rampe sofort neu; mehrere Änderungen am selben Regler sind ein
 einziger Undo-Schritt. Darunter steht der tatsächliche Surf-Winkel, mit Warnung unter 45°
 (man kann stehen) und über 65° (sehr steil). Ein Klick auf irgendeinen Teil wählt den ganzen
-Baustein. *Baustein lösen* macht normale Brushes daraus.
+Baustein. *Baustein lösen* macht normale Brushes daraus. Über *Rampentyp* wird eine gewählte Rampe nachträglich zu einer
+anderen Art (z. B. Gerade → Halbe Rampe oder Kurve), an derselben Stelle und mit allen passenden
+Reglern; das ist ein Undo-Schritt.
 
 So baut die Bibliothek Rampen, damit es keine Rampbugs durch krumme Geometrie gibt:
 - Die Kollision (Playerclip-Hülle) liegt auf ganzen Units, benachbarte Segmente teilen exakt

@@ -5,6 +5,10 @@ Loslassen wird gebaut. Ein einfacher Klick setzt die Vorlage so ab, wie sie ist.
 Von oben bestimmt der Strich Länge und Richtung (Kurven: Radius und Richtung). Von vorne oder
 von der Seite bestimmt der Anfangspunkt zusätzlich die Höhe. In 3D wird auf der getroffenen
 Fläche oder auf dem Boden gemalt.
+
+Gerade Rampen liegen immer auf dem Raster: Anfang und Länge rasten ein, die Richtung nur auf
+die Achsen (0°, 90°, 180°, 270°). Mit gedrückter Umschalttaste geht jede Richtung in 15°-Schritten.
+Kurven folgen dem Strich frei.
 """
 from __future__ import annotations
 
@@ -17,7 +21,7 @@ from PySide6.QtGui import QColor, QKeyEvent, QMouseEvent, QPainter, QPen
 
 from ...core.model import Solid
 from ...core.surf.catalog import Placement, generate
-from ...core.surf.paint import MIN_STROKE, fit_stroke
+from ...core.surf.paint import AXIS_STEP, MIN_STROKE, fit_stroke
 from ...i18n import tr
 from .base import Tool, pick_3d
 
@@ -33,8 +37,8 @@ class PaintTool(Tool):
     name = "paint"
     label = "Malen"
     shortcut = "Shift+R"
-    hint = ("Vorlage links wählen, dann vom Anfang zum Ende der Rampe ziehen. Klick setzt sie ab, "
-            "Esc beendet das Malen")
+    hint = ("Vorlage links wählen, dann vom Anfang zum Ende der Rampe ziehen. Gerade Rampen rasten auf "
+            "die Achsen ein, Umschalt = schräg in 15°-Schritten. Klick setzt sie ab, Esc beendet das Malen")
 
     def __init__(self, editor, library: "LibraryPanel") -> None:
         super().__init__(editor)
@@ -44,6 +48,8 @@ class PaintTool(Tool):
         self.end: tuple[float, float] | None = None
         self.yaw = 0.0
         self.z = 0.0
+        #: Umschalttaste beim Ziehen: gerade Rampen auch schräg (15°-Schritte)
+        self.free_angle = False
         self._cache: tuple[object, np.ndarray | None, np.ndarray | None] | None = None
         # Andere Vorlage oder Regler: Vorschau sofort neu zeichnen
         changed = getattr(library, "template_changed", None)
@@ -65,7 +71,8 @@ class PaintTool(Tool):
         values = self.library.insert_values(t)
         snap = self.editor.snap
         if self.start is not None and self.end is not None:
-            values, at = fit_stroke(t, values, self.start, self.end, snap=snap)
+            values, at = fit_stroke(t, values, self.start, self.end, snap=snap,
+                                    axis_step=15.0 if self.free_angle else AXIS_STEP)
             if math.hypot(self.end[0] - self.start[0], self.end[1] - self.start[1]) < MIN_STROKE:
                 at = Placement(at.x, at.y, at.z, self.yaw)
             at = Placement(snap(at.x), snap(at.y), snap(at.z), at.yaw)
@@ -173,10 +180,12 @@ class PaintTool(Tool):
         self.editor.redraw_requested.emit()
 
     def press_2d(self, vp: "Viewport", e: QMouseEvent) -> None:
+        self.free_angle = bool(e.modifiers() & Qt.ShiftModifier)
         if e.button() == Qt.LeftButton:
             self._press(self._point_2d(vp, e.position()))
 
     def move_2d(self, vp: "Viewport", e: QMouseEvent) -> None:
+        self.free_angle = bool(e.modifiers() & Qt.ShiftModifier)
         self._move(self._point_2d(vp, e.position()))
 
     def release_2d(self, vp: "Viewport", e: QMouseEvent) -> None:
@@ -184,10 +193,12 @@ class PaintTool(Tool):
             self._release()
 
     def press_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
+        self.free_angle = bool(e.modifiers() & Qt.ShiftModifier)
         if e.button() == Qt.LeftButton:
             self._press(self._point_3d(vp, e.position()))
 
     def move_3d(self, vp: "Viewport", e: QMouseEvent) -> None:
+        self.free_angle = bool(e.modifiers() & Qt.ShiftModifier)
         self._move(self._point_3d(vp, e.position()))
 
     def release_3d(self, vp: "Viewport", e: QMouseEvent) -> None:

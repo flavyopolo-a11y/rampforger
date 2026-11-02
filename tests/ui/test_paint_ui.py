@@ -79,3 +79,20 @@ def test_material_browser_drag_and_scope(window):
     assert window.editor.material_scope == "einer"
     browser.scope.buttons["alle"].click()
     assert window.editor.material_scope == "alle"
+
+
+def test_selected_ramp_type_changes_in_panel(window):
+    _select_template(window, "gerade")
+    tool = window.editor.tool
+    tool._press((0.0, 0.0, 0.0))
+    tool._move((40.0, 1024.0, 0.0))  # etwas schief gezogen: rastet auf die Achse ein
+    tool._release()
+    root = _blocks(window)[-1]
+    assert block_info(root)["placement"][3] == pytest.approx(90)
+    window.editor.set_selection({root.id})
+    lib = window.library
+    assert lib.type_row.isVisibleTo(lib)
+    lib.type_combo.setCurrentIndex(lib.type_combo.findData("kurve"))
+    lib._type_chosen()
+    assert block_info(window.editor.doc.get(root.id))["template"] == "kurve"
+    assert window.editor.selection == {root.id}
