@@ -236,3 +236,60 @@ def test_ramp_faces_get_lightmap_scale_from_slider():
         visible = [f for o in objs if isinstance(o, Solid) and o.parent_id is not None for f in o.faces
                    if not f.material.upper().startswith("TOOLS/")]
         assert visible and {f.lightmapscale for f in visible} == {value or 32}
+
+
+def test_renaming_teleporter_target_moves_destination_along():
+    from rampenschmiede.core.blocks import insert_block
+
+    doc = MapDocument()
+    stack = CommandStack(doc)
+    objs, _ = insert_block(doc, "teleporter", None, Placement(0, 0, 0, 0))
+    stack.push(AddObjects(objs))
+    root = objs[0]
+    (dest,) = [e for e in doc.entities() if e.classname == "info_teleport_destination"]
+    assert float(dest.get("origin").split()[2]) == 8  # nicht im Boden
+    cmd, _ = change_block(doc, root.id, {"ziel": "stage2_start"})
+    stack.push(cmd)
+    (dest,) = [e for e in doc.entities() if e.classname == "info_teleport_destination"]
+    (trig,) = [e for e in doc.entities() if e.classname == "trigger_teleport"]
+    assert trig.get("target") == dest.get("targetname") == "stage2_start"
+    stack.undo()
+    (dest,) = [e for e in doc.entities() if e.classname == "info_teleport_destination"]
+    assert dest.get("targetname") == "ziel"
+
+
+def test_shared_destination_is_not_renamed():
+    from rampenschmiede.core.blocks import insert_block
+
+    doc = MapDocument()
+    stack = CommandStack(doc)
+    objs, _ = insert_block(doc, "teleporter", None, Placement(0, 0, 0, 0))
+    stack.push(AddObjects(objs))
+    other, _ = build_block(doc, "teleporter", {"ziel": "ziel"}, Placement(500, 0, 0, 0))
+    stack.push(AddObjects(other))
+    cmd, _ = change_block(doc, objs[0].id, {"ziel": "neu"})
+    stack.push(cmd)
+    (dest,) = [e for e in doc.entities() if e.classname == "info_teleport_destination"]
+    assert dest.get("targetname") == "ziel"
+
+
+def test_booster_launch_uses_basevelocity():
+    doc, stack, root, _ = make("booster", {"art": "stoss", "tempo": 1000, "schub_neigung": 0.0})
+    assert root.classname == "trigger_multiple"
+    (out,) = root.outputs
+    assert (out.output, out.target, out.input, out.parameter) == ("OnStartTouch", "!activator", "AddOutput",
+                                                             "basevelocity 1000 0 0")
+    doc, stack, root, _ = make("booster", {"tempo": 500})
+    assert root.classname == "trigger_push" and root.get("pushdir") == "0 0 0"
+
+
+def test_own_outputs_survive_rebuild():
+    import dataclasses
+
+    from rampenschmiede.core.model import Output
+
+    doc, stack, root, _ = make("teleporter", {"ziel": "x"})
+    doc._replace([dataclasses.replace(root, outputs=(Output("OnStartTouch", "!activator", "SetHealth", "100"),))])
+    cmd, _ = change_block(doc, root.id, {"laenge": 512})
+    stack.push(cmd)
+    assert [o.input for o in doc.get(root.id).outputs] == ["SetHealth"]

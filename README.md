@@ -4,7 +4,7 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Version 0.23.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
+> **Stand: Version 0.24.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
 > Rampen-Bibliothek mit Reglern, Assistent „Neue Surf-Map“, Zeitnahme-Zonen für CS:S-Timer und Momentum,
 > Kompilieren und Testen mit F9, Texturen und Welt-Stile, Entities mit FGD und I/O, Licht-Vorschau,
 > Himmel und 3D-Skybox, Props, Gelände, Natur, Cordon, Instanzen, automatische Sicherung, Oberfläche
@@ -330,7 +330,7 @@ Ziehen in eine Ansicht setzt sie an die Mausposition (in 3D auf die Fläche unte
 | Rampen | Gerade, Halb (eine Seite), Invertiert, Trapez (flache Kante), Ski (mit Gefälle), Pyramide |
 | Kurven | Kurve, Halbe Kurve, Spirale, S-Kurve, Banane (Höhe gewölbt), Welle |
 | Spezial | Halfpipe, Rohr, Slide (V-Rinne), Gabelung, Transfer (zwei Rampen nebeneinander) |
-| Bhop | Bhop-Blöcke (Reihe, Zickzack, Stufen), Booster (`trigger_push`), Teleporter mit Ziel |
+| Bhop | Bhop-Blöcke (Reihe, Zickzack, Stufen), Booster (Schieben oder Stoß), Teleporter mit Ziel |
 
 Eine eingefügte Rampe ist ein **Baustein**: Ist sie ausgewählt, zeigt das Panel ihre Regler
 (Breite, Surf-Winkel, Lippe, Radius, Bogen, Grad pro Segment, Gefälle, Querschnitt, Richtung,
@@ -366,6 +366,13 @@ fehlende Start-/Zielzonen und Lücken in den Nummern.
 Startzonen und Stage-Zonen haben ein Feld *Name* (z. B. „Lava-Raum“, „Wellen“): Er steht in der
 Szenen-Liste und wird in Momentum als Name des Bonus bzw. der Stage angezeigt. Die Namen der
 Trigger bleiben beim `mod_zone`-Standard, weil CS:S-Timer nur nach Nummern zählen.
+
+**Teleporter und Booster.** Ein eingefügter Teleporter bringt sein Ziel (`info_teleport_destination`)
+gleich mit, 8 Units über dem Boden, damit niemand im Boden landet. Wird der *Zielname* geändert,
+wandert der Name des Ziels mit, solange nur dieser Teleporter es benutzt. Der Booster hat zwei
+Arten: *Schieben* (`trigger_push`, drückt, solange man drin ist) und *Stoß beim Betreten*
+(`basevelocity` per Output, ein fester Schub wie auf CS:S-Surf-Servern üblich und unabhängig von
+der Tickrate). Eigene Outputs an einem Baustein bleiben erhalten, wenn man Regler ändert.
 
 **Eigene Prefabs.** Auswahl treffen, in der Bibliothek *Als Prefab speichern …*, Namen
 eingeben. Das Prefab erscheint unter *Eigene Prefabs* und lässt sich wie jede Vorlage einfügen

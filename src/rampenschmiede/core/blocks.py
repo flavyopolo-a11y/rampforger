@@ -52,8 +52,10 @@ def placement_of(info: dict) -> Placement:
 def _root_entity(root_id: int, collision: str, info: dict, editor: EditorInfo | None) -> Entity:
     template = CATALOG[info["template"]]
     if template.entity is not None:
-        classname, kvs = template.entity(info["values"], placement_of(info))
-        return Entity(id=root_id, classname=classname, keyvalues=kvs,
+        made = template.entity(info["values"], placement_of(info))
+        classname, kvs = made[0], made[1]
+        outputs = tuple(made[2]) if len(made) > 2 else ()
+        return Entity(id=root_id, classname=classname, keyvalues=kvs, outputs=outputs,
                       editor=editor or EditorInfo(color=(220, 30, 220)), extra={BLOCK_KEY: info})
     # Immer func_detail: vbsp verschweißt Detail-Brushes mit der Welt (T-Kreuzungen). Als
     # func_brush zeigten Kurven im Spiel helle und dunkle Risse zwischen den Segmenten (E51).
@@ -166,7 +168,7 @@ def insert_block(doc: MapDocument, template: str, values: dict | None = None,
         dist = CATALOG[template].values(values)["laenge"] + 256
         x, y = round(at.x + math.cos(a) * dist), round(at.y + math.sin(a) * dist)
         objs.append(Entity(id=doc.new_id(), classname="info_teleport_destination", keyvalues=(
-            ("targetname", values["ziel"]), ("origin", f"{x} {y} {round(at.z)}"), ("angles", f"0 {at.yaw:g} 0"))))
+            ("targetname", values["ziel"]), ("origin", f"{x} {y} {round(at.z) + 8}"), ("angles", f"0 {at.yaw:g} 0"))))
     if template == "killzone":
         v = CATALOG[template].values(values)
         if v["art"] == "zurueck" and not any(e.get("targetname") == v["ziel"] for e in doc.entities()):
@@ -201,6 +203,9 @@ def rebuild(doc: MapDocument, root: Entity, values: dict | None = None,
     keep = {k: v for k, v in root.extra.items() if k != BLOCK_KEY}
     if keep and objs and isinstance(objs[0], Entity):
         objs[0] = objs[0].replace(extra={**keep, **objs[0].extra})
+    # Eigene Ausgänge (Entity-Panel) überleben den Neubau, wenn die Vorlage selbst keine erzeugt
+    if root.outputs and objs and isinstance(objs[0], Entity) and not objs[0].outputs:
+        objs[0] = objs[0].replace(outputs=root.outputs)
     return objs, gen
 
 
@@ -210,7 +215,34 @@ def change_block(doc: MapDocument, root_id: int, values: dict | None = None, at:
     assert isinstance(root, Entity) and is_block_root(root)
     new, gen = rebuild(doc, root, values, at)
     old = [root_id] + [s.id for s in doc.attached([root_id])]
+    renamed = _follow_target_rename(doc, root, values or {})
+    if renamed is not None:
+        old.append(renamed.id)
+        new.append(renamed)
     return SwapObjects(old, new, tr("Baustein ändern"), merge_key), gen
+
+
+#: Bausteine, deren Regler „ziel“ den Namen eines info_teleport_destination trägt
+_TARGET_TEMPLATES = ("teleporter", "killzone")
+
+
+def _follow_target_rename(doc: MapDocument, root: Entity, values: dict) -> Entity | None:
+    """Wird das Ziel eines Teleporters umbenannt, wandert der Name des Teleport-Ziels mit, solange
+    nur dieser Teleporter es benutzt. Sonst zeigte der Teleporter danach ins Leere."""
+    info = block_info(root)
+    if info is None or info["template"] not in _TARGET_TEMPLATES or "ziel" not in values:
+        return None
+    old_name, new_name = str(info["values"].get("ziel", "")), str(values["ziel"]).strip()
+    if not old_name or not new_name or old_name == new_name:
+        return None
+    if any(e.get("targetname") == new_name for e in doc.entities()):
+        return None  # vorhandenes Ziel gewählt: nur umhängen
+    dests = [e for e in doc.entities() if e.classname == "info_teleport_destination" and e.get("targetname") == old_name]
+    users = [e for e in doc.entities() if e.id != root.id and (
+        e.get("target") == old_name or (block_info(e) or {}).get("values", {}).get("ziel") == old_name)]
+    if len(dests) != 1 or users:
+        return None
+    return dests[0].with_keyvalue("targetname", new_name)
 
 
 def dissolve(doc: MapDocument, root_ids: Iterable[int]) -> Command | None:

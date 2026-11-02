@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol
 
 from ...i18n import N_, tr
-from ..model.objects import Face
+from ..model.objects import Face, Output
 from .hull import IPoint, hull_faces
 from .sweep import (
     Joint,
@@ -490,10 +490,21 @@ def build_trigger_box(v: dict, at: Placement, m: Materials) -> list[Shape]:
     return [HullShape(pts, Materials(TRIGGER, TRIGGER, TRIGGER, hide_bottom=True))]
 
 
-def booster_entity(v: dict, at: Placement) -> tuple[str, tuple[tuple[str, str], ...]]:
+def booster_entity(v: dict, at: Placement) -> tuple:
+    """`art` push: trigger_push schiebt, solange man drin ist. `art` stoss: ein Stoß beim Betreten
+    über basevelocity, wie auf CS:S-Surf-Servern üblich (trigger_push ist dort ungenau und hängt
+    von der Tickrate ab)."""
     yaw = (at.yaw + v["schub_richtung"]) % 360
+    pitch = v["schub_neigung"]
+    if v.get("art") == "stoss":
+        p, y = math.radians(pitch), math.radians(yaw)
+        vel = [v["tempo"] * math.cos(p) * math.cos(y), v["tempo"] * math.cos(p) * math.sin(y),
+               v["tempo"] * math.sin(p)]
+        vec = " ".join(str(round(c)) for c in vel)
+        return "trigger_multiple", (("spawnflags", "1"), ("wait", "0"), ("StartDisabled", "0")), (
+            Output("OnStartTouch", "!activator", "AddOutput", f"basevelocity {vec}"),)
     return "trigger_push", (
-        ("spawnflags", "1"), ("pushdir", f"{-v['schub_neigung']:g} {yaw:g} 0"), ("speed", f"{v['tempo']:g}"),
+        ("spawnflags", "1"), ("pushdir", f"{-pitch + 0.0:g} {yaw:g} 0"), ("speed", f"{v['tempo']:g}"),
         ("StartDisabled", "0"),
     )
 
@@ -516,10 +527,15 @@ _add(Template("bhop", tr("Bhop-Blöcke"), N_("Bhop"), tr("Reihe von Plattformen 
                dataclasses.replace(SIDE_MATERIAL, label=tr("Material"), hint=""),
                Param("unterseite_nodraw", tr("Unterseite unsichtbar (Nodraw)"), False)),
               build_bhop, check_angles=False, entity=bhop_entity))
-_add(Template("booster", tr("Booster"), N_("Bhop"), tr("Trigger, der den Spieler in eine Richtung schiebt (trigger_push)."),
+_add(Template("booster", tr("Booster"), N_("Bhop"), tr("Trigger, der den Spieler in eine Richtung schiebt oder stößt."),
               (*BOX_PARAMS, Param("tempo", tr("Tempo"), 800, 0, 10000, 50, "u/s"),
                Param("schub_neigung", tr("Neigung nach oben"), 0.0, -90, 90, 5, "°"),
-               Param("schub_richtung", tr("Richtung (relativ)"), 0.0, -180, 180, 15, "°", hint=tr("0° = entlang des Bausteins"))),
+               Param("schub_richtung", tr("Richtung (relativ)"), 0.0, -180, 180, 15, "°", hint=tr("0° = entlang des Bausteins")),
+               Param("art", tr("Art"), "push", choices=(
+                   ("push", tr("Schieben (trigger_push)")),
+                   ("stoss", tr("Stoß beim Betreten (basevelocity, CS:S-üblich)"))),
+                   hint=tr("Stoß: ein fester Schub beim Betreten, auf CS:S-Servern zuverlässiger. "
+                           "Schieben: drückt, solange man im Trigger ist"))),
               build_trigger_box, check_angles=False, entity=booster_entity))
 _add(Template("teleporter", tr("Teleporter"), N_("Bhop"), tr("Trigger, der zum Ziel teleportiert (trigger_teleport). "
               "Das Ziel wird mit eingefügt und lässt sich frei verschieben."),
