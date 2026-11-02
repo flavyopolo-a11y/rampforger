@@ -4,7 +4,7 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Version 0.21.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
+> **Stand: Version 0.22.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
 > Rampen-Bibliothek mit Reglern, Assistent „Neue Surf-Map“, Zeitnahme-Zonen für CS:S-Timer und Momentum,
 > Kompilieren und Testen mit F9, Texturen und Welt-Stile, Entities mit FGD und I/O, Licht-Vorschau,
 > Himmel und 3D-Skybox, Props, Gelände, Natur, Cordon, Instanzen, automatische Sicherung, Oberfläche
@@ -54,6 +54,15 @@ Die Steuerung folgt Hammer, damit Umsteiger sich sofort zurechtfinden. **F1** ze
 **Ansichten.** Vier Ansichten: 3D, Oben (X/Y), Vorne (Y/Z), Seite (X/Z). Jede lässt sich über
 ihre Kopfzeile umstellen, die Trenner sind verschiebbar. Die Ansicht unter der Maus ist orange
 umrandet. Die 3D-Ansicht kennt die Modi Texturiert, Schattiert, Flach und Drahtgitter.
+
+**Trigger in 3D.** Zonen, Teleporter und andere Trigger sind in der 3D-Ansicht halbdurchsichtig, damit
+sie nichts verdecken. Der Knopf *Trigger* in der Kopfzeile der 3D-Ansicht blendet ihre Flächen ganz
+aus; dann lassen sie sich auch nicht mehr anklicken (gut zum Arbeiten an Rampen).
+
+**Menüs.** Wie in Hammer: *Werkzeuge* enthält neben den Werkzeugen alles, was die Auswahl umbaut
+(Gruppieren, An Entity binden, Aushöhlen, Hohl machen, Transformieren, Spiegeln, Ausrichten). *Map*
+sammelt, was die ganze Map betrifft: Welt-Stil, Himmel, 3D-Skybox, Playerclip auf Rampen,
+Entity-Bericht, Statistik, Probleme suchen, Dichtheit prüfen, Umhüllen.
 
 **Werkzeuge.** Links stehen die Werkzeuge mit Symbol (Auswahl, Malen, Formen, Entity, Seiten,
 Schneiden, Loch, Ecken, Wände, Gelände, Streuen, Messen). Das aktive

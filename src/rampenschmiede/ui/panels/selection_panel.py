@@ -31,8 +31,8 @@ WORLD_FIELDS = (
     ("skyname", N_("Himmel"), "sky", "sky_day01_01", N_("Name der 2D-Skybox (materials/skybox/<Name>rt …)")),
     ("detailmaterial", N_("Detail-Material"), "text", "detail/detailsprites", N_("Bild für Gras-Sprites auf Displacements")),
     ("detailvbsp", N_("Detail-Datei"), "text", "detail.vbsp", N_("Welche Detail-Sprites auf welchen Materialien wachsen")),
-    ("maxpropscreenwidth", N_("Props ausblenden ab"), "int", "-1",
-     N_("Props verschwinden, wenn sie schmaler als so viele Pixel sind (-1 = nie)")),
+    ("maxpropscreenwidth", N_("Props ausblenden unter (Pixel)"), "int", "-1",
+     N_("Props verschwinden, wenn sie auf dem Bildschirm schmaler als so viele Pixel sind")),
     ("coldworld", N_("Kalte Welt"), "bool", "0", N_("Atemwolken und kalter Hauch (nur manche Spiele)")),
 )
 
@@ -96,6 +96,7 @@ class SelectionPanel(QWidget):
             elif kind == "int":
                 w = QSpinBox()
                 w.setRange(-1, 4096)
+                w.setSpecialValueText(self.tr("nie"))  # -1 heißt in Source „aus“
                 w.setKeyboardTracking(False)
                 w.valueChanged.connect(lambda _v, k=key: self._world_changed(k))
             else:

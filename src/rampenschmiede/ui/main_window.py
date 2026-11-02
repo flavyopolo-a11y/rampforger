@@ -121,7 +121,9 @@ BSP_FILTER = N_("Kompilierte Map (*.bsp)")
 VMF_FILTER = N_("Hammer-Map (*.vmf)")
 MAX_RECENT = 8
 #: Steigt, wenn neue Panels dazukommen: Alte gespeicherte Anordnungen werden dann verworfen
-LAYOUT_VERSION = 6
+LAYOUT_VERSION = 7
+#: Höhe des unteren Docks (Materialien, Modelle, Kompilieren) beim ersten Start
+BOTTOM_HEIGHT = 210
 DOCK_MIN_WIDTH = 340
 #: Tempo der 3D-Kamera beim Fliegen (Units pro Sekunde)
 CAMERA_SPEEDS = ((250, N_("Langsam")), (600, N_("Normal")), (1200, N_("Schnell")), (2500, N_("Sehr schnell")))
@@ -266,6 +268,10 @@ class MainWindow(QMainWindow):
 
     # ---- Aufbau ------------------------------------------------------------------
     def _build_docks(self) -> None:
+        # Seitenleisten reichen bis ganz nach unten, das untere Dock liegt nur unter den Ansichten:
+        # So bleibt links Platz für Bibliothek und Auswahl, und die Ansichten werden nicht flacher
+        self.setCorner(Qt.BottomLeftCorner, Qt.LeftDockWidgetArea)
+        self.setCorner(Qt.BottomRightCorner, Qt.RightDockWidgetArea)
         self.tool_dock = QDockWidget(self.tr("Werkzeug"), self)
         self.tool_dock.setObjectName("dock_tool")
         self.tool_options = ToolOptionsPanel(self.editor)
@@ -308,7 +314,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
         self.tabifyDockWidget(self.mat_dock, self.model_dock)
         self.tabifyDockWidget(self.mat_dock, self.log_dock)
-        self._bottom_height = 260
+        self._bottom_height = BOTTOM_HEIGHT
         for dock in (self.mat_dock, self.model_dock, self.log_dock):
             dock.visibilityChanged.connect(lambda visible, d=dock: self._bottom_tab_switched(d, visible))
         self.log_dock.hide()
@@ -522,16 +528,9 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(self.tr("&Bearbeiten"))
         for a in (self.act_undo, self.act_redo, None, self.act_cut, self.act_copy, self.act_paste, self.act_delete,
-                  None, self.act_select_all, self.act_find, self.act_goto, self.act_entity_report, self.act_sounds, None, self.act_group, self.act_ungroup, self.act_ignore_groups, None,
-                  self.act_tie, self.act_to_world, None, self.act_carve, self.act_hollow, None, self.act_instance_insert, self.act_instance_save, self.act_instance_open, None, self.act_transform,
-                  self.act_flip_h, self.act_flip_v, self.act_multi_copy, self.act_snap_selection):
+                  None, self.act_select_all, self.act_find, self.act_goto, self.act_sounds, None,
+                  self.act_instance_insert, self.act_instance_save, self.act_instance_open):
             m.addSeparator() if a is None else m.addAction(a)
-        sub = m.addMenu(self.tr("&Ausrichten"))
-        for a in self.align_actions[:-1]:
-            sub.addSeparator() if a is None else sub.addAction(a)
-        sub = m.addMenu(self.tr("Gleichmäßig &verteilen"))
-        for a in self.distribute_actions:
-            sub.addAction(a)
 
         m = mb.addMenu(self.tr("&Ansicht"))
         for a in (self.act_grid_finer, self.act_grid_coarser, None, self.act_center, None, self.act_hide,
@@ -560,18 +559,37 @@ class MainWindow(QMainWindow):
         m.addAction(self.mat_dock.toggleViewAction())
         m.addAction(self.model_dock.toggleViewAction())
 
+        # Wie Hammer: Werkzeuge und alles, was die Auswahl umbaut (Gruppieren, Binden, Aushöhlen …)
         m = mb.addMenu(self.tr("&Werkzeuge"))
         for a in self.tool_actions.values():
             m.addAction(a)
+        m.addSeparator()
+        for a in (self.act_group, self.act_ungroup, self.act_ignore_groups, None, self.act_tie, self.act_to_world,
+                  None, self.act_carve, self.act_hollow, None, self.act_transform, self.act_flip_h, self.act_flip_v,
+                  self.act_multi_copy, self.act_snap_selection):
+            m.addSeparator() if a is None else m.addAction(a)
+        sub = m.addMenu(self.tr("&Ausrichten"))
+        for a in self.align_actions[:-1]:
+            sub.addSeparator() if a is None else sub.addAction(a)
+        sub = m.addMenu(self.tr("Gleichmäßig &verteilen"))
+        for a in self.distribute_actions:
+            sub.addAction(a)
+
+        # Wie Hammer: alles, was die ganze Map betrifft
+        m = mb.addMenu(self.tr("&Map"))
+        for a in (self.act_world_style, self.act_sky, self.act_skybox3d, self.act_ramp_clip, None,
+                  self.act_entity_report, self.act_stats, None, self.act_problems, self.act_check_seal,
+                  self.act_enclose):
+            m.addSeparator() if a is None else m.addAction(a)
 
         m = mb.addMenu(self.tr("Te&xturen"))
-        for a in (self.act_ramp_assistant, self.act_world_style, self.act_sky, self.act_skybox3d, self.act_ramp_clip, None,
-                  self.act_free_assets, self.act_import_texture, self.act_texture_packs):
+        for a in (self.act_ramp_assistant, None, self.act_free_assets, self.act_import_texture,
+                  self.act_texture_packs):
             m.addSeparator() if a is None else m.addAction(a)
 
         m = mb.addMenu(self.tr("&Testen"))
         for a in (self.act_compile, self.act_compile_again, self.act_compile_cancel, None,
-                  self.act_problems, self.act_check_seal, self.act_stats, self.act_enclose, None,
+                  self.act_problems, None,
                   self.act_cordon, self.act_cordon_selection, self.act_cordon_clear, None,
                   self.act_load_pointfile, self.act_clear_leak, self.act_load_portals, self.act_clear_portals, None, self.act_profiles):
             m.addSeparator() if a is None else m.addAction(a)
@@ -1817,7 +1835,7 @@ class MainWindow(QMainWindow):
     def _initial_dock_sizes(self) -> None:
         self.resizeDocks([self.lib_dock, self.sel_dock], [320, 420], Qt.Vertical)
         # Unten nur so hoch, dass die Ansichten das meiste Platz behalten
-        self.resizeDocks([self.mat_dock], [260], Qt.Vertical)
+        self.resizeDocks([self.mat_dock], [BOTTOM_HEIGHT], Qt.Vertical)
 
     def _arrange_left(self) -> None:
         """Links oben Bibliothek und Szene als Reiter, darunter, was ausgewählt ist. Erst teilen,
@@ -1854,7 +1872,7 @@ class MainWindow(QMainWindow):
         self.resizeDocks([self.tool_dock, self.sel_dock, self.lib_dock, self.scene_dock], [DOCK_MIN_WIDTH] * 4,
                          Qt.Horizontal)
         if not restored:
-            self.resizeDocks([self.mat_dock], [260], Qt.Vertical)
+            self.resizeDocks([self.mat_dock], [BOTTOM_HEIGHT], Qt.Vertical)
             # Szene oben etwas kleiner als das, was ausgewählt ist (erst wenn das Fenster steht)
             QTimer.singleShot(0, self._initial_dock_sizes)
         try:

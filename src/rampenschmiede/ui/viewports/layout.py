@@ -3,8 +3,17 @@ ihre Kopfzeile auf 3D, Oben, Vorne oder Seite umgestellt werden (wie in Hammer).
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QSplitter, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QHBoxLayout,
+    QSplitter,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
+from ...render.scene_mesh import is_translucent
 from ..editor import EditorContext
 from .viewport import RENDER_MODES, VIEW_TITLES, Viewport
 
@@ -41,12 +50,22 @@ class ViewportFrame(QFrame):
             "grau: Standard 16, blau: grob (spart Speicher). Dunkel: Flächen ohne Lightmap. "
             "Ändern im Textur-Werkzeug unter Lightmap-Skalierung."), Qt.ToolTipRole)
         self.mode_combo.currentIndexChanged.connect(self._on_mode)
+        self.trigger_button = QToolButton()
+        self.trigger_button.setText(self.tr("Trigger"))
+        self.trigger_button.setCheckable(True)
+        self.trigger_button.setChecked(editor.show_triggers_3d)
+        self.trigger_button.setToolTip(self.tr(
+            "Trigger und Zonen in 3D halbdurchsichtig zeigen. Aus: nur ihr Umriss bleibt, anklicken geht nicht, "
+            "damit man ungestört an Rampen arbeitet"))
+        self.trigger_button.toggled.connect(self._on_triggers)
         hl.addWidget(self.view_combo)
         hl.addWidget(self.mode_combo)
+        hl.addWidget(self.trigger_button)
         hl.addStretch(1)
         lay.addWidget(header)
         lay.addWidget(self.viewport, 1)
         self.mode_combo.setVisible(view == "3d")
+        self.trigger_button.setVisible(view == "3d")
         self.active = False
         self.set_active(False)
 
@@ -58,6 +77,20 @@ class ViewportFrame(QFrame):
         view = self.view_combo.currentData()
         self.viewport.set_view(view)
         self.mode_combo.setVisible(view == "3d")
+        self.trigger_button.setVisible(view == "3d")
+
+    def _on_triggers(self, on: bool) -> None:
+        self.viewport.editor.show_triggers_3d = on
+        if not on:
+            self.viewport.editor.set_selection([i for i in self.viewport.editor.selection
+                                                if not _is_trigger(self.viewport.editor, i)])
+        # alle 3D-Ansichten neu zeichnen
+        for w in self.window().findChildren(ViewportFrame):
+            if w.trigger_button.isChecked() != on:
+                w.trigger_button.blockSignals(True)
+                w.trigger_button.setChecked(on)
+                w.trigger_button.blockSignals(False)
+            w.viewport.update()
 
     def _on_mode(self, _: int) -> None:
         self.viewport.render_mode = self.mode_combo.currentData()
@@ -65,6 +98,13 @@ class ViewportFrame(QFrame):
 
     def set_view(self, view: str) -> None:
         self.view_combo.setCurrentIndex(list(VIEW_TITLES).index(view))
+
+
+def _is_trigger(editor: EditorContext, oid: int) -> bool:
+    obj = editor.doc.get(oid)
+    if obj is None:
+        return False
+    return any(is_translucent(s) for s in [obj, *editor.doc.children(oid)])
 
 
 class ViewportGrid(QSplitter):

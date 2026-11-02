@@ -34,6 +34,8 @@ MAX_LIGHTS = 32
 SKY_MODES = ("textured", "lit")
 #: Deckkraft der durchscheinenden Vorschau-Flächen von Werkzeugen
 GHOST_ALPHA = 0.6
+#: Deckkraft von Triggern und Zonen in 3D
+TRIGGER_ALPHA = 0.3
 
 
 class ViewportRenderer:
@@ -49,6 +51,11 @@ class ViewportRenderer:
         self._faces_vbo: moderngl.Buffer | None = None
         self._faces_vao: moderngl.VertexArray | None = None
         self._faces_count = 0
+        self._glass_vbo: moderngl.Buffer | None = None
+        self._glass_vao: moderngl.VertexArray | None = None
+        self._glass_count = 0
+        #: Trigger und Zonen in 3D zeigen (halbdurchsichtig) oder ganz ausblenden
+        self.show_triggers = True
         self._lines_vbo: moderngl.Buffer | None = None
         self._lines_vao: moderngl.VertexArray | None = None
         self._lines_count = 0
@@ -65,6 +72,7 @@ class ViewportRenderer:
         self._tex_atlas: TextureAtlas | None = None
         self._tex_generation = -1
         self._tex_uploaded = 0
+        self.prog_faces["u_alpha"].value = 1.0
 
     # ---- Hochladen ---------------------------------------------------------
     def _upload(self, data: np.ndarray, vbo: moderngl.Buffer | None, prog: moderngl.Program, fmt: str,
@@ -145,7 +153,7 @@ class ViewportRenderer:
         self.sync_textures(atlas)
         if arrays.version == self._version:
             return
-        for vao in (self._faces_vao, self._lines_vao, self._sel_vao, self._edges_vao):
+        for vao in (self._faces_vao, self._glass_vao, self._lines_vao, self._sel_vao, self._edges_vao):
             if vao is not None:
                 vao.release()
         self._faces_vbo, self._faces_vao = self._upload(
@@ -153,6 +161,11 @@ class ViewportRenderer:
             ("in_pos", "in_normal", "in_color", "in_uv", "in_layer", "in_layer2", "in_blend", "in_selected",
              "in_lightmap"))
         self._faces_count = len(arrays.faces)
+        self._glass_vbo, self._glass_vao = self._upload(
+            arrays.faces_translucent, self._glass_vbo, self.prog_faces, "3f 3f 3f 2f 1f 1f 1f 1f 3f",
+            ("in_pos", "in_normal", "in_color", "in_uv", "in_layer", "in_layer2", "in_blend", "in_selected",
+             "in_lightmap"))
+        self._glass_count = len(arrays.faces_translucent)
         self._lines_vbo, self._lines_vao = self._upload(
             arrays.lines2d, self._lines_vbo, self.prog_lines, "3f 3f", ("in_pos", "in_color"))
         self._lines_count = len(arrays.lines2d)
@@ -223,6 +236,8 @@ class ViewportRenderer:
             self.ctx.polygon_offset = (1.0, 1.0)
             self._faces_vao.render(moderngl.TRIANGLES, vertices=self._faces_count)
             self.ctx.polygon_offset = (0.0, 0.0)
+        if mode != "wireframe" and self.show_triggers and self._glass_vao is not None:
+            self._draw_translucent(mvp, mode, cam, lights, show_sky, fbo)
         self.prog_lines["u_mvp"].write(mvp)
         if mode == "wireframe" and self._lines_vao is not None:
             # Drahtgitter: alle Kanten in Brush-Farben
@@ -249,6 +264,28 @@ class ViewportRenderer:
             self._draw_dynamic_lines(extra_lines)
         self.ctx.disable(moderngl.DEPTH_TEST)
 
+    def _draw_translucent(self, mvp: bytes, mode: str, cam: Camera3D, lights: LightSet | None, show_sky: bool,
+                          fbo: moderngl.Framebuffer) -> None:
+        """Trigger und Zonen: durchscheinend, ohne in den Tiefenpuffer zu schreiben, damit man
+        dahinter liegende Rampen sieht und anklicken kann."""
+        prog = self.prog_faces
+        if self._faces_vao is None:
+            prog["u_mvp"].write(mvp)
+            prog["u_light_dir"].value = tuple(_normalize((0.35, 0.55, 0.9)))
+            prog["u_flat"].value = 1.0 if mode == "flat" else 0.0
+            prog["u_textured"].value = 0.0
+            prog["u_lit"].value = 0.0
+            prog["u_lightmap"].value = 0.0
+            prog["u_has_sky"].value = 0.0
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+        fbo.depth_mask = False
+        prog["u_alpha"].value = TRIGGER_ALPHA
+        self._glass_vao.render(moderngl.TRIANGLES, vertices=self._glass_count)
+        prog["u_alpha"].value = 1.0
+        fbo.depth_mask = True
+        self.ctx.disable(moderngl.BLEND)
+
     # ---- 2D ------------------------------------------------------------------
     def draw_2d(self, fbo: moderngl.Framebuffer, cam: Camera2D, width: int, height: int, grid_size: int,
                 extra_lines: np.ndarray | None = None, pixel_size: tuple[int, int] | None = None) -> None:
@@ -265,7 +302,7 @@ class ViewportRenderer:
             self._draw_dynamic_lines(extra_lines)
 
     def release(self) -> None:
-        for obj in (self._faces_vao, self._lines_vao, self._sel_vao, self._edges_vao, self._faces_vbo,
+        for obj in (self._faces_vao, self._glass_vao, self._glass_vbo, self._lines_vao, self._sel_vao, self._edges_vao, self._faces_vbo,
                     self._lines_vbo, self._sel_vbo, self._edges_vbo, self._dyn_vao, self._dyn_vbo, self.prog_faces,
                     self.prog_lines, self._tex, self._sky_vao, self._sky_vbo, self.prog_sky, self._sky_tex):
             if obj is not None:
