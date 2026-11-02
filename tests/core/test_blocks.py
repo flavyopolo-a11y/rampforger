@@ -293,3 +293,24 @@ def test_own_outputs_survive_rebuild():
     cmd, _ = change_block(doc, root.id, {"laenge": 512})
     stack.push(cmd)
     assert [o.input for o in doc.get(root.id).outputs] == ["SetHealth"]
+
+
+def test_ramp_type_can_be_changed():
+    from rampenschmiede.core.blocks import change_template
+
+    doc, stack, root, _ = make("gerade", {"laenge": 2048, "winkel": 55.0}, Placement(64, 128, 0, 90))
+    assert change_template(doc, root.id, "teleporter") is None  # nur Rampen untereinander
+    cmd, _ = change_template(doc, root.id, "halb")
+    stack.push(cmd)
+    info = block_info(doc.get(root.id))
+    assert info["template"] == "halb"
+    v = info["values"]
+    # Gezogene Länge und eigener Winkel bleiben, der Querschnitt wird der der halben Rampe
+    assert (v["laenge"], v["winkel"], v["profil"]) == (2048, 55.0, "halb")
+    assert info["placement"] == [64, 128, 0, 90]
+    cmd, _ = change_template(doc, root.id, "kurve")
+    stack.push(cmd)
+    assert block_info(doc.get(root.id))["template"] == "kurve"
+    stack.undo()
+    stack.undo()
+    assert block_info(doc.get(root.id))["template"] == "gerade"

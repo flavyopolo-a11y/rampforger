@@ -191,14 +191,16 @@ def _start_point(doc: MapDocument, at: Placement) -> str:
 
 
 def rebuild(doc: MapDocument, root: Entity, values: dict | None = None,
-            at: Placement | None = None) -> tuple[list[MapObject], Generated]:
-    """Neue Objekte für einen bestehenden Baustein (gleiche Wurzel-ID und Farbe)."""
+            at: Placement | None = None, template: str | None = None) -> tuple[list[MapObject], Generated]:
+    """Neue Objekte für einen bestehenden Baustein (gleiche Wurzel-ID und Farbe). Mit `template`
+    wird er zu einer anderen Vorlage; dann zählen nur `values`."""
     info = block_info(root)
     assert info is not None
-    merged = {**info["values"], **(values or {})}
+    merged = dict(values or {}) if template else {**info["values"], **(values or {})}
     kids = doc.children(root.id)
     color = kids[0].editor.color if kids else None
-    objs, gen = build_block(doc, info["template"], merged, at or placement_of(info), root.id, root.editor, color)
+    objs, gen = build_block(doc, template or info["template"], merged, at or placement_of(info), root.id,
+                            root.editor, color)
     # Weitere Zusatzdaten der Wurzel (z. B. „sitzt_auf“ einer Zone) überleben den Neubau
     keep = {k: v for k, v in root.extra.items() if k != BLOCK_KEY}
     if keep and objs and isinstance(objs[0], Entity):
@@ -220,6 +222,39 @@ def change_block(doc: MapDocument, root_id: int, values: dict | None = None, at:
         old.append(renamed.id)
         new.append(renamed)
     return SwapObjects(old, new, tr("Baustein ändern"), merge_key), gen
+
+
+def is_ramp_template(key: str) -> bool:
+    """Rampen und Kurven (Brushes mit Kollision), die sich gegeneinander tauschen lassen."""
+    t = CATALOG.get(key)
+    return t is not None and t.entity is None and not t.world
+
+
+def carried_values(old_key: str, old_values: dict, new_key: str) -> dict:
+    """Regler, die beim Wechsel der Vorlage mitkommen: alle, die es in beiden gibt. Ausnahme: Hat
+    die neue Vorlage dafür einen eigenen Standard (Halbe Rampe: Querschnitt „halb“) und war der alte
+    Wert unverändert, gilt der neue Standard."""
+    old_t, new_t = CATALOG[old_key], CATALOG[new_key]
+    old_defaults = old_t.values()
+    overrides = dict(new_t.overrides)
+    keys = {p.key for p in new_t.params}
+    return {k: v for k, v in old_values.items()
+            if k in keys and not (k in overrides and v == old_defaults.get(k))}
+
+
+def change_template(doc: MapDocument, root_id: int, new_key: str) -> tuple[Command, Generated] | None:
+    """Baustein zu einer anderen Rampe machen (gerade → Kurve, Halbe Rampe …), an derselben
+    Stelle, mit allen passenden Reglern. Ein Undo-Schritt; Auswahl und Stützen bleiben."""
+    root = doc.get(root_id)
+    info = block_info(root)
+    if info is None or new_key == info["template"] or not (is_ramp_template(info["template"])
+                                                         and is_ramp_template(new_key)):
+        return None
+    assert isinstance(root, Entity)
+    values = carried_values(info["template"], info["values"], new_key)
+    new, gen = rebuild(doc, root, values, template=new_key)
+    old = [root_id] + [s.id for s in doc.attached([root_id])]
+    return SwapObjects(old, new, tr("Rampentyp ändern")), gen
 
 
 #: Bausteine, deren Regler „ziel“ den Namen eines info_teleport_destination trägt
@@ -318,11 +353,14 @@ __all__ = [
     "block_info",
     "build_block",
     "insert_block",
+    "carried_values",
     "change_block",
+    "change_template",
     "clone_objects",
     "dissolve",
     "is_block_root",
     "is_clip_member",
+    "is_ramp_template",
     "placement_of",
     "rebuild",
     "transform_command",

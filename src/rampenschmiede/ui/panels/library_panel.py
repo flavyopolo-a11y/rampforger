@@ -39,9 +39,11 @@ from ...core.attach import SITS_ON, fit_on, is_zone_template, link, support_belo
 from ...core.blocks import (
     block_info,
     change_block,
+    change_template,
     dissolve,
     insert_block,
     is_block_root,
+    is_ramp_template,
     placement_of,
 )
 from ...core.commands import AddObjects
@@ -250,6 +252,21 @@ class LibraryPanel(QWidget):
         self.description = QLabel()
         self.description.setWordWrap(True)
         box_lay.addWidget(self.description)
+        # Rampentyp eines gewählten Bausteins wechseln (gerade, halb, Kurve …)
+        self.type_row = QWidget()
+        trow = QHBoxLayout(self.type_row)
+        trow.setContentsMargins(0, 0, 0, 0)
+        trow.addWidget(QLabel(self.tr("Rampentyp")))
+        self.type_combo = QComboBox()
+        self.type_combo.setToolTip(self.tr(
+            "Macht aus der Rampe eine andere Art, an derselben Stelle. Passende Regler wie Breite, "
+            "Winkel und Material bleiben."))
+        for t in CATALOG.values():
+            if is_ramp_template(t.key):
+                self.type_combo.addItem(self.tr(t.name), t.key)
+        self.type_combo.activated.connect(self._type_chosen)
+        trow.addWidget(self.type_combo, 1)
+        box_lay.addWidget(self.type_row)
         self.form = QFormLayout()
         box_lay.addLayout(self.form)
         self.angle_label = QLabel()
@@ -387,6 +404,19 @@ class LibraryPanel(QWidget):
         if cmd is not None:
             self.editor.run(cmd)
 
+    def _type_chosen(self, _index: int = 0) -> None:
+        root = self.selected_block()
+        key = self.type_combo.currentData()
+        if root is None or not key:
+            return
+        made = change_template(self.editor.doc, root.id, key)
+        if made is None:
+            return
+        self.editor.stack.end_merge()
+        self.editor.run(made[0])
+        self._shown = None
+        self._sync_from_selection()
+
     def _template_changed(self, *_args) -> None:
         if self.selected_block() is None:
             self._show_form()
@@ -421,6 +451,12 @@ class LibraryPanel(QWidget):
             at = None
             self.box.setTitle(self.tr("Vorlage: {0}").format(self.tr(template.name)) if template else "")
         self.dissolve_btn.setVisible(root is not None)
+        typed = root is not None and template is not None and is_ramp_template(template.key)
+        self.type_row.setVisible(typed)
+        if typed:
+            self.type_combo.blockSignals(True)
+            self.type_combo.setCurrentIndex(self.type_combo.findData(template.key))
+            self.type_combo.blockSignals(False)
         ramp = root is not None and template is not None and template.check_angles and template.entity is None \
             and not template.world
         self.pillar_row.setVisible(ramp)
