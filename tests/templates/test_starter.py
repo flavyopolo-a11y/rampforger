@@ -93,3 +93,25 @@ def test_hull_never_shrinks_and_ignores_missing_parts():
     floor = hull_parts(doc)["boden"]
     doc._remove([floor.id])
     assert hull_parts(doc) is None and grow_hull(doc) is None
+
+
+def test_css_gets_enough_spawns_per_team_on_the_start_block():
+    from rampenschmiede.core.templates.starter import START_BLOCK, TEAM_SPAWNS
+
+    doc = MapDocument()
+    objs = starter_room(doc, "css")
+    spawns = [o for o in objs if isinstance(o, Entity) and o.classname.startswith("info_player")]
+    for cls in ("info_player_terrorist", "info_player_counterterrorist"):
+        assert sum(s.classname == cls for s in spawns) == TEAM_SPAWNS
+    # alle auf dem Startblock, nicht übereinander, eine Gruppe
+    block = next(o for o in objs if isinstance(o, Solid) and o.bbox().size[0] == START_BLOCK)
+    bb = block.bbox()
+    points = {s.origin[:2] for s in spawns}
+    assert len(points) == len(spawns)
+    for x, y in points:
+        assert bb.mins[0] + 16 <= x <= bb.maxs[0] - 16 and bb.mins[1] + 16 <= y <= bb.maxs[1] - 16
+    assert len({s.editor.group_id for s in spawns}) == 1 and spawns[0].editor.group_id is not None
+    # Momentum: ein einzelner Spawn, keine Gruppe
+    single = [o for o in starter_room(MapDocument(), "momentum") if isinstance(o, Entity)
+              and o.classname.startswith("info_player")]
+    assert len(single) == 1 and single[0].editor.group_id is None

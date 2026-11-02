@@ -18,7 +18,7 @@ from ..geometry import primitives
 from ..mathutil import BBox
 from ..model import EditorInfo, Entity, MapDocument, MapObject, Solid, object_bbox
 from ..surf.catalog import CATALOG, Placement, ramp_height
-from .starter import ALL_SPAWNS, SPAWN_CLASSES, enclose_map
+from .starter import enclose_map, spawn_entities
 
 #: Source-Maps dürfen von -16384 bis 16384 reichen
 MAP_LIMIT = 16384
@@ -98,9 +98,7 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings) -> list[MapObject]:
         objs.append(Entity(id=doc.new_id(), classname="info_teleport_destination", keyvalues=(
             ("targetname", name), ("origin", f"{x + 128} 0 {top + 8}"), ("angles", "0 0 0"))))
         if stage == 0:
-            for i, cls in enumerate(SPAWN_CLASSES.get(s.game or "", ALL_SPAWNS)):
-                objs.append(Entity(id=doc.new_id(), classname=cls, keyvalues=(
-                    ("origin", f"{x + 96} {(i - 1) * 64} {top + 8}"), ("angles", "0 0 0"))))
+            objs += spawn_entities(doc, s.game, (x + s.platform // 2, 0), top + 8, size=s.platform)
         x += s.platform + s.gap
         ramp_top = top - 96
         for _ in range(s.ramps_per_stage):

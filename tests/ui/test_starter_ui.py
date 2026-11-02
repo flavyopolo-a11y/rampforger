@@ -27,7 +27,8 @@ def test_new_map_starts_with_sealed_room(window, qtbot):
     window.show_seal_problem()
     assert window.editor.leak_lines is not None
     sel = window.editor.selected_objects()
-    assert len(sel) == 1 and sel[0].classname.startswith("info_player")
+    # Die Spawns sind eine Gruppe: Das Leck wählt den Spawn samt seiner Gruppe
+    assert sel and all(o.classname.startswith("info_player") for o in sel)
 
     # Umhüllen macht die Map wieder dicht, in einem Undo-Schritt
     window.act_enclose.trigger()

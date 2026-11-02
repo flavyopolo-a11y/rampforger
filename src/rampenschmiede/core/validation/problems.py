@@ -19,6 +19,7 @@ from ..geometry.vertex_edit import VertexError, off_grid, snap_to_grid
 from ..materials.apply import replace_material
 from ..model import DEFAULT_MATERIAL, Entity, MapDocument, Solid, owner_id
 from ..models.props import MODEL_CLASSES, best_class, change_class, class_problem, entity_model
+from ..templates.starter import TEAM_SPAWNS
 from ..zones import collect_zones, zone_problems
 
 if TYPE_CHECKING:
@@ -308,6 +309,12 @@ def _spawns(doc: MapDocument) -> list[Problem]:
         out.append(Problem(INFO, tr("Spawns"), tr('CS:S: keine Spawns für {0}, wer dieses Team wählt, spawnt nicht').format(team)))
     elif t == 0 and ct == 0:
         out.append(Problem(WARNING, tr("Spawns"), tr("Nur info_player_start: CS:S-Server brauchen T- oder CT-Spawns")))
+    for cls, team, n in (("info_player_terrorist", "T", t), ("info_player_counterterrorist", "CT", ct)):
+        if 0 < n < TEAM_SPAWNS:
+            ids = tuple(e.id for e in spawns if e.classname.lower() == cls)
+            out.append(Problem(WARNING, tr("Spawns"), tr(
+                "Nur {0} {1}-Spawns: CS:S lässt nur so viele Spieler in dieses Team, Surf-Server brauchen "
+                "meist {2} je Team").format(n, team, TEAM_SPAWNS), ids))
     solids = [s for s in doc.solids() if not is_displacement_solid(s) and _collides(doc, s)]
     for e in spawns:
         o = e.origin

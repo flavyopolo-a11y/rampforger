@@ -733,6 +733,7 @@
  "Nur in der Auswahl": "Только в выделении",
  "Nur info_player_start: CS:S-Server brauchen T- oder CT-Spawns": "Только info_player_start: серверам CS:S нужны спавны T или CT",
  "Nur viereckige Seiten können Gelände werden": "Рельефом могут стать только четырёхугольные грани",
+ "Nur {0} {1}-Spawns: CS:S lässt nur so viele Spieler in dieses Team, Surf-Server brauchen meist {2} je Team": "Только {0} спавнов {1}: CS:S пускает в команду не больше игроков, серверам сёрфа обычно нужно {2} на команду",
  "Nähte geschlossen ({0} Brush(es) angepasst)": "Швы закрыты (подправлено брашей: {0})",
  "Nähte schließen": "Закрыть швы",
  "Oben (X/Y)": "Сверху (X/Y)",

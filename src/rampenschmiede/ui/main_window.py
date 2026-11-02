@@ -761,12 +761,15 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, self.tr("Neue Surf-Map"), str(exc))
             return False
         doc._insert(objs)
-        spawn = next((o.origin for o in objs if isinstance(o, Entity) and o.classname.startswith("info_player")
-                      and o.origin), None)
-        if spawn is not None:
-            # Hinter dem Spawn, Blick die Strecke entlang
-            doc.editor.camera_position = (spawn[0] - 256, spawn[1], spawn[2] + 160)
-            doc.editor.camera_angles = (0.0, -12.0)
+        spawns = [o.origin for o in objs if isinstance(o, Entity) and o.classname.startswith("info_player")
+                  and o.origin]
+        if spawns:
+            # Hinter und über den Spawns, Blick über die Startzone die Strecke entlang
+            x = min(p[0] for p in spawns)
+            y = sum(p[1] for p in spawns) / len(spawns)
+            z = max(p[2] for p in spawns)
+            doc.editor.camera_position = (x - 384, y, z + 320)
+            doc.editor.camera_angles = (0.0, -20.0)
         self.editor.set_document(doc, None)
         self._update_title()
         QTimer.singleShot(0, self._center_2d_on_map)
