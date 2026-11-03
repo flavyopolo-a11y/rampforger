@@ -51,27 +51,28 @@ Tests: `pytest` · eigene .exe bauen: `python packaging/build_exe.py` (Ergebnis 
 
 Wer noch nie eine Map gebaut hat, startet mit **Easy Mode** (ganz links oben in der Werkzeugleiste,
 *Datei → Easy Mode*, Strg+Shift+M). Der Editor bleibt, wie er ist; der Easy Mode ist ein geführter
-Einstieg in fünf Schritten:
+Einstieg in vier Schritten:
 
-1. **Rampen:** Rampentextur wählen (Klassisch, Neon, Lava, Eis, Wald, Grau oder eigene Farben). Rechts
-   zeigt eine große Vorschau verschiedene Rampen mit genau dieser Textur.
-2. **Welt-Stil:** Himmel, Sonne, Nebel und Wände (Tag, Nacht, Neon, Wüste …). Auf Wunsch kommen auch
-   die Rampenfarben vom Stil.
-3. **Strecke:** mit Stages oder linear, wie viele Stages und Rampen, Bonusse, Schwierigkeit
-   (Leicht/Mittel/Schwer stellt Winkel, Lücken und Abfall), Spiel. Feineinstellungen für Profis.
-4. **Layout-Manager:** jede Stage und jeden Bonus benennen (z. B. „Lava-Raum“), Platz für Rampen, Anordnung *hintereinander* oder *in Reihen nebeneinander* (dann bringt ein
-   Teleporter am Stage-Ende zur nächsten Stage). Ein Plan von oben zeigt live, wie die Map liegt und
-   ob sie in die Grenzen von Source passt.
-5. **Malen:** „Map bauen und malen“ erzeugt den Rahmen der Map (Spawn, Stages mit benannten Zonen,
-   Teleporter, dichte Skybox), wendet Stil und Rampentextur an und schaltet das Malen-Werkzeug ein.
-   Die Rampen malst du selbst in den freien Platz, jede mit der Form, die du gerade willst.
+1. **Welt-Stil:** Himmel, Sonne, Nebel und Wände (Tag, Nacht, Neon, Wüste …).
+2. **Rampentextur:** vorgewählt ist die Textur passend zum Stil. Daneben Klassisch, Neon, Lava, Eis,
+   Wald, Grau, eigene Farben, **jede Textur des Spiels** (Suche, auch eigene Texturen) oder ein
+   **eigenes Bild** (PNG, JPG, TGA, BMP). Eine große Vorschau zeigt verschiedene Rampen damit.
+3. **Strecke:** mit Stages oder linear, Bonusse, Spiel. **Jede Stage und jeder Bonus ist ein eigener
+   Raum** (Klein 3072 bis Riesig 8192 Units, linear bis 16384), mit Namen (z. B. „Lava-Raum“). Im Raum
+   stehen nur Start und Ziel, dazwischen ist alles frei für Rampen in jede Richtung und mit Kurven.
+   Wer fällt, startet den Raum neu; das Ziel teleportiert zur nächsten Stage. Ein Plan von oben zeigt
+   live, wie die Räume liegen und ob sie in die Grenzen von Source passen.
+4. **Bauen:** „Map bauen“ erzeugt die Räume (Spawn, benannte Zonen, Teleporter, unsichtbare Wände,
+   dichte Skybox), wendet Stil und Rampentextur an und schaltet das Malen-Werkzeug ein. Die Rampen
+   malst du selbst, jede mit der Form und Richtung, die du gerade willst; das Ziel schiebst du ans
+   Ende deiner Strecke.
 
 Danach führt eine Leiste oben weiter: was erledigt ist, was jetzt zu tun ist, und Knöpfe für
 Rampen malen, Wände malen, Rampenfarben, Welt-Stil und Testen (F9). Beim ersten Start lädt sie
 zum Easy Mode ein; mit × verschwindet sie.
 
-![Easy Mode, Schritt 1: Rampentextur und Rampenform mit Vorschau](docs/bilder/easy_mode.png)
-![Easy Mode, Schritt 4: Layout-Manager mit Plan von oben](docs/bilder/easy_layout.png)
+![Easy Mode, Schritt 2: Rampentextur mit Vorschau](docs/bilder/easy_textur.png)
+![Easy Mode, Schritt 3: jede Stage ein eigener Raum, Plan von oben](docs/bilder/easy_layout.png)
 
 **Rampenvorschau mit Texturen.** Die Vorschau in der Bibliothek, im Rampen-Assistenten und im Easy
 Mode zeigt die Rampe mit ihren echten Texturen (eigene Rampenfarben oder Spiel-Materialien), nicht

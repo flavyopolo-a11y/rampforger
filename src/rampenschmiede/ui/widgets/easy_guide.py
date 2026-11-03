@@ -1,6 +1,6 @@
 """Easy-Mode-Leiste oben im Fenster: führt nach dem Assistenten durch die nächsten Schritte.
 
-Sie zeigt, was schon erledigt ist (Rampen, Welt-Stil, Strecke), und für den jetzigen Schritt einen
+Sie zeigt, was schon erledigt ist (Welt-Stil, Rampentextur, Räume), und für den jetzigen Schritt einen
 Satz, was zu tun ist, plus Knöpfe für das Naheliegende: Rampen malen, Wände malen, Farben und Stil
 ändern, testen. Beim ersten Start lädt sie zum Easy Mode ein.
 """
@@ -14,8 +14,9 @@ from ..icons import ACTIVE, icon
 
 #: Was im jeweiligen Werkzeug zu tun ist (Werkzeugname -> Satz)
 TOOL_HINTS = {
-    "paint": N_("Zieh in der Ansicht von oben vom Anfang zum Ende einer Rampe. Links in der Bibliothek "
-                "wählst du eine andere Form."),
+    "paint": N_("Zieh in der Ansicht von oben in einem Raum vom Anfang zum Ende einer Rampe, in jede Richtung "
+                "(Umschalt: schräg). Für Kurven wählst du links „Kurve“ oder „S-Kurve“. Das rote Ziel schiebst du "
+                "ans Ende deiner Strecke."),
     "wall": N_("Klick in der Ansicht von oben Punkt für Punkt, wo die Wand stehen soll. Enter beendet die Wand, "
                "Klick auf den ersten Punkt schließt den Raum."),
     "select": N_("Klick auf eine Rampe, dann stellst du sie links mit Reglern ein. Ziehen verschiebt sie."),
@@ -23,7 +24,7 @@ TOOL_HINTS = {
 DEFAULT_HINT = N_("Wähle oben eine Aktion. F9 startet die Map im Spiel.")
 WELCOME = N_("Neu hier? Der Easy Mode führt dich Schritt für Schritt zu deiner ersten Surf-Map.")
 
-DONE_STEPS = (N_("Rampen"), N_("Welt-Stil"), N_("Strecke"), N_("Layout"))
+DONE_STEPS = (N_("Welt-Stil"), N_("Rampentextur"), N_("Räume"))
 
 
 class EasyGuideBar(QToolBar):
@@ -84,11 +85,11 @@ class EasyGuideBar(QToolBar):
             b.setVisible(key == "start")
 
     def guide(self, tool: str = "paint") -> None:
-        """Nach dem Assistenten: Schritte 1–4 erledigt, jetzt malen."""
+        """Nach dem Assistenten: Stil, Textur und Räume stehen, jetzt malen."""
         self.guiding = True
         done = "  ".join(f"✓ {self.tr(s)}" for s in DONE_STEPS)
         self.progress.setText(f"<span style='color:#6c6'>{done}</span>  <b style='color:{ACTIVE}'>"
-                              f"5 {self.tr('Malen')}</b>")
+                              f"4 {self.tr('Rampen malen')}</b>")
         for key, b in self.buttons.items():
             b.setVisible(key != "start")
         self.show_tool(tool)

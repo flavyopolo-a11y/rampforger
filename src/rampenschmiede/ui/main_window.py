@@ -47,7 +47,7 @@ from ..core.profiles import ProfileStore, detect_profiles
 from ..core.skybox3d import STYLE_BY_KEY as SKY3D_BY_KEY
 from ..core.skybox3d import STYLES as SKY3D_STYLES
 from ..core.skybox3d import pick_material, remove_command, skybox_command, skybox_ids
-from ..core.templates import SurfMapSettings, enclose_map, new_surf_map, starter_room
+from ..core.templates import enclose_map, new_room_map, new_surf_map, starter_room
 from ..core.validation.problems import find_problems
 from ..core.validation.seal import check_seal
 from ..core.validation.seal import describe as describe_seal
@@ -790,29 +790,33 @@ class MainWindow(QMainWindow):
             self.new_surf_map(dlg.settings())
 
     def easy_mode(self) -> bool:
-        """Easy Mode: Assistent in fünf Schritten, danach bauen, Stil und Farben anwenden, malen."""
+        """Easy Mode: Assistent in vier Schritten, danach bauen, Stil und Textur anwenden, malen."""
         profile = self.profiles.active_profile()
-        dlg = EasyModeWizard(profile.key if profile else None, self)
+        dlg = EasyModeWizard(profile.key if profile else None, self, self.editor.materials, self.import_texture)
         if dlg.exec() != QDialog.Accepted or not self._confirm_discard():
             return False
         return self.build_easy_map(dlg.choice())
 
     def build_easy_map(self, result: EasyResult) -> bool:
-        if not self.new_surf_map(result.settings):
+        if not self.new_surf_map(result.settings, new_room_map):
             return False
         style = style_of(result)
         self.apply_world_style(style, result.clip)
-        # Rampentextur aus Schritt 1 gewinnt gegen die Rampenfarben des Stils; Wände bleiben vom Stil
-        self.apply_ramp_colors(AssistantChoice(result.ramp, result.lines, style.wall, clip=result.clip,
-                                               walls=False, remember=True))
-        self.editor.stack.set_clean()
+        # Rampentextur aus Schritt 2 gewinnt gegen die Rampenfarben des Stils; Wände bleiben vom Stil
+        if result.material:
+            self.apply_ramp_material(result.material, result.clip)
+        else:
+            self.apply_ramp_colors(AssistantChoice(result.ramp, result.lines, style.wall, clip=result.clip,
+                                                   walls=False, remember=True))
+        # Die neue Map beginnt ohne Rückgängig-Schritte: Strg+Z soll nicht den Stil wieder abnehmen
+        self.editor.stack.clear()
         self.editor.set_selection(())
         # Rampen malt man selbst: Malen mit der geraden Rampe vorgewählt, jede andere Form ist einen Klick weg
         self.library.select_template("gerade")
         self.editor.set_tool("paint")
         self.settings.setValue("easy_welcome_done", "true")
         self.easy_bar.guide("paint")
-        self.statusBar().showMessage(self.tr("Deine Map steht. Jetzt malen: vom Anfang zum Ende einer Rampe ziehen"),
+        self.statusBar().showMessage(self.tr("Deine Räume stehen. Jetzt malen: vom Anfang zum Ende einer Rampe ziehen"),
                                      8000)
         return True
 
@@ -833,10 +837,11 @@ class MainWindow(QMainWindow):
         elif key == "test":
             self.compile_dialog()
 
-    def new_surf_map(self, settings: SurfMapSettings) -> bool:
+    def new_surf_map(self, settings, build=None) -> bool:
+        """Neue Map aus dem Surf-Assistenten (`build` = Generator, sonst `new_surf_map`)."""
         doc = MapDocument()
         try:
-            objs = new_surf_map(doc, settings)
+            objs = (build or new_surf_map)(doc, settings)
         except ValueError as exc:
             QMessageBox.warning(self, self.tr("Neue Surf-Map"), str(exc))
             return False
@@ -1602,6 +1607,21 @@ class MainWindow(QMainWindow):
         self.library.refresh()
         self.editor.set_current_material(ramp)
         self.editor.status_message.emit(self.tr("Rampenfarben angewendet"))
+        return True
+
+    def apply_ramp_material(self, material: str, clip: bool = True) -> bool:
+        """Eine Textur aus der Bibliothek (Spiel oder eigene) wird die Rampentextur der Map:
+        alle Rampen bekommen sie, neu gemalte auch. Wände bleiben, wie sie sind."""
+        name = material.upper()
+        old = get_theme(self.editor.doc)
+        theme = Theme(name, name, old.wall, "clip" if clip else "detail", old.colors)
+        cmds: list[Command] = [SetTheme(theme, "Rampentextur")]
+        cmd = apply_theme(self.editor.doc, Theme(name, name, "", theme.collision))
+        if cmd is not None:
+            cmds.append(cmd)
+        self.editor.run(MacroCommand(cmds, self.tr("Rampentextur")))
+        self.library.refresh()
+        self.editor.set_current_material(name)
         return True
 
     def world_style(self) -> bool:
