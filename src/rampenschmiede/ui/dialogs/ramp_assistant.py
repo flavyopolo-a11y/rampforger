@@ -10,8 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PIL import Image
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QImage, QPixmap
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -27,7 +27,9 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.materials.authoring import RGB, ramp_image, wall_image
+from ...core.model import Face
 from ...i18n import N_
+from ..widgets.template_preview import template_pixmap
 
 #: Fertige Farbkombinationen: Name, Rampe, Linien, Wände
 PRESETS: tuple[tuple[str, RGB, RGB, RGB], ...] = (
@@ -62,6 +64,36 @@ def pil_pixmap(img: Image.Image, size: int | None = None) -> QPixmap:
         img = img.resize((size, size), Image.Resampling.BILINEAR)
     qimg = QImage(img.tobytes("raw", "RGBA"), img.width, img.height, QImage.Format_RGBA8888)
     return QPixmap.fromImage(qimg.copy())
+
+
+#: Materialnamen nur für die Vorschau: so weiß das Bild, welche Fläche welche Textur bekommt
+_SURF, _SIDE = "PREVIEW/RAMP", "PREVIEW/SIDE"
+
+
+def textured_ramp(kind: str, ramp: RGB, lines: RGB, size: QSize | int = 200,
+                  background: QPixmap | None = None) -> QPixmap:
+    """Rampe der Art `kind` mit der Rampentextur aus `ramp`/`lines`, Seiten etwas dunkler, auf
+    `background` (sonst durchsichtig)."""
+    surf = pil_pixmap(ramp_image(ramp, lines, 256)).toImage()
+    side = pil_pixmap(wall_image(side_color(ramp), 128)).toImage()
+
+    def texture(face: Face) -> QImage | None:
+        m = face.material.upper()
+        if m == _SURF:
+            return surf
+        return None if m.startswith("TOOLS/") else side
+
+    values: dict = {"mat_surf": _SURF, "mat_seite": _SIDE}
+    if kind == "ski":
+        values["gefaelle"] = -256
+    pix = template_pixmap(kind, values, size, texture)
+    if background is None:
+        return pix
+    out = background.copy()
+    p = QPainter(out)
+    p.drawPixmap(0, 0, pix)
+    p.end()
+    return out
 
 
 @dataclass
@@ -190,11 +222,9 @@ class RampAssistant(QDialog):
         if not hasattr(self, "preview"):
             return
         ramp, lines, wall = self.ramp_btn.color(), self.lines_btn.color(), self.wall_btn.color()
-        img = Image.new("RGB", (200, 136), wall)
-        img.paste(wall_image(wall, 64).resize((200, 136)), (0, 0))
-        img.paste(ramp_image(ramp, lines, 128).resize((120, 120)), (8, 8))
-        img.paste(wall_image(side_color(ramp), 64).resize((24, 120)), (128, 8))
-        self.preview.setPixmap(pil_pixmap(img))
+        # Wand als Hintergrund, davor die Rampe mit ihrer Textur, so wie sie im Spiel aussieht
+        self.preview.setPixmap(textured_ramp("gerade", ramp, lines, self.preview.size(),
+                                             pil_pixmap(wall_image(wall, 64).resize((200, 136)))))
 
 
-__all__ = ["PRESETS", "AssistantChoice", "RampAssistant", "from_hex", "side_color", "to_hex"]
+__all__ = ["PRESETS", "AssistantChoice", "RampAssistant", "from_hex", "side_color", "textured_ramp", "to_hex"]

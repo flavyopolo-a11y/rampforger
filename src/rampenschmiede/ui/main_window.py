@@ -56,6 +56,7 @@ from ..i18n import N_
 from .autosave import DEFAULT_MINUTES, Autosaver, backup_before_save, backups_dir, latest_autosave
 from .compile_controller import CompileController, load_pointfile, load_portalfile
 from .dialogs.compile_dialog import CompileDialog
+from .dialogs.easy_mode import EasyModeWizard, EasyResult, style_of
 from .dialogs.entity_report import EntityReport
 from .dialogs.find_dialog import FindDialog
 from .dialogs.free_assets import FreeAssetsDialog
@@ -104,6 +105,7 @@ from .tools.vertex_tool import VertexTool
 from .tools.wall_tool import WallTool
 from .viewports.layout import ViewportGrid
 from .viewports.viewport import MAP_SUFFIXES, dropped_maps
+from .widgets.easy_guide import EasyGuideBar
 
 APP_NAME = "Rampenschmiede"
 #: Reihenfolge der Werkzeuge links (wie oft man sie braucht)
@@ -339,6 +341,10 @@ class MainWindow(QMainWindow):
                                     "Neue Map, auf Wunsch mit Startraum (Spawn in dichter Skybox)")
         self.act_new_empty = self._action("Neu (&leer)", lambda: self.file_new(empty=True), "Ctrl+Alt+N",
                                           "Neue Map ganz ohne Inhalt")
+        self.act_easy = self._action("&Easy Mode: Map Schritt für Schritt …", self.easy_mode, "Ctrl+Shift+M",
+                                     "Geführt zur eigenen Surf-Map: Rampen, Welt-Stil, Stages und Bonusse, "
+                                     "Layout, dann malen")
+        self.act_easy.setIconText(self.tr("Easy Mode"))
         self.act_surf_wizard = self._action("Neue S&urf-Map (Assistent) …", self.surf_wizard, "Ctrl+Shift+N",
                                             "Spielbare Surf-Map aus Stages, Rampen und Teleportern erzeugen")
         self.act_starter = self._action("Neue Maps mit &Startraum", self._toggle_starter, None,
@@ -515,7 +521,11 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         mb = self.menuBar()
         m = mb.addMenu(self.tr("&Datei"))
-        for a in (self.act_new, self.act_new_empty, self.act_surf_wizard, self.act_starter, self.act_open):
+        for a in (self.act_easy, None, self.act_new, self.act_new_empty, self.act_surf_wizard, self.act_starter,
+                  self.act_open):
+            if a is None:
+                m.addSeparator()
+                continue
             m.addAction(a)
         self.recent_menu = m.addMenu(self.tr("&Zuletzt geöffnet"))
         self.recent_menu.aboutToShow.connect(self._fill_recent)
@@ -613,7 +623,7 @@ class MainWindow(QMainWindow):
                              (self.act_grid_finer, "grid_finer"), (self.act_grid_coarser, "grid_coarser"),
                              (self.act_compile, "compile"), (self.act_expert, "expert"),
                              (self.act_ramp_assistant, "palette"), (self.act_carve, "carve"), (self.act_world_style, "sun"),
-                             (self.act_sky, "sky")):
+                             (self.act_sky, "sky"), (self.act_easy, "easy")):
             action.setIcon(icon(name))
         for name, action in self.tool_actions.items():
             action.setIcon(icon(name))
@@ -623,7 +633,7 @@ class MainWindow(QMainWindow):
         tb.setObjectName("tb_file")
         tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         tb.setIconSize(QSize(20, 20))
-        for a in (self.act_new, self.act_open, self.act_save, None, self.act_undo, self.act_redo, None,
+        for a in (self.act_easy, None, self.act_new, self.act_open, self.act_save, None, self.act_undo, self.act_redo, None,
                   self.act_grid_finer, self.act_grid_coarser, None, self.act_compile, None, self.act_expert):
             tb.addSeparator() if a is None else tb.addAction(a)
         for a in (self.act_grid_finer, self.act_grid_coarser):
@@ -641,6 +651,12 @@ class MainWindow(QMainWindow):
         tb.addWidget(self.mode_icon)
         tb.addWidget(self.mode_label)
         self.addToolBar(Qt.TopToolBarArea, tb)
+        # Easy Mode: eigene Zeile unter der Werkzeugleiste
+        self.addToolBarBreak(Qt.TopToolBarArea)
+        self.easy_bar = EasyGuideBar(self)
+        self.easy_bar.action.connect(self._easy_action)
+        self.addToolBar(Qt.TopToolBarArea, self.easy_bar)
+        self.easy_bar.setVisible(self.settings.value("easy_welcome_done", "false") != "true")
         tools = QToolBar(self.tr("Werkzeuge"))
         tools.setObjectName("tb_tools")
         tools.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
@@ -738,6 +754,8 @@ class MainWindow(QMainWindow):
         self.mode_icon.setPixmap(pixmap(name, 20, ACTIVE))
         self.mode_label.setText(self.tr("Werkzeug: {0}").format(self.tr(tool.label)))
         self.mode_label.setToolTip(self.tr(tool.hint))
+        if hasattr(self, "easy_bar"):
+            self.easy_bar.show_tool(name)
         self.statusBar().showMessage(self.tr(tool.hint), 6000)
         if name == "paint":
             # Beim Malen gehören die Regler der Vorlage nach vorne, nicht der Szenen-Baum
@@ -770,6 +788,49 @@ class MainWindow(QMainWindow):
         dlg = SurfWizard(profile.key if profile else None, self)
         if dlg.exec() and self._confirm_discard():
             self.new_surf_map(dlg.settings())
+
+    def easy_mode(self) -> bool:
+        """Easy Mode: Assistent in fünf Schritten, danach bauen, Stil und Farben anwenden, malen."""
+        profile = self.profiles.active_profile()
+        dlg = EasyModeWizard(profile.key if profile else None, self)
+        if dlg.exec() != QDialog.Accepted or not self._confirm_discard():
+            return False
+        return self.build_easy_map(dlg.choice())
+
+    def build_easy_map(self, result: EasyResult) -> bool:
+        if not self.new_surf_map(result.settings):
+            return False
+        style = style_of(result)
+        self.apply_world_style(style, result.clip)
+        # Rampentextur aus Schritt 1 gewinnt gegen die Rampenfarben des Stils; Wände bleiben vom Stil
+        self.apply_ramp_colors(AssistantChoice(result.ramp, result.lines, style.wall, clip=result.clip,
+                                               walls=False, remember=True))
+        self.editor.stack.set_clean()
+        self.editor.set_selection(())
+        self.library.select_template(result.settings.kinds_used()[0])
+        self.editor.set_tool("paint")
+        self.settings.setValue("easy_welcome_done", "true")
+        self.easy_bar.guide("paint")
+        self.statusBar().showMessage(self.tr("Deine Map steht. Jetzt malen: vom Anfang zum Ende einer Rampe ziehen"),
+                                     8000)
+        return True
+
+    def _easy_action(self, key: str) -> None:
+        if key == "close":
+            # Einladung nicht bei jedem Start wieder zeigen
+            self.settings.setValue("easy_welcome_done", "true")
+        elif key == "start":
+            self.easy_mode()
+        elif key == "paint":
+            self.editor.set_tool("paint")
+        elif key == "wall":
+            self.editor.set_tool("wall")
+        elif key == "colors":
+            self.ramp_assistant()
+        elif key == "style":
+            self.world_style()
+        elif key == "test":
+            self.compile_dialog()
 
     def new_surf_map(self, settings: SurfMapSettings) -> bool:
         doc = MapDocument()

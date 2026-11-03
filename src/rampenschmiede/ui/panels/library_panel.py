@@ -74,7 +74,7 @@ from ..icons import icon
 from ..paths import prefabs_dir, textures_dir
 from ..tools.shape_tool import SHAPE_HINTS, SHAPES
 from ..widgets.material_field import MaterialField
-from ..widgets.template_preview import render, template_icon
+from ..widgets.template_preview import library_textures, render, template_icon
 
 #: Symbol je Gruppe in der Bibliothek
 CATEGORY_ICONS = {"Rampen": "ramp", "Kurven": "curve", "Spezial": "halfpipe", "Bhop": "bhop", "Zonen": "flag",
@@ -356,7 +356,9 @@ class LibraryPanel(QWidget):
     def _set_preview(self, face_sets) -> None:
         self.preview.setVisible(bool(face_sets))
         if face_sets:
-            self.preview.setPixmap(render(face_sets, QSize(PREVIEW_SIZE, PREVIEW_SIZE * 3 // 4)))
+            # Mit den echten Texturen: so sieht die Rampe in der Map aus (eigene Rampenfarben, Spiel-Materialien)
+            self.preview.setPixmap(render(face_sets, QSize(PREVIEW_SIZE, PREVIEW_SIZE * 3 // 4),
+                                          textures=library_textures(self.editor.materials)))
 
     def _template_clicked(self, item: QTreeWidgetItem, _col: int = 0) -> None:
         """Vorlage angeklickt: gleich zum Malen bereit (Vorschau am Mauszeiger). Eine Form

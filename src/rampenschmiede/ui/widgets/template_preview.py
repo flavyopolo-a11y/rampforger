@@ -7,10 +7,20 @@ Vorschaubild konvexer Brushes reicht das.
 from __future__ import annotations
 
 import math
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
 from PySide6.QtCore import QPointF, QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap, QPolygonF
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QIcon,
+    QImage,
+    QPainter,
+    QPen,
+    QPixmap,
+    QPolygonF,
+    QTransform,
+)
 
 from ...core.model import Face, Solid
 from ...core.surf.catalog import CATALOG, Template, generate
@@ -58,12 +68,32 @@ def _rotate(p: Sequence[float]) -> tuple[float, float, float]:
     return x, y * sp + z * cp, y * cp - z * sp
 
 
+#: Units pro Wiederholung einer Textur in der texturierten Vorschau
+TEXTURE_UNITS = 512.0
+
+#: Textur je Fläche (oder None = einfarbig wie sonst)
+TextureFor = Callable[[Face], "QImage | None"]
+
+
+def _face_axes(n: Sequence[float]) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Achsen der Textur auf einer Fläche: Bild-x läuft die Neigung hinunter, Bild-y waagrecht
+    entlang der Fläche. So liegen die Linien einer Rampentextur quer zur Fahrtrichtung."""
+    hx, hy = -n[1], n[0]
+    length = math.hypot(hx, hy)
+    if length < 1e-6:
+        return (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)
+    h = (hx / length, hy / length, 0.0)
+    down = (n[1] * h[2] - n[2] * h[1], n[2] * h[0] - n[0] * h[2], n[0] * h[1] - n[1] * h[0])
+    return down, h
+
+
 def render(face_sets: Iterable[Sequence[Face]], size: QSize | int = 160,
-           background: QColor | None = None) -> QPixmap:
-    """Bild der Brushes aus `face_sets` (Flächen je Brush)."""
+           background: QColor | None = None, textures: TextureFor | None = None) -> QPixmap:
+    """Bild der Brushes aus `face_sets` (Flächen je Brush). Mit `textures` werden Flächen mit
+    Textur belegt (Rampentexturen ansehen, bevor man sie anwendet)."""
     if isinstance(size, int):
         size = QSize(size, size)
-    polys: list[tuple[float, list[tuple[float, float]], QColor]] = []
+    polys: list[tuple[float, list[tuple[float, float]], QColor, tuple | None]] = []
     for faces in face_sets:
         if not faces:
             continue
@@ -83,12 +113,22 @@ def render(face_sets: Iterable[Sequence[Face]], size: QSize | int = 160,
             shade = 0.5 + 0.5 * max(0.0, sum(n[k] * LIGHT[k] for k in range(3)))
             shaded = QColor.fromRgbF(min(1.0, color.redF() * shade), min(1.0, color.greenF() * shade),
                                      min(1.0, color.blueF() * shade), color.alphaF())
-            polys.append((depth, [(p[0], p[1]) for p in pts], shaded))
+            texture = textures(face) if textures is not None and color.alpha() == 255 else None
+            tex = None
+            if texture is not None and not texture.isNull():
+                down, along = _face_axes(n)
+                # Ursprung auf der Ebene am nächsten zum Nullpunkt: Nachbarflächen setzen das Muster fort
+                o = [n[k] * face.plane.dist for k in range(3)]
+                step_x = TEXTURE_UNITS / texture.width()
+                step_y = TEXTURE_UNITS / texture.height()
+                tex = (texture, _rotate(o), _rotate([o[k] + down[k] * step_x for k in range(3)]),
+                       _rotate([o[k] + along[k] * step_y for k in range(3)]), shade)
+            polys.append((depth, [(p[0], p[1]) for p in pts], shaded, tex))
     image = QImage(size, QImage.Format_ARGB32_Premultiplied)
     image.fill(background or Qt.transparent)
     if polys:
-        xs = [x for _d, pts, _c in polys for x, _y in pts]
-        ys = [y for _d, pts, _c in polys for _x, y in pts]
+        xs = [x for _d, pts, _c, _t in polys for x, _y in pts]
+        ys = [y for _d, pts, _c, _t in polys for _x, y in pts]
         w, h = max(xs) - min(xs) or 1.0, max(ys) - min(ys) or 1.0
         usable_w, usable_h = size.width() * (1 - 2 * MARGIN), size.height() * (1 - 2 * MARGIN)
         scale = min(usable_w / w, usable_h / h)
@@ -96,8 +136,24 @@ def render(face_sets: Iterable[Sequence[Face]], size: QSize | int = 160,
         oy = (size.height() + h * scale) / 2 + min(ys) * scale
         painter = QPainter(image)
         painter.setRenderHint(QPainter.Antialiasing)
-        for _depth, pts, color in sorted(polys, key=lambda t: -t[0]):
+        def to_screen(p) -> tuple[float, float]:
+            return ox + p[0] * scale, oy - p[1] * scale
+
+        for _depth, pts, color, tex in sorted(polys, key=lambda t: -t[0]):
             screen = [QPointF(ox + x * scale, oy - y * scale) for x, y in pts]
+            if tex is not None:
+                # Ortho-Projektion: Bildpunkte -> Bildschirm ist affin, also reicht eine QTransform
+                tex_image, o, px, py, shade = tex
+                (x0, y0), (x1, y1), (x2, y2) = to_screen(o), to_screen(px), to_screen(py)
+                brush = QBrush(QPixmap.fromImage(tex_image))
+                brush.setTransform(QTransform(x1 - x0, y1 - y0, x2 - x0, y2 - y0, x0, y0))
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(brush)
+                painter.drawPolygon(QPolygonF(screen))
+                painter.setBrush(QColor(0, 0, 0, round(255 * (1 - shade) * 0.9)))
+                painter.setPen(QPen(EDGE, 1.0))
+                painter.drawPolygon(QPolygonF(screen))
+                continue
             # Kanten nur an größeren Flächen; feine Kurvenstücke würden sonst schwarz
             area = abs(sum(screen[i].x() * screen[i - 1].y() - screen[i - 1].x() * screen[i].y()
                            for i in range(len(screen)))) / 2
@@ -110,6 +166,23 @@ def render(face_sets: Iterable[Sequence[Face]], size: QSize | int = 160,
     return QPixmap.fromImage(image)
 
 
+def library_textures(library) -> TextureFor:
+    """Texturen aus der Materialbibliothek (eigene Rampentexturen, Spiel-Materialien) für `render`.
+    Werkzeug-Texturen und fehlende Materialien bleiben einfarbig."""
+    cache: dict[str, QImage | None] = {}
+
+    def texture(face: Face) -> QImage | None:
+        name = face.material.upper()
+        if name.startswith("TOOLS/") or library is None:
+            return None
+        if name not in cache:
+            tex = library.texture(name)
+            cache[name] = (QImage(tex.rgba, tex.width, tex.height, tex.width * 4, QImage.Format_RGBA8888).copy()
+                           if tex is not None and tex.width and tex.height else None)
+        return cache[name]
+    return texture
+
+
 def template_faces(template: Template | str, values: dict | None = None) -> list[Sequence[Face]]:
     try:
         return list(generate(template, values).face_sets)
@@ -117,8 +190,9 @@ def template_faces(template: Template | str, values: dict | None = None) -> list
         return []
 
 
-def template_pixmap(template: Template | str, values: dict | None = None, size: int = 160) -> QPixmap:
-    return render(template_faces(template, values), size)
+def template_pixmap(template: Template | str, values: dict | None = None, size: int | QSize = 160,
+                    textures: TextureFor | None = None, background: QColor | None = None) -> QPixmap:
+    return render(template_faces(template, values), size, background, textures)
 
 
 def template_icon(key: str, size: int = 48) -> QIcon:
@@ -130,4 +204,4 @@ def template_icon(key: str, size: int = 48) -> QIcon:
     return found
 
 
-__all__ = ["render", "template_faces", "template_icon", "template_pixmap"]
+__all__ = ["library_textures", "render", "template_faces", "template_icon", "template_pixmap"]
