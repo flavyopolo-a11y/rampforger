@@ -113,6 +113,10 @@ _SHAPES: dict[str, str] = {
     "visgroup": '<path d="M3.5 8.5 L12 4 L20.5 8.5 L12 13 Z" fill="currentColor" fill-opacity="0.25"/>'
                 '<path d="M3.5 12.5 L12 17 L20.5 12.5M3.5 16.5 L12 21 L20.5 16.5"/>',
     "report": '<path d="M5 3h14v18H5z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/>',
+    "easy": '<path d="M4 20 L14.5 9.5" stroke-width="2.2"/><path d="M14.5 9.5 L16.5 7.5"/>'
+            '<path d="M17 2.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z" fill="currentColor"/>'
+            '<path d="M7 4l.6 1.4L9 6l-1.4.6L7 8l-.6-1.4L5 6l1.4-.6z" fill="currentColor"/>'
+            '<path d="M19.5 13l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5z" fill="currentColor"/>',
     "play": '<path d="M7 4.5 L19 12 L7 19.5 Z" fill="currentColor" fill-opacity="0.3"/>',
     "stop": '<path d="M6 6h12v12H6z" fill="currentColor" fill-opacity="0.3"/>',
     "eye": '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',

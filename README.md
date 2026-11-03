@@ -4,8 +4,8 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Version 0.25.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
-> Rampen-Bibliothek mit Reglern, Assistent „Neue Surf-Map“, Zeitnahme-Zonen für CS:S-Timer und Momentum,
+> **Stand: Version 0.26.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
+> Easy Mode (geführt zur eigenen Map), Rampen-Bibliothek mit Reglern, Assistent „Neue Surf-Map“, Zeitnahme-Zonen für CS:S-Timer und Momentum,
 > Kompilieren und Testen mit F9, Texturen und Welt-Stile, Entities mit FGD und I/O, Licht-Vorschau,
 > Himmel und 3D-Skybox, Props, Gelände, Natur, Cordon, Instanzen, automatische Sicherung, Oberfläche
 > auf Englisch, Deutsch oder Russisch.
@@ -46,6 +46,36 @@ python -m rampenschmiede            # optional: Pfad zu einer .rsmap-Datei
 ```
 
 Tests: `pytest` · eigene .exe bauen: `python packaging/build_exe.py` (Ergebnis in `dist/Rampenschmiede`).
+
+## Easy Mode: Map Schritt für Schritt
+
+Wer noch nie eine Map gebaut hat, startet mit **Easy Mode** (ganz links oben in der Werkzeugleiste,
+*Datei → Easy Mode*, Strg+Shift+M). Der Editor bleibt, wie er ist; der Easy Mode ist ein geführter
+Einstieg in fünf Schritten:
+
+1. **Rampen:** Rampentextur (Klassisch, Neon, Lava, Eis, Wald, Grau oder eigene Farben) und Rampenform
+   wählen. Rechts zeigt eine große Vorschau die Rampe mit genau dieser Textur.
+2. **Welt-Stil:** Himmel, Sonne, Nebel und Wände (Tag, Nacht, Neon, Wüste …). Auf Wunsch kommen auch
+   die Rampenfarben vom Stil.
+3. **Strecke:** mit Stages oder linear, wie viele Stages und Rampen, Bonusse, Schwierigkeit
+   (Leicht/Mittel/Schwer stellt Winkel, Lücken und Abfall), Spiel. Feineinstellungen für Profis.
+4. **Layout-Manager:** jede Stage und jeden Bonus benennen (z. B. „Lava-Raum“), Rampenzahl und
+   Rampenform je Stage, Anordnung *hintereinander* oder *in Reihen nebeneinander* (dann bringt ein
+   Teleporter am Stage-Ende zur nächsten Stage). Ein Plan von oben zeigt live, wie die Map liegt und
+   ob sie in die Grenzen von Source passt.
+5. **Malen:** „Map bauen und malen“ erzeugt die Map (Spawn, Zonen mit Namen, Teleporter, dichte
+   Skybox), wendet Stil und Rampentextur an und schaltet das Malen-Werkzeug mit deiner Rampe ein.
+
+Danach führt eine Leiste oben weiter: was erledigt ist, was jetzt zu tun ist, und Knöpfe für
+Rampen malen, Wände malen, Rampenfarben, Welt-Stil und Testen (F9). Beim ersten Start lädt sie
+zum Easy Mode ein; mit × verschwindet sie.
+
+![Easy Mode, Schritt 1: Rampentextur und Rampenform mit Vorschau](docs/bilder/easy_mode.png)
+![Easy Mode, Schritt 4: Layout-Manager mit Plan von oben](docs/bilder/easy_layout.png)
+
+**Rampenvorschau mit Texturen.** Die Vorschau in der Bibliothek, im Rampen-Assistenten und im Easy
+Mode zeigt die Rampe mit ihren echten Texturen (eigene Rampenfarben oder Spiel-Materialien), nicht
+mehr nur einfarbig.
 
 ## Bedienung
 
