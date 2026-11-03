@@ -31,8 +31,6 @@ def test_wizard_walks_through_the_steps_and_plans_the_map(qtbot):
     qtbot.addWidget(dlg)
     assert dlg.stack.currentIndex() == 0 and not dlg.back_btn.isEnabled()
     dlg.ramps.textures.setCurrentRow(2)       # Lava
-    dlg.ramps.kinds.setCurrentRow(2)          # Banane
-    assert dlg.ramps.kind() == "banane"
     assert dlg.ramps.colors_chosen() == (PRESETS[2][1], PRESETS[2][2])
     dlg.next_btn.click()
     dlg.style_page.gallery.setCurrentRow(5)
@@ -42,11 +40,17 @@ def test_wizard_walks_through_the_steps_and_plans_the_map(qtbot):
     dlg.course.difficulty.setCurrentIndex(list(DIFFICULTY).index("schwer"))
     dlg.next_btn.click()
     assert dlg.stack.currentIndex() == 3
-    table = dlg.layout_page.table
-    assert table.rowCount() == 5
-    table.cellWidget(0, 0).setText("Eingang")
-    table.cellWidget(1, 2).setCurrentIndex(table.cellWidget(1, 2).findData("ski"))
-    table.cellWidget(3, 0).setText("Kurz")
+    page = dlg.layout_page
+    assert len(page.courses) == 5 and [c.track for c in page.courses] == [0, 0, 0, 1, 1]
+    # Jede Rampe steht einzeln da und bekommt ihre eigene Form
+    first = page.courses[0]
+    assert first.item.childCount() == 2 and first.item.child(0).text(0) == "Rampe 1"
+    first.name.setText("Eingang")
+    first.kinds[1].setCurrentIndex(first.kinds[1].findData("banane"))
+    page.courses[1].count.setValue(3)
+    assert len(page.courses[1].kinds) == 3
+    page.courses[1].kinds[2].setCurrentIndex(page.courses[1].kinds[2].findData("ski"))
+    page.courses[3].name.setText("Kurz")
     dlg.layout_page.layout_combo.setCurrentIndex(1)
     dlg._update_plan()
     assert dlg.layout_page.plan.items and not dlg._error
@@ -57,9 +61,10 @@ def test_wizard_walks_through_the_steps_and_plans_the_map(qtbot):
     s = choice.settings
     assert (choice.ramp, choice.lines) == (PRESETS[2][1], PRESETS[2][2])
     assert choice.style == "neon" or choice.style  # sechster Stil
-    assert s.layout == "reihen" and s.ramp_kind == "banane" and s.angle == DIFFICULTY["schwer"][1]
+    assert s.layout == "reihen" and s.angle == DIFFICULTY["schwer"][1]
     assert [st.name for st in s.stage_specs] == ["Eingang", "", ""]
-    assert s.stage_specs[1].kind == "ski"
+    assert s.stage_specs[0].kinds == ("gerade", "banane")
+    assert s.stage_specs[1].kinds == ("gerade", "gerade", "ski") and s.stage_specs[1].ramps == 3
     assert [b.name for b in s.bonuses] == ["Kurz", ""]
 
 
@@ -67,7 +72,7 @@ def test_linear_course_has_one_row_and_too_big_maps_block_building(qtbot):
     dlg = EasyModeWizard()
     qtbot.addWidget(dlg)
     dlg.course.linear.setChecked(True)
-    assert dlg.layout_page.table.rowCount() == 1
+    assert len(dlg.layout_page.courses) == 1
     assert dlg.settings().stage_specs[0].ramps >= 4
     dlg.course.staged.setChecked(True)
     dlg.course.fine.setChecked(True)
@@ -89,7 +94,7 @@ def test_easy_map_is_built_styled_and_ready_to_paint(window, qtbot):
     assert window.easy_bar.buttons["start"].isVisibleTo(window.easy_bar)
     assert not window.easy_bar.buttons["paint"].isVisibleTo(window.easy_bar)
     _name, ramp, lines, _wall = PRESETS[1]
-    settings = SurfMapSettings(game="css", ramp_kind="welle", stage_specs=(CourseSpec("Eingang", 1), CourseSpec("", 1)),
+    settings = SurfMapSettings(game="css", stage_specs=(CourseSpec("Eingang", 1, kinds=("welle",)), CourseSpec("", 1)),
                                bonuses=(CourseSpec("Kurz", 1),))
     assert window.build_easy_map(EasyResult(ramp, lines, "eis", settings))
     doc = window.editor.doc

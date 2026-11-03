@@ -53,14 +53,14 @@ Wer noch nie eine Map gebaut hat, startet mit **Easy Mode** (ganz links oben in 
 *Datei → Easy Mode*, Strg+Shift+M). Der Editor bleibt, wie er ist; der Easy Mode ist ein geführter
 Einstieg in fünf Schritten:
 
-1. **Rampen:** Rampentextur (Klassisch, Neon, Lava, Eis, Wald, Grau oder eigene Farben) und Rampenform
-   wählen. Rechts zeigt eine große Vorschau die Rampe mit genau dieser Textur.
+1. **Rampen:** Rampentextur wählen (Klassisch, Neon, Lava, Eis, Wald, Grau oder eigene Farben). Rechts
+   zeigt eine große Vorschau verschiedene Rampen mit genau dieser Textur.
 2. **Welt-Stil:** Himmel, Sonne, Nebel und Wände (Tag, Nacht, Neon, Wüste …). Auf Wunsch kommen auch
    die Rampenfarben vom Stil.
 3. **Strecke:** mit Stages oder linear, wie viele Stages und Rampen, Bonusse, Schwierigkeit
    (Leicht/Mittel/Schwer stellt Winkel, Lücken und Abfall), Spiel. Feineinstellungen für Profis.
-4. **Layout-Manager:** jede Stage und jeden Bonus benennen (z. B. „Lava-Raum“), Rampenzahl und
-   Rampenform je Stage, Anordnung *hintereinander* oder *in Reihen nebeneinander* (dann bringt ein
+4. **Layout-Manager:** jede Stage und jeden Bonus benennen (z. B. „Lava-Raum“), Rampenzahl, und für
+   jede einzelne Rampe ihre Form (Rampe 1: Gerade, Rampe 2: Banane …), Anordnung *hintereinander* oder *in Reihen nebeneinander* (dann bringt ein
    Teleporter am Stage-Ende zur nächsten Stage). Ein Plan von oben zeigt live, wie die Map liegt und
    ob sie in die Grenzen von Source passt.
 5. **Malen:** „Map bauen und malen“ erzeugt die Map (Spawn, Zonen mit Namen, Teleporter, dichte

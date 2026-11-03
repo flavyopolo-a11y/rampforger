@@ -76,3 +76,12 @@ def test_quick_plan_is_the_same_and_reports_too_big_maps():
     assert quick == full and error == ""
     _plan, error = plan_surf_map(SurfMapSettings(stages=10, ramps_per_stage=4, ramp_length=4096))
     assert "Source" in error
+
+
+def test_every_ramp_gets_the_shape_chosen_for_it():
+    doc = build(game="css", stages=2,
+                stage_specs=(CourseSpec("", 3, kinds=("gerade", "gerade", "welle")), CourseSpec("", 2, kinds=("ski", "banane"))))
+    assert check_seal(doc).sealed
+    placed = sorted(((block_info(e)["placement"][1], block_info(e)["placement"][0]), block_info(e)["template"])
+                    for e in doc.entities() if (block_info(e) or {}).get("template") in ("gerade", "banane", "welle", "ski"))
+    assert [k for _pos, k in placed] == ["gerade", "gerade", "welle", "ski", "banane"]

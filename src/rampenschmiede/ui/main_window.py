@@ -807,7 +807,7 @@ class MainWindow(QMainWindow):
                                                walls=False, remember=True))
         self.editor.stack.set_clean()
         self.editor.set_selection(())
-        self.library.select_template(result.settings.ramp_kind)
+        self.library.select_template(result.settings.kinds_used()[0])
         self.editor.set_tool("paint")
         self.settings.setValue("easy_welcome_done", "true")
         self.easy_bar.guide("paint")

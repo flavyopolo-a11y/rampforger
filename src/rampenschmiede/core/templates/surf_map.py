@@ -40,11 +40,13 @@ ROW_SPACE = 1280
 
 @dataclass(frozen=True)
 class CourseSpec:
-    """Eine Stage oder Bonus-Strecke: Name, Anzahl und Art der Rampen (leer = Art der Map)."""
+    """Eine Stage oder Bonus-Strecke: Name, Anzahl und Art der Rampen (leer = Art der Map).
+    `kinds` legt die Form jeder einzelnen Rampe fest (Rampe 1, 2, …), so wie man sie wählt."""
 
     name: str = ""
     ramps: int = 2
     kind: str = ""
+    kinds: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -83,9 +85,14 @@ class SurfMapSettings:
             return list(self.stage_specs)
         return [CourseSpec(ramps=self.ramps_per_stage) for _ in range(self.stages)]
 
-    def kind_of(self, spec: CourseSpec) -> str:
-        kind = spec.kind or self.ramp_kind
+    def kind_of(self, spec: CourseSpec, index: int = 0) -> str:
+        """Form der `index`-ten Rampe einer Stage: so gewählt, sonst die Form der Stage oder der Map."""
+        kind = spec.kinds[index] if index < len(spec.kinds) else (spec.kind or self.ramp_kind)
         return kind if kind in CATALOG else "gerade"
+
+    def kinds_used(self) -> list[str]:
+        courses = (*self.stage_list(), *self.bonuses)
+        return list(dict.fromkeys([self.kind_of(c, i) for c in courses for i in range(c.ramps)] or ["gerade"]))
 
     @property
     def row_pitch(self) -> int:
@@ -165,7 +172,7 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings, plan: list[PlanItem] | No
     rows_count = len(_rows(s))
     pitch = s.row_pitch
     length = total_length(s)
-    heights = [_ramp_setup(s, s.kind_of(c))[1] for c in (*stages, *s.bonuses)]
+    heights = [_ramp_setup(s, k)[1] for k in s.kinds_used()]
     x_start = -(length // 2) // 16 * 16
     top0 = int(max(heights)) + 512
     half_w = s.ramp_width // 2
@@ -195,10 +202,11 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings, plan: list[PlanItem] | No
 
     def ramps(spec: CourseSpec, x: int, y: int, top: int, track: int) -> tuple[int, int]:
         nonlocal lowest
-        kind = s.kind_of(spec)
-        values, height, drop_along = _ramp_setup(s, kind)
         ramp_top = top - 96
-        for _ in range(spec.ramps):
+        height = 0.0
+        for index in range(spec.ramps):
+            kind = s.kind_of(spec, index)
+            values, height, drop_along = _ramp_setup(s, kind)
             anchor_z = int(ramp_top - height)
             if not _plan_only:
                 ramp, _gen = build_block(doc, kind, values, Placement(x, y, anchor_z, 0))
