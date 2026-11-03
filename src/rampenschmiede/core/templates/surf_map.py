@@ -79,6 +79,9 @@ class SurfMapSettings:
     stage_specs: tuple[CourseSpec, ...] = ()
     #: Bonus-Strecken (Bonus 1, 2, …), jede in einer eigenen Reihe
     bonuses: tuple[CourseSpec, ...] = field(default_factory=tuple)
+    #: False: nur der Rahmen (Plattformen, Zonen, Teleporter, Hülle); den Platz für die Rampen
+    #: malt man selbst (Easy Mode). `ramps` zählt dann die Rampen-Plätze einer Stage.
+    with_ramps: bool = True
 
     def stage_list(self) -> list[CourseSpec]:
         if self.stage_specs:
@@ -208,10 +211,10 @@ def new_surf_map(doc: MapDocument, s: SurfMapSettings, plan: list[PlanItem] | No
             kind = s.kind_of(spec, index)
             values, height, drop_along = _ramp_setup(s, kind)
             anchor_z = int(ramp_top - height)
-            if not _plan_only:
+            if s.with_ramps and not _plan_only:
                 ramp, _gen = build_block(doc, kind, values, Placement(x, y, anchor_z, 0))
                 objs.extend(ramp)
-            note("ramp", x, y, x + s.ramp_length, half_w, kind, track)
+            note("ramp" if s.with_ramps else "space", x, y, x + s.ramp_length, half_w, kind, track)
             lowest = min(lowest, anchor_z + min(0, drop_along))
             x += s.ramp_length + s.gap
             ramp_top += drop_along - s.drop

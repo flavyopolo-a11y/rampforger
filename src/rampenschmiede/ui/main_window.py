@@ -807,7 +807,8 @@ class MainWindow(QMainWindow):
                                                walls=False, remember=True))
         self.editor.stack.set_clean()
         self.editor.set_selection(())
-        self.library.select_template(result.settings.kinds_used()[0])
+        # Rampen malt man selbst: Malen mit der geraden Rampe vorgewählt, jede andere Form ist einen Klick weg
+        self.library.select_template("gerade")
         self.editor.set_tool("paint")
         self.settings.setValue("easy_welcome_done", "true")
         self.easy_bar.guide("paint")

@@ -44,10 +44,9 @@ from PySide6.QtWidgets import (
 from ...core.materials.authoring import RGB
 from ...core.materials.styles import STYLE_BY_KEY, STYLES, WorldStyle
 from ...core.surf.catalog import CATALOG
-from ...core.templates import RAMP_KINDS, CourseSpec, PlanItem, SurfMapSettings, plan_surf_map
+from ...core.templates import CourseSpec, PlanItem, SurfMapSettings, plan_surf_map
 from ...i18n import N_
 from ..icons import ACTIVE
-from ..widgets.template_preview import template_pixmap
 from .ramp_assistant import PRESETS, _ColorButton, pil_pixmap, textured_ramp
 from .surf_wizard import GAMES
 from .world_styles import StyleGallery, style_preview
@@ -344,7 +343,7 @@ class CoursePage(QWidget):
         form = QFormLayout()
         self.stages = _spin(1, 12, d.stages)
         self.ramps = _spin(1, 8, d.ramps_per_stage)
-        self.ramps_label = QLabel(self.tr("Rampen pro Stage"))
+        self.ramps_label = QLabel(self.tr("Platz für Rampen pro Stage"))
         self.stages_label = QLabel(self.tr("Stages"))
         self.bonuses = _spin(0, 4, 0)
         self.difficulty = QComboBox()
@@ -399,7 +398,7 @@ class CoursePage(QWidget):
     def _kind_toggled(self, staged: bool) -> None:
         self.stages.setVisible(staged)
         self.stages_label.setVisible(staged)
-        self.ramps_label.setText(self.tr("Rampen pro Stage") if staged else self.tr("Rampen"))
+        self.ramps_label.setText(self.tr("Platz für Rampen pro Stage") if staged else self.tr("Platz für Rampen"))
         # Linear: eine lange Strecke mit mehr Rampen; zurück zu Stages: wieder wenige je Stage
         if not staged and self.ramps.value() < 4:
             self.ramps.setValue(6)
@@ -474,12 +473,23 @@ class LayoutPlan(QWidget):
             if item.kind == "ramp":
                 # Jede Rampenform eigene Farbe: man sieht, dass die Rampen abwechseln
                 color = KIND_COLORS.get(item.label, color)
-            p.setPen(QPen(color.darker(160), 1))
-            p.setBrush(color)
+            if item.kind == "space":
+                # Leerer Platz, auf den man die Rampen selbst malt
+                p.setPen(QPen(QColor(255, 140, 40, 200), 1.5, Qt.DashLine))
+                p.setBrush(QColor(255, 140, 40, 28))
+            else:
+                p.setPen(QPen(color.darker(160), 1))
+                p.setBrush(color)
             p.drawRoundedRect(rect(item.rect), 3, 3)
         p.setPen(QColor(235, 238, 242))
         for item in self.items:
-            if item.kind == "ramp" and item.label in CATALOG:
+            if item.kind == "space":
+                r = rect(item.rect)
+                if r.width() > 50:
+                    p.setPen(QColor(255, 170, 90))
+                    p.drawText(r, Qt.AlignCenter | Qt.TextWordWrap, self.tr("Rampe malen"))
+                    p.setPen(QColor(235, 238, 242))
+            elif item.kind == "ramp" and item.label in CATALOG:
                 r = rect(item.rect)
                 if r.width() > 40:
                     p.setPen(QColor(20, 22, 26))
@@ -496,14 +506,13 @@ class LayoutPlan(QWidget):
 
 
 class _Course:
-    """Eine Zeile im Layout-Manager: Stage oder Bonus mit Name, Rampenzahl und einer Form je Rampe."""
+    """Eine Zeile im Layout-Manager: Stage oder Bonus mit Name und Platz für Rampen."""
 
     def __init__(self, track: int, item: QTreeWidgetItem, name: QLineEdit, count: QSpinBox) -> None:
         self.track = track
         self.item = item
         self.name = name
         self.count = count
-        self.kinds: list[QComboBox] = []
 
 
 class LayoutPage(QWidget):
@@ -513,16 +522,18 @@ class LayoutPage(QWidget):
         super().__init__(parent)
         lay = QVBoxLayout(self)
         lay.addWidget(_title(self.tr("4. Layout-Manager: So liegt deine Map")))
-        lay.addWidget(_hint(self.tr("Gib jeder Stage und jedem Bonus einen Namen und wähle für jede Rampe ihre Form. "
-                                    "Der Plan rechts zeigt die Map von oben, jede Rampe mit ihrem Namen.")))
+        lay.addWidget(_hint(self.tr("Gib jeder Stage und jedem Bonus einen Namen und sag, wie viel Platz sie für "
+                                    "Rampen braucht. Die Rampen selbst malst du danach, so wie du sie haben willst. "
+                                    "Gestrichelt im Plan: dort malst du.")))
         body = QHBoxLayout()
         left = QVBoxLayout()
         self.tree = QTreeWidget()
         self.tree.setColumnCount(2)
-        self.tree.setHeaderLabels([self.tr("Name"), self.tr("Rampen / Form")])
+        self.tree.setHeaderLabels([self.tr("Name"), self.tr("Platz für Rampen")])
         self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
         self.tree.setSelectionMode(QAbstractItemView.NoSelection)
+        self.tree.setRootIsDecorated(False)
         self.tree.setMinimumWidth(420)
         left.addWidget(self.tree, 1)
         arrange = QFormLayout()
@@ -552,8 +563,6 @@ class LayoutPage(QWidget):
 
         self.courses: list[_Course] = []
         self.linear = False
-        #: Form neuer Rampen (aus Schritt 1)
-        self.default_kind = "gerade"
         self.layout_combo.currentIndexChanged.connect(lambda *_: self.changed.emit())
         self.add_stage.clicked.connect(lambda: self._add(0))
         self.remove_stage.clicked.connect(lambda: self._remove(0))
@@ -584,27 +593,6 @@ class LayoutPage(QWidget):
         self.add_bonus.setEnabled(len(self._of(True)) < 4)
         self.layout_combo.setEnabled(not self.linear and stages > 1)
 
-    def _kind_combo(self, kind: str) -> QComboBox:
-        combo = QComboBox()
-        for key in RAMP_KINDS:
-            combo.addItem(QIcon(template_pixmap(key, None, 32)), self.tr(CATALOG[key].name), key)
-        combo.setCurrentIndex(max(0, combo.findData(kind)))
-        combo.currentIndexChanged.connect(lambda *_: self.changed.emit())
-        return combo
-
-    def _set_count(self, course: _Course, n: int) -> None:
-        """Eine Unterzeile je Rampe: „Rampe 1  [Form]“. Neue Rampen nehmen die Form der vorigen."""
-        while len(course.kinds) < n:
-            kind = course.kinds[-1].currentData() if course.kinds else self.default_kind
-            child = QTreeWidgetItem(course.item, [self.tr("Rampe {0}").format(len(course.kinds) + 1)])
-            combo = self._kind_combo(kind)
-            self.tree.setItemWidget(child, 1, combo)
-            course.kinds.append(combo)
-        while len(course.kinds) > n:
-            course.kinds.pop()
-            course.item.removeChild(course.item.child(course.item.childCount() - 1))
-        course.item.setExpanded(True)
-
     def _insert(self, track: int, spec: CourseSpec) -> None:
         index = len(self.courses) if track else len(self._of(False))
         item = QTreeWidgetItem()
@@ -612,14 +600,12 @@ class LayoutPage(QWidget):
         name = QLineEdit(spec.name)
         name.textChanged.connect(lambda *_: self.changed.emit())
         count = _spin(1, 12 if self.linear and not track else 8, spec.ramps, suffix=self.tr(" Rampen"))
+        count.setToolTip(self.tr("So viel Platz bekommt die Stage: je Rampe eine Rampenlänge"))
         course = _Course(1 if track else 0, item, name, count)
         self.courses.insert(index, course)
         self.tree.setItemWidget(item, 0, name)
         self.tree.setItemWidget(item, 1, count)
-        self._set_count(course, spec.ramps)
-        for combo, kind in zip(course.kinds, spec.kinds):
-            combo.setCurrentIndex(max(0, combo.findData(kind)))
-        count.valueChanged.connect(lambda n, c=course: (self._set_count(c, n), self.changed.emit()))
+        count.valueChanged.connect(lambda *_: self.changed.emit())
 
     def _add(self, track: int) -> None:
         self._insert(track, CourseSpec(ramps=1 if track else 2))
@@ -661,8 +647,7 @@ class LayoutPage(QWidget):
     def specs(self) -> tuple[tuple[CourseSpec, ...], tuple[CourseSpec, ...]]:
         stages, bonuses = [], []
         for c in self.courses:
-            kinds = tuple(k.currentData() for k in c.kinds)
-            spec = CourseSpec(c.name.text().strip(), len(kinds), kinds[0] if kinds else "", kinds)
+            spec = CourseSpec(c.name.text().strip(), c.count.value())
             (bonuses if c.track else stages).append(spec)
         return tuple(stages), tuple(bonuses)
 
@@ -678,8 +663,8 @@ class LayoutPage(QWidget):
         else:
             xs = [c for i in items for c in (i.rect[0], i.rect[2])]
             ys = [c for i in items for c in (i.rect[1], i.rect[3])]
-            ramps = sum(1 for i in items if i.kind == "ramp")
-            self.size_label.setText(self.tr("✓ Passt: {0} Rampen, etwa {1} × {2} Units (Source erlaubt 32768)").format(
+            ramps = sum(1 for i in items if i.kind in ("ramp", "space"))
+            self.size_label.setText(self.tr("✓ Passt: Platz für {0} Rampen, etwa {1} × {2} Units (Source erlaubt 32768)").format(
                 ramps, round(max(xs) - min(xs)), round(max(ys) - min(ys))))
             self.size_label.setStyleSheet("color: #6c6; font-weight: bold;")
         return error
@@ -692,10 +677,10 @@ class PaintPage(QWidget):
         super().__init__(parent)
         lay = QVBoxLayout(self)
         lay.addWidget(_title(self.tr("5. Jetzt deine Map malen")))
-        lay.addWidget(_hint(self.tr("Mit „Map bauen“ entsteht deine Strecke: Start mit Spawn, Stages, Zonen, "
-                                    "Teleporter und eine dichte Skybox. Danach ist das Malen-Werkzeug mit deiner "
-                                    "Rampe aktiv: Zieh in einer Ansicht vom Anfang zum Ende, und die Rampe ist da. "
-                                    "Oben führt dich eine Leiste durch die nächsten Schritte.")))
+        lay.addWidget(_hint(self.tr("Mit „Map bauen“ entsteht der Rahmen deiner Map: Start mit Spawn, Stages mit "
+                                    "Zonen und Teleportern, eine dichte Skybox. Die Rampen malst du selbst: Form links "
+                                    "anklicken, in der Ansicht vom Anfang zum Ende ziehen. Für jede Rampe kannst du "
+                                    "eine andere Form nehmen. Oben führt dich eine Leiste durch die nächsten Schritte.")))
         body = QHBoxLayout()
         self.summary = QLabel()
         self.summary.setWordWrap(True)
@@ -820,6 +805,7 @@ class EasyModeWizard(QDialog):
 
     def settings(self) -> SurfMapSettings:
         s = self.course.base_settings("gerade")
+        s.with_ramps = False  # nur der Rahmen, die Rampen malt man selbst
         stages, bonuses = self.layout_page.specs()
         s.stage_specs = stages
         s.stages = len(stages)
@@ -838,9 +824,7 @@ class EasyModeWizard(QDialog):
         stages, bonuses = s.stage_specs, s.bonuses
         names = ", ".join(spec.name or self.tr("Stage {0}").format(i) for i, spec in enumerate(stages, 1))
         rows = [
-            (self.tr("Rampen"), self.tr("{0}, Textur „{1}“").format(
-                ", ".join(self.tr(CATALOG[k].name) for k in s.kinds_used()),
-                                                                    self.ramps.texture_name())),
+            (self.tr("Rampen"), self.tr("Textur „{0}“, du malst sie selbst").format(self.ramps.texture_name())),
             (self.tr("Welt-Stil"), self.tr(style.name)),
             (self.tr("Strecke"), self.tr("Linear mit {0} Rampen").format(stages[0].ramps) if self.course.is_linear()
              else self.tr("{0} Stages: {1}").format(len(stages), names)),
@@ -851,7 +835,7 @@ class EasyModeWizard(QDialog):
         ]
         self.paint.summary.setText("<table cellspacing=6>" + "".join(
             f"<tr><td><b>{k}</b></td><td>{v}</td></tr>" for k, v in rows) + "</table>")
-        self.paint.preview.show_ramps(s.kinds_used()[:4], ramp, lines, style)
+        self.paint.preview.show_ramps(list(PREVIEW_KINDS), ramp, lines, style)
         self.paint.plan.set_plan(self.layout_page.plan.items, self.layout_page.plan.error)
 
     def choice(self) -> EasyResult:

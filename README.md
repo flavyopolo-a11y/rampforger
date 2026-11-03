@@ -4,7 +4,7 @@ Desktop-Map-Editor für Windows, spezialisiert auf Surf-, Bhop- und Trick-Maps f
 Counter-Strike: Source und Momentum Mod. Ziel: Ein Anfänger baut in 30 Minuten eine
 spielbare Surf-Map, ein Profi vermisst keine Funktion aus Hammer.
 
-> **Stand: Version 0.26.0** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
+> **Stand: Version 0.26.1** – alle Etappen des Plans plus die Hammer-Pakete: 3D- und 2D-Ansichten,
 > Easy Mode (geführt zur eigenen Map), Rampen-Bibliothek mit Reglern, Assistent „Neue Surf-Map“, Zeitnahme-Zonen für CS:S-Timer und Momentum,
 > Kompilieren und Testen mit F9, Texturen und Welt-Stile, Entities mit FGD und I/O, Licht-Vorschau,
 > Himmel und 3D-Skybox, Props, Gelände, Natur, Cordon, Instanzen, automatische Sicherung, Oberfläche
@@ -59,12 +59,12 @@ Einstieg in fünf Schritten:
    die Rampenfarben vom Stil.
 3. **Strecke:** mit Stages oder linear, wie viele Stages und Rampen, Bonusse, Schwierigkeit
    (Leicht/Mittel/Schwer stellt Winkel, Lücken und Abfall), Spiel. Feineinstellungen für Profis.
-4. **Layout-Manager:** jede Stage und jeden Bonus benennen (z. B. „Lava-Raum“), Rampenzahl, und für
-   jede einzelne Rampe ihre Form (Rampe 1: Gerade, Rampe 2: Banane …), Anordnung *hintereinander* oder *in Reihen nebeneinander* (dann bringt ein
+4. **Layout-Manager:** jede Stage und jeden Bonus benennen (z. B. „Lava-Raum“), Platz für Rampen, Anordnung *hintereinander* oder *in Reihen nebeneinander* (dann bringt ein
    Teleporter am Stage-Ende zur nächsten Stage). Ein Plan von oben zeigt live, wie die Map liegt und
    ob sie in die Grenzen von Source passt.
-5. **Malen:** „Map bauen und malen“ erzeugt die Map (Spawn, Zonen mit Namen, Teleporter, dichte
-   Skybox), wendet Stil und Rampentextur an und schaltet das Malen-Werkzeug mit deiner Rampe ein.
+5. **Malen:** „Map bauen und malen“ erzeugt den Rahmen der Map (Spawn, Stages mit benannten Zonen,
+   Teleporter, dichte Skybox), wendet Stil und Rampentextur an und schaltet das Malen-Werkzeug ein.
+   Die Rampen malst du selbst in den freien Platz, jede mit der Form, die du gerade willst.
 
 Danach führt eine Leiste oben weiter: was erledigt ist, was jetzt zu tun ist, und Knöpfe für
 Rampen malen, Wände malen, Rampenfarben, Welt-Stil und Testen (F9). Beim ersten Start lädt sie
