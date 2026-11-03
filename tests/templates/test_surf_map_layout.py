@@ -85,3 +85,14 @@ def test_every_ramp_gets_the_shape_chosen_for_it():
     placed = sorted(((block_info(e)["placement"][1], block_info(e)["placement"][0]), block_info(e)["template"])
                     for e in doc.entities() if (block_info(e) or {}).get("template") in ("gerade", "banane", "welle", "ski"))
     assert [k for _pos, k in placed] == ["gerade", "gerade", "welle", "ski", "banane"]
+
+
+def test_frame_only_leaves_room_to_paint_ramps():
+    doc = build(game="css", stages=3, ramps_per_stage=2, with_ramps=False, bonuses=(CourseSpec("", 1),))
+    assert check_seal(doc).sealed
+    assert not any((block_info(e) or {}).get("template") in ("gerade", "banane", "welle", "ski", "trapez")
+                   for e in doc.entities())
+    z = zones(doc)
+    assert {("start", 0, 0), ("stage", 0, 2), ("stage", 0, 3), ("end", 0, 0), ("start", 1, 0)} <= set(z)
+    # Fall-Teleporter decken den Platz für die Rampen ab
+    assert sum(1 for e in doc.entities() if e.classname == "trigger_teleport") == 4
